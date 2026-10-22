@@ -1,13 +1,27 @@
-// キャンバス描画（横から見た図）。手描きインク風は後回し、まずは読みやすさ優先。
+// キャンバス描画：斜め俯瞰（アイソメ）。列車は左上から右下へ走り、車両は断面で中が見える。
 
 import { CAR_LEN } from './data.ts';
 import { capacity, carsOnPlatform, load, type Game } from './game.ts';
+import { drawApproach, drawDwellPanel, drawRouteStrip, PANEL_H, STRIP_H } from './panels.ts';
 
 const INK = '#1F1B16';
 const PAPER = '#F5EFE3';
 const CARD = '#FFFDF6';
 const CAR_COLORS = ['#6FC3A0', '#F0A79C', '#E9B23E', '#8299E0', '#F08E78'];
-const POLE_SPACING = 50;
+const PEOPLE = ['#6FC3A0', '#F0A79C', '#E9B23E', '#8299E0', '#F08E78', '#B98A5E', '#3A3631'];
+
+// 寸法 [m]（見やすさ優先で実物より太め・高め）
+const CW = 6; // 車体の幅
+const UNDER_Z = 0.5; // 床下機器の下端
+const FLOOR_Z = 1.3; // 床の高さ（＝ホームの高さ）
+const DECK_H = 3.4; // 1階分の高さ
+const GAP = 0.8; // 車両間のすき間
+const PLAT_Y0 = CW + 0.4; // ホームは手前側
+const PLAT_Y1 = CW + 10;
+const POLE_SPACING = 40;
+const C = 0.866;
+
+type V3 = [number, number, number];
 
 export function draw(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number): void {
   ctx.save();
@@ -18,511 +32,315 @@ export function draw(ctx: CanvasRenderingContext2D, g: Game, w: number, h: numbe
   ctx.fillRect(0, 0, w, h);
 
   const portrait = h > w * 1.1;
-  // 上：路線ストリップ、その下：停止メーター／停車パネル、下：車両の横図
-  const stripH = 56;
-  const panelTop = stripH + 8;
-  const panelH = portrait ? Math.min(230, h * 0.34) : Math.min(150, h * 0.3);
+  const sceneTop = STRIP_H + PANEL_H + 8;
+  // 1画面に見せる距離。編成が長くなるほど引く
+  const minView = portrait ? 40 : 80;
+  const viewMeters = Math.max(minView, Math.min(340, g.stats.cars * CAR_LEN * 0.6));
+  const s = w / (C * viewMeters);
+  const ax = w * (portrait ? 0.6 : 0.62);
+  const ay = sceneTop + (h - sceneTop) * (portrait ? 0.6 : 0.58);
+  const ox = g.x;
+  const P = (x: number, y: number, z: number): [number, number] => [
+    ax + (x - ox - y) * C * s,
+    ay + (x - ox + y) * 0.5 * s - z * s,
+  ];
+  const r = new Renderer(ctx, P, s);
 
-  // 1画面に見せる距離。スマホ縦は寄りぎみ、編成が長くなるほど引く
-  const minView = portrait ? 62 : 150;
-  const viewMeters = Math.max(minView, Math.min(420, g.stats.cars * CAR_LEN * 1.15));
-  const ppm = w / viewMeters;
-  const frontScreen = w * 0.62;
-  const toX = (m: number) => frontScreen + (m - g.x) * ppm;
-  const groundY = Math.round(h * (portrait ? 0.86 : 0.82));
-  const carH = Math.max(34, Math.min(110, h * 0.2, ppm * 20 * 0.8));
+  const xa = g.x - viewMeters * 2.2;
+  const xb = g.x + viewMeters * 1.4;
 
-  drawBackdrop(ctx, w, groundY);
+  drawGround(r, xa, xb);
+  drawPoles(r, xa, xb);
+  drawTrain(r, g);
+  drawStations(r, g, xa, xb);
 
-  // 架線柱（流れる景色）
-  ctx.strokeStyle = '#9A8064';
-  ctx.lineWidth = 2;
-  const first = Math.floor((g.x - viewMeters) / POLE_SPACING) * POLE_SPACING;
-  for (let m = first; m < g.x + viewMeters; m += POLE_SPACING) {
-    const sx = toX(m);
-    if (sx < -10 || sx > w + 10) continue;
-    ctx.beginPath();
-    ctx.moveTo(sx, groundY);
-    ctx.lineTo(sx, groundY - carH * 1.9);
-    ctx.stroke();
+  // 上部の情報（背景を敷いてから描く）
+  ctx.fillStyle = 'rgba(245,239,227,0.94)';
+  ctx.fillRect(0, STRIP_H, w, PANEL_H + 6);
+  drawRouteStrip(ctx, g, w);
+  if (g.phase === 'running') drawApproach(ctx, g, w, STRIP_H + 8);
+  else if (g.phase === 'dwell' || g.phase === 'adjust') drawDwellPanel(ctx, g, w, STRIP_H + 8);
+}
+
+class Renderer {
+  ctx: CanvasRenderingContext2D;
+  P: (x: number, y: number, z: number) => [number, number];
+  s: number;
+  constructor(ctx: CanvasRenderingContext2D, P: (x: number, y: number, z: number) => [number, number], s: number) {
+    this.ctx = ctx;
+    this.P = P;
+    this.s = s;
   }
-  ctx.beginPath();
-  ctx.moveTo(0, groundY - carH * 1.75);
-  ctx.lineTo(w, groundY - carH * 1.75);
-  ctx.stroke();
+  poly(pts: V3[], fill: string | null, stroke = true, lw = 1.6): void {
+    const c = this.ctx;
+    c.beginPath();
+    pts.forEach((p, i) => {
+      const [sx, sy] = this.P(p[0], p[1], p[2]);
+      if (i === 0) c.moveTo(sx, sy);
+      else c.lineTo(sx, sy);
+    });
+    c.closePath();
+    if (fill) {
+      c.fillStyle = fill;
+      c.fill();
+    }
+    if (stroke) {
+      c.strokeStyle = INK;
+      c.lineWidth = lw;
+      c.lineJoin = 'round';
+      c.stroke();
+    }
+  }
+  /** x が一定の面（右下向き） */
+  qx(x: number, y0: number, y1: number, z0: number, z1: number, fill: string | null, stroke = true): void {
+    this.poly([[x, y0, z0], [x, y1, z0], [x, y1, z1], [x, y0, z1]], fill, stroke);
+  }
+  /** y が一定の面（左下向き＝長い側面） */
+  qy(y: number, x0: number, x1: number, z0: number, z1: number, fill: string | null, stroke = true): void {
+    this.poly([[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], fill, stroke);
+  }
+  /** z が一定の面（上面） */
+  qz(z: number, x0: number, x1: number, y0: number, y1: number, fill: string | null, stroke = true): void {
+    this.poly([[x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z]], fill, stroke);
+  }
+  line(a: V3, b: V3, color = INK, lw = 2): void {
+    const c = this.ctx;
+    const [x0, y0] = this.P(...a);
+    const [x1, y1] = this.P(...b);
+    c.strokeStyle = color;
+    c.lineWidth = lw;
+    c.beginPath();
+    c.moveTo(x0, y0);
+    c.lineTo(x1, y1);
+    c.stroke();
+  }
+}
 
-  // 駅（見えている範囲のものだけ）
-  g.pos.forEach((P, i) => {
+function drawGround(r: Renderer, xa: number, xb: number): void {
+  r.qz(0, xa, xb, -1.4, CW + 0.6, '#DCCFB6', false);
+  const start = Math.floor(xa / 2.4) * 2.4;
+  for (let x = start; x < xb; x += 2.4) r.qz(0.02, x, x + 0.7, -0.6, CW - 0.2, '#9A8064', false);
+  r.line([xa, 1.4, 0.08], [xb, 1.4, 0.08], INK, 2.4);
+  r.line([xa, CW - 1.4, 0.08], [xb, CW - 1.4, 0.08], INK, 2.4);
+}
+
+function drawPoles(r: Renderer, xa: number, xb: number): void {
+  const start = Math.floor(xa / POLE_SPACING) * POLE_SPACING;
+  for (let x = start; x < xb; x += POLE_SPACING) {
+    r.line([x, -2.4, 0], [x, -2.4, 9.4], '#9A8064', 3);
+    r.line([x, -2.4, 9], [x, CW / 2, 9], '#9A8064', 2);
+  }
+  r.line([xa, CW / 2, 8.8], [xb, CW / 2, 8.8], '#9A8064', 1.5);
+}
+
+function drawStations(r: Renderer, g: Game, xa: number, xb: number): void {
+  const ctx = r.ctx;
+  g.pos.forEach((stop, i) => {
     const st = g.line.stations[i];
-    const startM = P - st.platformCars * CAR_LEN;
-    const x0 = toX(startM);
-    const x1 = toX(P + 3);
-    if (x1 < -40 || x0 > w + 40) return;
-    // ホーム
-    ctx.fillStyle = '#E6DCC8';
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2;
-    const platTop = groundY - carH * 0.32;
-    ctx.fillRect(x0, platTop, x1 - x0, groundY - platTop);
-    ctx.strokeRect(x0, platTop, x1 - x0, groundY - platTop);
-    ctx.fillStyle = '#E9B23E';
-    ctx.fillRect(x0, platTop, x1 - x0, 4);
-    // 駅名標
-    const signW = Math.max(70, st.name.length * 16 + 20);
-    const signX = (x0 + x1) / 2 - signW / 2;
-    const signY = groundY - carH * 2.5;
-    ctx.fillStyle = INK;
-    ctx.fillRect((x0 + x1) / 2 - 2, signY + 26, 4, groundY - carH * 0.32 - signY - 26);
-    roundRect(ctx, signX, signY, signW, 28, 5, CARD);
-    ctx.fillStyle = INK;
-    ctx.font = '900 15px "Zen Maru Gothic", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(st.name, signX + signW / 2, signY + 14);
-    // 停止位置目標
-    const sx = toX(P);
-    ctx.fillStyle = INK;
-    ctx.fillRect(sx - 2, groundY - carH * 1.45, 4, carH * 1.13);
-    roundRect(ctx, sx - 18, groundY - carH * 1.45 - 18, 36, 20, 4, i === g.target ? '#E4553A' : CARD);
-    ctx.fillStyle = i === g.target ? CARD : INK;
-    ctx.font = '900 12px "Zen Maru Gothic", sans-serif';
-    ctx.fillText('停', sx, groundY - carH * 1.45 - 8);
+    const x0 = stop - st.platformCars * CAR_LEN;
+    const x1 = stop + 14; // 停止位置の先にも少しホームを延ばす（駅名標を置く）
+    if (x1 < xa || x0 > xb) return;
+    // ホーム（手前側）
+    r.qz(FLOOR_Z, x0, x1, PLAT_Y0, PLAT_Y1, '#E6DCC8');
+    r.qz(FLOOR_Z + 0.01, x0, x1, PLAT_Y0 + 0.5, PLAT_Y0 + 0.9, '#E9B23E', false);
+    r.qy(PLAT_Y1, x0, x1, 0, FLOOR_Z, '#C9BBA2');
+    r.qx(x1, PLAT_Y0, PLAT_Y1, 0, FLOOR_Z, '#A8987D');
+
     // 待っている客
     if (i === g.target && (g.phase === 'dwell' || g.phase === 'adjust')) {
-      drawCrowd(ctx, g.waiting, x0 + 6, x1 - 6, platTop, carH);
+      const shown = Math.min(g.waiting, 60);
+      const pts: V3[] = [];
+      for (let k = 0; k < shown; k++) {
+        const px = x0 + 2 + hrand(i * 17 + 3, k) * (stop - x0 - 3);
+        const py = PLAT_Y0 + 2.2 + hrand(i * 29 + 7, k) * 6.5;
+        pts.push([px, py, FLOOR_Z]);
+      }
+      pts.sort((a, b) => a[0] + a[1] - (b[0] + b[1]));
+      pts.forEach((p, k) => drawPerson(r, p, PEOPLE[Math.floor(hrand(i, k * 3) * PEOPLE.length)], 1));
+      if (g.waiting > shown) {
+        const [sx, sy] = r.P(x0 + 4, PLAT_Y1 - 1, FLOOR_Z + 3);
+        label(ctx, sx, sy, `×${g.waiting}`, CARD);
+      }
     }
+
+    // 停止位置の目印
+    r.line([stop, PLAT_Y0 + 0.6, FLOOR_Z], [stop, PLAT_Y0 + 0.6, FLOOR_Z + 4], INK, 3);
+    const [mx, my] = r.P(stop, PLAT_Y0 + 0.6, FLOOR_Z + 4);
+    label(ctx, mx, my, '停', i === g.target ? '#E4553A' : CARD, i === g.target ? CARD : INK);
+    // 駅名標（停止位置の先）
+    r.line([x1 - 2, PLAT_Y1 - 1.5, FLOOR_Z], [x1 - 2, PLAT_Y1 - 1.5, FLOOR_Z + 5], INK, 3);
+    const [nx, ny] = r.P(x1 - 2, PLAT_Y1 - 1.5, FLOOR_Z + 5);
+    label(ctx, nx, ny, st.name, CARD, INK, 15);
   });
-
-  // レール
-  ctx.fillStyle = '#DCCFB6';
-  ctx.fillRect(0, groundY, w, h - groundY);
-  ctx.fillStyle = INK;
-  ctx.fillRect(0, groundY + 2, w, 3);
-
-  drawTrain(ctx, g, toX, ppm, groundY, carH, groundY - (panelTop + panelH) - 24);
-
-  drawRouteStrip(ctx, g, w, stripH);
-  if (g.phase === 'running') drawApproach(ctx, g, w, panelTop, panelH);
-  else if (g.phase === 'dwell' || g.phase === 'adjust') drawDwellPanel(ctx, g, w, panelTop, panelH);
 }
 
-function drawRouteStrip(ctx: CanvasRenderingContext2D, g: Game, w: number, hh: number): void {
-  ctx.fillStyle = CARD;
-  ctx.fillRect(0, 0, w, hh);
-  ctx.fillStyle = INK;
-  ctx.fillRect(0, hh - 2, w, 2);
-  const total = g.pos[g.pos.length - 1];
-  const x0 = 24;
-  const x1 = w - 24;
-  const y = 20;
-  const toS = (m: number) => x0 + (m / total) * (x1 - x0);
-  ctx.fillStyle = '#C9BBA2';
-  ctx.fillRect(x0, y - 3, x1 - x0, 6);
-  ctx.fillStyle = INK;
-  ctx.fillRect(x0, y - 3, Math.max(0, toS(g.x) - x0), 6);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  g.pos.forEach((P, i) => {
-    const sx = toS(P);
-    const passed = i < g.target || (i === g.target && g.phase !== 'running');
-    ctx.beginPath();
-    ctx.arc(sx, y, i === g.target ? 7 : 5, 0, Math.PI * 2);
-    ctx.fillStyle = i === g.target ? '#E4553A' : passed ? INK : CARD;
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    const name = g.line.stations[i].name;
-    const show = i === 0 || i === g.pos.length - 1 || i === g.target || w > 600;
-    if (show) {
-      ctx.fillStyle = i === g.target ? '#B53E28' : '#5A5045';
-      ctx.font = `${i === g.target ? 900 : 700} 11px "Zen Maru Gothic", sans-serif`;
-      ctx.fillText(name, Math.min(w - 30, Math.max(30, sx)), y + 10);
-    }
-  });
-  // 自分の列車
-  const tx = toS(g.x);
-  ctx.fillStyle = '#E9B23E';
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(tx - 9, y - 8, 18, 16, 4);
-  ctx.fill();
-  ctx.stroke();
-}
-
-function drawApproach(ctx: CanvasRenderingContext2D, g: Game, w: number, top: number, hh: number): void {
-  const remain = g.pos[g.target] - g.x;
-  const st = g.line.stations[g.target];
-  const pad = 16;
-  // 見出し
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = '#5A5045';
-  ctx.font = '700 13px "Zen Maru Gothic", sans-serif';
-  ctx.fillText(`次は ${st.name}　ホーム${st.platformCars}両分／編成${g.stats.cars}両`, pad, top);
-  // 大きな数字
-  const big = Math.min(54, hh * 0.28);
-  ctx.fillStyle = remain < 0 ? '#B53E28' : INK;
-  ctx.font = `${big}px "Dela Gothic One", sans-serif`;
-  const distText = remain >= 0 ? `${remain.toFixed(1)}m` : `+${(-remain).toFixed(1)}m`;
-  ctx.fillText(distText, pad, top + 22);
-  ctx.textAlign = 'right';
-  ctx.font = `${big * 0.6}px "Dela Gothic One", sans-serif`;
-  ctx.fillStyle = INK;
-  ctx.fillText(`${Math.round(g.v * 3.6)}km/h`, w - pad, top + 22 + big * 0.3);
-
-  // 停止位置メーター
-  const R = 80;
-  const bx0 = pad;
-  const bw = w - pad * 2;
-  const by = top + 22 + big + 18;
-  const bh = Math.max(26, hh * 0.18);
-  const scale = (bw * 0.82) / R;
-  const xStop = bx0 + bw * 0.82;
-  ctx.fillStyle = CARD;
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(bx0, by, bw, bh, 8);
-  ctx.fill();
-  ctx.stroke();
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(bx0, by, bw, bh, 8);
-  ctx.clip();
-  // オーバーラン側
-  ctx.fillStyle = '#F7CCC5';
-  ctx.fillRect(xStop, by, bw - (xStop - bx0), bh);
-  // 許容ゾーン
-  ctx.fillStyle = '#F3D27F';
-  ctx.fillRect(xStop - 2 * scale, by, 4 * scale, bh);
-  ctx.fillStyle = '#6FC3A0';
-  ctx.fillRect(xStop - 0.5 * scale, by, Math.max(2, scale), bh);
-  // 目盛り
-  ctx.fillStyle = 'rgba(31,27,22,0.35)';
-  for (let m = 10; m <= R; m += 10) ctx.fillRect(xStop - m * scale, by + bh * 0.65, 1.5, bh * 0.35);
-  // 列車の先頭
-  const tx = Math.max(bx0 + 6, Math.min(bx0 + bw - 6, xStop - remain * scale));
-  ctx.fillStyle = INK;
-  ctx.fillRect(tx - 3, by, 6, bh);
-  ctx.restore();
-  ctx.fillStyle = INK;
-  ctx.fillRect(xStop - 1, by - 6, 2, bh + 12);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
-  ctx.fillText('停止位置', xStop, by + bh + 6);
-  if (remain > R) {
-    ctx.textAlign = 'left';
-    ctx.fillText(`→ まだ先（あと${Math.round(remain)}m）`, bx0 + 4, by + bh + 6);
-  }
-  // ブレーキの強さ
-  const brY = by + bh + 24;
-  if (brY + 12 < top + hh + 30) {
-    ctx.textAlign = 'left';
-    ctx.font = '700 12px "Zen Maru Gothic", sans-serif';
-    ctx.fillStyle = '#5A5045';
-    ctx.fillText('ブレーキ', bx0, brY);
-    const gx = bx0 + 56;
-    const gw = Math.min(200, bw - 60);
-    ctx.fillStyle = CARD;
-    ctx.strokeStyle = INK;
-    ctx.beginPath();
-    ctx.roundRect(gx, brY, gw, 12, 6);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#E4553A';
-    ctx.beginPath();
-    ctx.roundRect(gx, brY, gw * g.brake, 12, 6);
-    ctx.fill();
-  }
-}
-
-function drawDwellPanel(ctx: CanvasRenderingContext2D, g: Game, w: number, top: number, hh: number): void {
-  const pad = 16;
-  const st = g.line.stations[g.target];
-  const cd = g.dep[g.target] - g.time;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = '#5A5045';
-  ctx.font = '700 13px "Zen Maru Gothic", sans-serif';
-  ctx.fillText(g.phase === 'adjust' ? `${st.name}　停止位置を直しています…` : `${st.name}　停車中`, pad, top);
-  const big = Math.min(54, hh * 0.28);
-  ctx.font = `${big}px "Dela Gothic One", sans-serif`;
-  ctx.fillStyle = cd >= 0 ? INK : '#B53E28';
-  const s = Math.abs(Math.round(cd));
-  const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  ctx.fillText(cd >= 0 ? `発車まで ${t}` : `遅れ +${t}`, pad, top + 22);
-
-  // 乗降の進み具合
-  const alight = g.onboard[g.target];
-  const cap = capacity(g);
-  const ld = load(g);
-  let y = top + 22 + big + 14;
-  const bw = w - pad * 2;
-  const rows: [string, number, number, string][] = [
-    [`降車 あと${alight}人`, alight, Math.max(alight, 1), '#8299E0'],
-    [`乗車待ち ${g.waiting}人`, g.waiting, Math.max(g.waiting, ld, 1), '#E9B23E'],
-    [`車内 ${ld}/${cap}人`, ld, Math.max(cap, 1), ld >= cap ? '#E4553A' : '#6FC3A0'],
-  ];
-  const cut = g.stats.cars - carsOnPlatform(g);
-  const warns: string[] = [];
-  if (cut > 0) warns.push(`${cut}両ドアカット`);
-  if (ld >= cap && g.waiting > 0) warns.push('満員！');
-  if (warns.length) {
-    ctx.textAlign = 'right';
-    ctx.font = '900 13px "Zen Maru Gothic", sans-serif';
-    ctx.fillStyle = '#B53E28';
-    ctx.fillText(warns.join('　'), w - pad, top);
-    ctx.textAlign = 'left';
-  }
-  for (const [label, v, max, color] of rows) {
-    if (y + 18 > top + hh + 40) break;
-    ctx.font = '700 13px "Zen Maru Gothic", sans-serif';
-    ctx.fillStyle = INK;
-    ctx.fillText(label, pad, y);
-    const gx = pad + 120;
-    const gw = bw - 120;
-    ctx.fillStyle = CARD;
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(gx, y + 1, gw, 14, 7);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.roundRect(gx, y + 1, gw * Math.min(1, v / max), 14, 7);
-    ctx.fill();
-    y += 24;
-  }
-}
-
-function drawBackdrop(ctx: CanvasRenderingContext2D, w: number, groundY: number): void {
-  ctx.fillStyle = '#F2D9A6';
-  ctx.beginPath();
-  ctx.arc(w * 0.85, groundY * 0.62, Math.min(w, groundY) * 0.12, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#C9BBA2';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, groundY * 0.82);
-  ctx.quadraticCurveTo(w * 0.25, groundY * 0.7, w * 0.45, groundY * 0.8);
-  ctx.quadraticCurveTo(w * 0.7, groundY * 0.68, w, groundY * 0.78);
-  ctx.stroke();
-}
-
-function drawCrowd(
-  ctx: CanvasRenderingContext2D,
-  n: number,
-  x0: number,
-  x1: number,
-  platTop: number,
-  carH: number,
-): void {
-  if (n <= 0) return;
-  const shown = Math.min(n, 40);
-  const span = Math.max(1, x1 - x0);
-  const r = Math.max(3, carH * 0.07);
-  for (let k = 0; k < shown; k++) {
-    const px = x0 + ((k * 0.618 * span) % span);
-    const py = platTop - r * 2.2 - (k % 3) * r * 0.9;
-    ctx.fillStyle = CAR_COLORS[k % CAR_COLORS.length];
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.roundRect(px - r, py, r * 2, r * 2.6, r);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#F3D9B8';
-    ctx.beginPath();
-    ctx.arc(px, py - r * 0.9, r * 0.9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-  ctx.fillStyle = INK;
-  ctx.font = '900 14px "Zen Maru Gothic", sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'bottom';
-  ctx.fillText(`待ち ${n}人`, x0, platTop - r * 6.2);
-}
-
-function drawTrain(
-  ctx: CanvasRenderingContext2D,
-  g: Game,
-  toX: (m: number) => number,
-  ppm: number,
-  groundY: number,
-  carH: number,
-  maxH: number,
-): void {
+function drawTrain(r: Renderer, g: Game): void {
   const cars = g.stats.cars;
   const doors = g.stats.doorsPerCar;
-  const bottom = groundY - 6;
-  // 二階建て化を重ねるほど背が高くなる（画面に入る範囲で）
   const decks = 1 + (g.stats.levels['capacity'] ?? 0);
-  const bodyH = Math.min(maxH, carH * (1 + 0.62 * (decks - 1)));
-  const top = bottom - bodyH;
+  const topZ = FLOOR_Z + DECK_H * decks + 0.3;
   const ratio = capacity(g) > 0 ? load(g) / capacity(g) : 0;
   const atStation = g.phase === 'dwell' || g.phase === 'adjust';
   const onPlat = atStation ? carsOnPlatform(g) : cars;
-  const w = ctx.canvas.width / (window.devicePixelRatio || 1);
+  const acN = Math.min(6, g.stats.levels['cooler'] ?? 0);
+  const motorN = Math.min(4, g.stats.levels['motor'] ?? 0);
 
-  for (let k = 0; k < cars; k++) {
-    const right = toX(g.x - k * CAR_LEN);
-    const left = toX(g.x - (k + 1) * CAR_LEN) + 2;
-    if (right < -5 || left > w + 5) continue;
-    const width = right - left;
+  for (let k = cars - 1; k >= 0; k--) {
+    const x0 = g.x - (k + 1) * CAR_LEN + GAP / 2;
+    const x1 = g.x - k * CAR_LEN - GAP / 2;
     const color = CAR_COLORS[k % CAR_COLORS.length];
+    const len = x1 - x0;
 
-    // 車体（外枠）
-    ctx.fillStyle = color;
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    if (k === 0) ctx.roundRect(left, top, width, bodyH, [6, 16, 6, 6]);
-    else ctx.roundRect(left, top, width, bodyH, 6);
-    ctx.fill();
-    ctx.stroke();
+    // 連結部の幌
+    if (k < cars - 1) r.qy(CW / 2 + 1, x0 - GAP, x0, FLOOR_Z, FLOOR_Z + 2.6, '#3A3631', false);
 
-    // 屋根の機器（冷房強化の数だけ増える）
-    const acN = Math.min(8, g.stats.levels['cooler'] ?? 0);
-    for (let a = 0; a < acN; a++) {
-      const aw = Math.min(18, width / (acN + 1) - 4);
-      const ax = left + ((a + 1) * width) / (acN + 1) - aw / 2;
-      ctx.fillStyle = '#CFE6EE';
-      ctx.fillRect(ax, top - 7, aw, 7);
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.4;
-      ctx.strokeRect(ax, top - 7, aw, 7);
-    }
-    // 床下の機器（高出力モーターの数だけ増える）
-    const motorN = Math.min(6, g.stats.levels['motor'] ?? 0);
-    for (let a = 0; a < motorN; a++) {
-      const mw = Math.min(16, width / (motorN + 2));
-      const mx = left + width * 0.38 + a * (mw + 3) - (motorN * (mw + 3)) / 2 + width * 0.12;
-      ctx.fillStyle = '#3A3631';
-      ctx.fillRect(mx, bottom - 2, mw, 6);
+    // 床下
+    r.qy(CW - 0.3, x0 + 1, x1 - 1, UNDER_Z, FLOOR_Z, '#3A3631', false);
+    for (let m = 0; m < motorN; m++) {
+      const mx = x0 + len * 0.3 + m * 2.2;
+      r.qy(CW - 0.25, mx, mx + 1.8, UNDER_Z + 0.1, FLOOR_Z - 0.1, '#24211D', false);
     }
 
-    // 断面（車内）
-    const inL = left + 5;
-    const inR = right - (k === 0 ? 10 : 5);
-    const inTop = top + 7;
-    const floorY = bottom - Math.max(8, carH * 0.16);
-    const inW = inR - inL;
-    ctx.fillStyle = '#FFF7E6';
-    ctx.fillRect(inL, inTop, inW, floorY - inTop);
-    const deckH = (floorY - inTop) / decks;
-
-    const spacing = CAR_LEN / doors;
-    const doorW = Math.min(1.6, spacing * 0.55) * ppm;
-    const doorXs: number[] = [];
-    for (let j = 0; j < doors; j++) doorXs.push(left + (j + 0.5) * spacing * ppm);
-
+    // 奥の壁（内側）と窓
+    r.qy(0, x0, x1, FLOOR_Z, topZ, tint(color, 0.55));
+    const bay = len / doors;
     for (let d = 0; d < decks; d++) {
-      const fy = floorY - d * deckH; // この階の床
-      const cy = fy - deckH; // この階の天井
-      // 座席（ドアの間）
-      ctx.fillStyle = '#C9B79C';
-      const seatH = Math.max(3, deckH * 0.1);
-      ctx.fillRect(inL, fy - seatH * 2.2, inW, seatH);
-      // 乗客
-      const fh = Math.min(deckH * 0.72, 34);
-      const fw = fh * 0.42;
-      const perRow = Math.max(1, Math.floor(inW / (fw * 1.3)));
+      const zf = FLOOR_Z + d * DECK_H;
+      for (let j = 0; j < doors; j++) {
+        const wx0 = x0 + j * bay + bay * 0.22;
+        const wx1 = x0 + (j + 1) * bay - bay * 0.22;
+        if (wx1 - wx0 > 0.8) r.qy(0.01, wx0, wx1, zf + 1.3, zf + 2.7, '#CFE6EE', true);
+      }
+    }
+
+    // 各階：床・座席・乗客
+    for (let d = 0; d < decks; d++) {
+      const zf = FLOOR_Z + d * DECK_H;
+      r.qz(zf, x0, x1, 0, CW, '#E8D6B5');
+      r.qz(zf + 0.7, x0 + 0.4, x1 - 0.4, 0, 1.1, '#C9B79C');
+      r.qy(1.1, x0 + 0.4, x1 - 0.4, zf, zf + 0.7, '#B3A07F');
+      const perRow = Math.max(1, Math.floor((len - 1.6) / 1.7));
       const slots = perRow * 2;
       const count = Math.round(ratio * slots);
+      const pts: [V3, string][] = [];
       for (let p = 0; p < count; p++) {
-        const row = p % 2; // 0: 手前、1: 奥
+        const row = p % 2;
         const idx = Math.floor(p / 2);
-        const jx = (hrand(k * 131 + d, p) - 0.5) * fw * 0.5;
-        const px = inL + fw * 0.7 + ((idx + (row ? 0.5 : 0)) * (inW - fw * 1.4)) / perRow + jx;
-        if (px > inR - fw * 0.5) continue;
-        const scale = row ? 0.86 : 1;
-        drawPerson(ctx, px, fy - 1 - (row ? fh * 0.08 : 0), fh * scale, PEOPLE[Math.floor(hrand(k, p * 7 + d) * PEOPLE.length)], row === 1);
+        const px = x0 + 1.2 + ((idx + (row ? 0.5 : 0)) * (len - 2.2)) / perRow + (hrand(k * 7 + d, p) - 0.5) * 0.6;
+        const py = row ? 2.1 : 4.2;
+        pts.push([[Math.min(x1 - 0.8, px), py, zf], PEOPLE[Math.floor(hrand(k + 11, p * 5 + d) * PEOPLE.length)]]);
       }
-      // 階の床
-      ctx.fillStyle = INK;
-      ctx.fillRect(inL, fy - 1, inW, 2);
-      if (d > 0) {
-        // 2階以上の窓枠
-        ctx.strokeStyle = shade(color);
-        ctx.lineWidth = 2;
-        ctx.strokeRect(inL + 1, cy + 1, inW - 2, deckH - 2);
-      }
+      pts.sort((a, b) => a[0][0] + a[0][1] - (b[0][0] + b[0][1]));
+      for (const [pt, col] of pts) drawPerson(r, pt, col, 0.92);
     }
 
-    // ドア（1階だけ）
-    const doorH = Math.min(deckH * 0.86, carH * 0.8);
-    for (const cx of doorXs) {
-      const open = atStation && g.doorAnim > 0 && k < onPlat ? g.doorAnim : 0;
-      const half = doorW / 2;
+    // 手前の腰壁と柱（上は抜いて中を見せる）
+    r.qy(CW, x0, x1, FLOOR_Z - 0.3, FLOOR_Z + 0.8, color);
+    r.qy(CW, x0, x0 + 0.5, FLOOR_Z + 0.8, topZ, color);
+    r.qy(CW, x1 - 0.5, x1, FLOOR_Z + 0.8, topZ, color);
+    r.qy(CW, x0, x1, topZ - 0.45, topZ, color);
+    for (let d = 1; d < decks; d++) r.qy(CW, x0, x1, FLOOR_Z + d * DECK_H - 0.25, FLOOR_Z + d * DECK_H + 0.25, color);
+
+    // ドア（1階・手前側）
+    const open = atStation && k < onPlat ? g.doorAnim : 0;
+    for (let j = 0; j < doors; j++) {
+      const xc = x0 + (j + 0.5) * bay;
+      const half = Math.min(0.75, bay * 0.28);
       const slide = half * open * 0.95;
-      ctx.fillStyle = shade(color);
-      ctx.globalAlpha = 0.85;
-      ctx.fillRect(cx - half - slide, floorY - doorH, half, doorH);
-      ctx.fillRect(cx + slide, floorY - doorH, half, doorH);
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.4;
-      ctx.strokeRect(cx - half - slide, floorY - doorH, half, doorH);
-      ctx.strokeRect(cx + slide, floorY - doorH, half, doorH);
+      r.ctx.globalAlpha = 0.82;
+      r.qy(CW + 0.02, xc - half - slide, xc - slide, FLOOR_Z + 0.8, FLOOR_Z + 2.7, shade(color));
+      r.qy(CW + 0.02, xc + slide, xc + half + slide, FLOOR_Z + 0.8, FLOOR_Z + 2.7, shade(color));
+      r.ctx.globalAlpha = 1;
     }
-    // 外枠をもう一度（断面の縁）
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    if (k === 0) ctx.roundRect(left, top, width, bodyH, [6, 16, 6, 6]);
-    else ctx.roundRect(left, top, width, bodyH, 6);
-    ctx.stroke();
-    ctx.fillStyle = CARD;
-    ctx.fillRect(left + 1, floorY + 2, width - 2, Math.max(3, carH * 0.05));
-
-    // 先頭車の顔
-    if (k === 0) {
-      ctx.fillStyle = '#FFF3CF';
-      ctx.fillRect(right - 10, top + 8, 7, bodyH * 0.3);
-      ctx.strokeStyle = INK;
-      ctx.strokeRect(right - 10, top + 8, 7, bodyH * 0.3);
-      ctx.fillStyle = '#FFE48A';
-      ctx.beginPath();
-      ctx.arc(right - 6, bottom - carH * 0.18, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    }
-
     // ドアカット（ホーム外の車両）
     if (atStation && k >= onPlat) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(left, top, width, bodyH);
-      ctx.clip();
-      ctx.strokeStyle = 'rgba(31,27,22,0.35)';
-      ctx.lineWidth = 4;
-      for (let s = left - bodyH; s < right; s += 12) {
-        ctx.beginPath();
-        ctx.moveTo(s, bottom);
-        ctx.lineTo(s + bodyH, top);
-        ctx.stroke();
-      }
-      ctx.restore();
+      r.ctx.globalAlpha = 0.55;
+      for (let hx = x0; hx < x1 - 0.8; hx += 1.2) r.qy(CW + 0.03, hx, hx + 0.5, FLOOR_Z - 0.3, FLOOR_Z + 0.8, INK, false);
+      r.ctx.globalAlpha = 1;
     }
 
-    // 車輪
-    ctx.fillStyle = INK;
-    for (const fx of [0.18, 0.32, 0.68, 0.82]) {
-      ctx.beginPath();
-      ctx.arc(left + width * fx, bottom + 2, Math.max(3, carH * 0.08), 0, Math.PI * 2);
-      ctx.fill();
+    // 天井の一部と屋根の機器
+    r.qz(topZ, x0, x1, 0, CW * 0.3, shade(color));
+    r.poly([[x0, 0, topZ], [x1, 0, topZ], [x1, CW, topZ], [x0, CW, topZ]], null, true, 1.6);
+    for (let a = 0; a < acN; a++) {
+      const bx = x0 + 1.5 + a * ((len - 3) / Math.max(1, acN));
+      box(r, bx, bx + 2, 0.2, CW * 0.3 - 0.1, topZ, topZ + 0.8, '#CFE6EE');
     }
-    // 連結器
-    if (k < cars - 1) ctx.fillRect(left - 4, bottom - carH * 0.35, 6, 5);
+
+    // 前の妻面（右下向き）
+    r.qx(x1, 0, CW, UNDER_Z, topZ, k === 0 ? color : shade(color));
+    if (k === 0) {
+      r.qx(x1 + 0.01, 0.8, CW - 0.8, FLOOR_Z + 1.3, FLOOR_Z + 2.7, '#FFF3CF');
+      r.qx(x1 + 0.01, 0, CW, FLOOR_Z + 0.2, FLOOR_Z + 0.5, CARD, false);
+      for (const yy of [1.2, CW - 1.2]) {
+        const [hx, hy] = r.P(x1 + 0.02, yy, FLOOR_Z + 0.9);
+        r.ctx.fillStyle = '#FFE48A';
+        r.ctx.strokeStyle = INK;
+        r.ctx.lineWidth = 1.5;
+        r.ctx.beginPath();
+        r.ctx.arc(hx, hy, Math.max(2.5, 0.35 * r.s), 0, Math.PI * 2);
+        r.ctx.fill();
+        r.ctx.stroke();
+      }
+    } else {
+      r.qx(x1 + 0.01, CW / 2 - 0.8, CW / 2 + 0.8, FLOOR_Z, FLOOR_Z + 2.4, '#3A3631', false);
+    }
+
+    // 車輪（手前側）
+    for (const fx of [2.4, 4.4, len - 4.4, len - 2.4]) {
+      const [wx, wy] = r.P(x0 + fx, CW - 0.2, UNDER_Z);
+      r.ctx.fillStyle = INK;
+      r.ctx.beginPath();
+      r.ctx.ellipse(wx, wy, 0.55 * r.s, 0.45 * r.s, 0, 0, Math.PI * 2);
+      r.ctx.fill();
+    }
   }
 }
 
-const PEOPLE = ['#6FC3A0', '#F0A79C', '#E9B23E', '#8299E0', '#F08E78', '#B98A5E', '#3A3631'];
+function box(r: Renderer, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, fill: string): void {
+  r.qy(y1, x0, x1, z0, z1, shade(fill));
+  r.qx(x1, y0, y1, z0, z1, shade(fill, 0.65));
+  r.qz(z1, x0, x1, y0, y1, fill);
+}
+
+function drawPerson(r: Renderer, p: V3, color: string, scale: number): void {
+  const [x, y] = r.P(p[0], p[1], p[2]);
+  const h = 2.3 * r.s * scale;
+  const ctx = r.ctx;
+  const bodyW = h * 0.36;
+  const bodyH = h * 0.58;
+  const headR = h * 0.17;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.roundRect(x - bodyW / 2, y - bodyH, bodyW, bodyH, bodyW / 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#F3D9B8';
+  ctx.beginPath();
+  ctx.arc(x, y - bodyH - headR * 0.9, headR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
+function label(ctx: CanvasRenderingContext2D, x: number, y: number, text: string, bg: string, fg = INK, size = 12): void {
+  ctx.font = `900 ${size}px "Zen Maru Gothic", sans-serif`;
+  const tw = ctx.measureText(text).width;
+  const bw = tw + 14;
+  const bh = size + 10;
+  ctx.fillStyle = bg;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x - bw / 2, y - bh, bw, bh, 5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y - bh / 2 + 1);
+}
 
 function hrand(a: number, b: number): number {
   let x = (Math.imul(a + 1, 73856093) ^ Math.imul(b + 1, 19349663)) >>> 0;
@@ -530,40 +348,13 @@ function hrand(a: number, b: number): number {
   return ((x ^ (x >>> 16)) >>> 0) / 4294967296;
 }
 
-function drawPerson(ctx: CanvasRenderingContext2D, x: number, feetY: number, h: number, color: string, back: boolean): void {
-  const headR = h * 0.17;
-  const bodyW = h * 0.36;
-  const bodyH = h * 0.58;
-  ctx.globalAlpha = back ? 0.75 : 1;
-  ctx.fillStyle = color;
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.roundRect(x - bodyW / 2, feetY - bodyH, bodyW, bodyH, bodyW / 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#F3D9B8';
-  ctx.beginPath();
-  ctx.arc(x, feetY - bodyH - headR * 0.9, headR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, fill: string) {
-  ctx.fillStyle = fill;
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.fill();
-  ctx.stroke();
-}
-
-function shade(hex: string): string {
+function shade(hex: string, k = 0.78): string {
   const n = parseInt(hex.slice(1), 16);
-  const r = Math.round(((n >> 16) & 255) * 0.78);
-  const gg = Math.round(((n >> 8) & 255) * 0.78);
-  const b = Math.round((n & 255) * 0.78);
-  return `rgb(${r},${gg},${b})`;
+  return `rgb(${Math.round(((n >> 16) & 255) * k)},${Math.round(((n >> 8) & 255) * k)},${Math.round((n & 255) * k)})`;
+}
+
+function tint(hex: string, t: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const m = (c: number) => Math.round(c + (255 - c) * t);
+  return `rgb(${m((n >> 16) & 255)},${m((n >> 8) & 255)},${m(n & 255)})`;
 }
