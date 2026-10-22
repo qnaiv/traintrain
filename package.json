@@ -1,0 +1,17 @@
+{
+  "name": "traintrain",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "まもなく、魔改造電車が参ります（開発コード hakobi）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "sim": "node --experimental-strip-types scripts/sim.ts"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}
