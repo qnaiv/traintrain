@@ -171,7 +171,7 @@ body {
   position: absolute;
   left: 8px;
   right: 8px;
-  bottom: 8px;
+  top: 64px;
   padding: 10px;
   border: 2.5px solid var(--ink);
   border-radius: 16px;
@@ -351,10 +351,9 @@ body {
   font-weight: 900;
 }
 
-.dwell-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.btn-depart {
+  min-height: 84px;
+  font-size: 24px;
 }
 
 .screen {

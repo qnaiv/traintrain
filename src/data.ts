@@ -19,24 +19,17 @@ export interface LineDef {
 export const ENODEN: LineDef = {
   id: 'enoden',
   name: '江ノ島電鉄',
+  // 実際は15駅。テンポ優先で7駅に間引いている
   stations: [
     { name: '藤沢', platformCars: 4, demand: 14 },
-    { name: '石上', platformCars: 4, demand: 6 },
-    { name: '柳小路', platformCars: 4, demand: 6 },
-    { name: '鵠沼', platformCars: 4, demand: 8 },
-    { name: '湘南海岸公園', platformCars: 4, demand: 8 },
+    { name: '鵠沼', platformCars: 4, demand: 10 },
     { name: '江ノ島', platformCars: 4, demand: 18 },
-    { name: '腰越', platformCars: 2, demand: 8 },
-    { name: '鎌倉高校前', platformCars: 4, demand: 14 },
-    { name: '七里ヶ浜', platformCars: 4, demand: 10 },
-    { name: '稲村ヶ崎', platformCars: 4, demand: 10 },
-    { name: '極楽寺', platformCars: 4, demand: 8 },
-    { name: '長谷', platformCars: 4, demand: 18 },
-    { name: '由比ヶ浜', platformCars: 4, demand: 8 },
-    { name: '和田塚', platformCars: 4, demand: 6 },
+    { name: '腰越', platformCars: 2, demand: 10 },
+    { name: '鎌倉高校前', platformCars: 4, demand: 16 },
+    { name: '長谷', platformCars: 4, demand: 20 },
     { name: '鎌倉', platformCars: 4, demand: 0 },
   ],
-  sections: [600, 450, 400, 500, 550, 650, 500, 450, 600, 700, 450, 400, 350, 450],
+  sections: [650, 600, 450, 550, 750, 600],
 };
 
 export const CAR_LEN = 20; // 1両の長さ [m]

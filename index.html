@@ -43,29 +43,20 @@
 
       <footer id="controls">
         <div id="ctl-run" class="ctl" hidden>
-          <div class="run-info">
-            <span>速度 <b id="run-speed">0</b> km/h</span>
-            <span>停止位置まで <b id="run-dist">0</b></span>
-            <span class="gauge-wrap">ブレーキ<span class="gauge"><span id="g-brake" class="gauge-fill gauge-red"></span></span></span>
-          </div>
           <button id="btn-brake" class="btn btn-brake" type="button">ブレーキ<small>長押し（スペースキー）</small></button>
         </div>
         <div id="ctl-dwell" class="ctl" hidden>
-          <div id="dwell-info" class="dwell-info"></div>
-          <div class="dwell-buttons">
-            <button id="btn-doors" class="btn" type="button">ドアを開ける</button>
-            <button id="btn-depart" class="btn btn-primary" type="button">発車 ▶</button>
-          </div>
+          <button id="btn-depart" class="btn btn-primary btn-depart" type="button">発車 ▶</button>
         </div>
       </footer>
 
       <section id="screen-title" class="screen">
         <div class="screen-inner">
-          <div class="eyebrow">ブラウザ ローグライク × 鉄道 ・ 開発コード hakobi ・ v0.1</div>
+          <div class="eyebrow">ブラウザ ローグライク × 鉄道 ・ 開発コード hakobi ・ v0.2</div>
           <h1 class="title"><span class="led">まもなく、</span><span class="title-main">魔改造電車が<br />参ります</span></h1>
           <ul class="howto">
             <li>駅が近づいたら<b>ブレーキを長押し</b>。停止位置にぴったり止めよう</li>
-            <li>停車中も時計は進む。<b>ドアを開けて</b>客を乗せ、時刻どおりに<b>発車</b></li>
+            <li>停車中も時計は進む。ドアは自動で開くので、乗せ終わったら時刻どおりに<b>発車</b></li>
             <li>乗り切れない客は積み残し（信頼が減る）。何を諦めるかは自分しだい</li>
             <li>駅を出るたびに<b>魔改造</b>を1つ。上限なしで重ねられる</li>
             <li><b>遅れ5分</b>か<b>信頼0</b>で運転打ち切り</li>

@@ -100,7 +100,7 @@ export function newGame(line: LineDef, seed = Date.now()): Game {
     onboard: new Array(n).fill(0),
     waiting: 0,
     doorAnim: 0,
-    doorsWant: false,
+    doorsWant: true,
     departQueued: false,
     adjustTimer: 0,
     flowAcc: 0,
@@ -112,7 +112,7 @@ export function newGame(line: LineDef, seed = Date.now()): Game {
     overReason: '',
   };
   g.waiting = spawnWaiting(g, 0);
-  toast(g, `${line.stations[0].name}駅。ドアを開けて客を乗せよう`, 'info');
+  toast(g, `${line.stations[0].name}駅。乗せ終わったら発車！`, 'info');
   return g;
 }
 
@@ -236,6 +236,7 @@ export function update(g: Game, dt: number): void {
     if (g.adjustTimer <= 0) {
       g.x = g.pos[g.target];
       g.phase = 'dwell';
+      g.doorsWant = true;
     }
   } else if (g.phase === 'dwell') updateDwell(g, dt);
 
@@ -259,6 +260,11 @@ function updateRunning(g: Game, dt: number): void {
   g.x += g.v * dt;
 
   const P = g.pos[g.target];
+  // 駅が近づいたら、選ばれなかった強化は見送り（停止メーターを隠さないため）
+  if (g.offer && P - g.x < 130) {
+    g.offer = null;
+    toast(g, '魔改造は見送り（駅が近い）', 'info');
+  }
   if (g.v <= 0 && g.x >= P - STOP_WINDOW_BEFORE && g.x <= P + PASS_DISTANCE) {
     arrive(g);
   } else if (g.x > P + PASS_DISTANCE) {
@@ -304,6 +310,7 @@ function arrive(g: Game): void {
   } else {
     g.x = P;
     g.phase = 'dwell';
+    g.doorsWant = true; // ドアは自動で開く
   }
   const cut = doorCutCars(g);
   if (cut > 0) toast(g, `ホームは${carsOnPlatform(g)}両分。${cut}両がドアカット`, 'bad');
@@ -380,7 +387,7 @@ function boardOne(g: Game): void {
 function spawnWaiting(g: Game, i: number): number {
   const st = g.line.stations[i];
   if (st.demand <= 0) return 0;
-  const ramp = 1 + 0.22 * i;
+  const ramp = 1 + 0.4 * i;
   const jitter = 0.8 + g.rand() * 0.4;
   return Math.max(1, Math.round(st.demand * ramp * jitter));
 }

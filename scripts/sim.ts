@@ -44,7 +44,7 @@ function run(seed: number, policy: Policy, pick: (g: Game) => number) {
       } else if (!g.doorsWant && g.doorAnim === 0) {
         // 発車時刻を過ぎたら、乗り切れていなくても発車する（積み残しを受け入れる）
         if (late && canDepart(g)) depart(g);
-        else if (!done) toggleDoors(g);
+        else if (!done && !g.doorsWant) toggleDoors(g);
       } else if (g.doorsWant && (done || late)) {
         if (!isTerminal(g)) toggleDoors(g);
       }

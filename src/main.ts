@@ -6,13 +6,11 @@ import {
   countdown,
   DELAY_LIMIT,
   dismissOffer,
-  doorCutCars,
   isTerminal,
   load,
   newGame,
   requestDepart,
   setBrake,
-  toggleDoors,
   update,
   type Game,
 } from './game.ts';
@@ -31,15 +29,19 @@ let shownToasts = '';
 let resultShown = false;
 
 // ---- 画面サイズ ----
-function resize() {
+// 下の操作欄の高さが変わるとステージも変わるので、毎フレーム大きさを合わせる
+function fitCanvas(): { w: number; h: number } {
   const dpr = window.devicePixelRatio || 1;
   const r = stage.getBoundingClientRect();
-  canvas.width = Math.round(r.width * dpr);
-  canvas.height = Math.round(r.height * dpr);
+  const cw = Math.round(r.width * dpr);
+  const ch = Math.round(r.height * dpr);
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw;
+    canvas.height = ch;
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w: r.width, h: r.height };
 }
-window.addEventListener('resize', resize);
-resize();
 
 // ---- 入力 ----
 const brakeBtn = $<HTMLButtonElement>('btn-brake');
@@ -66,8 +68,6 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
     e.preventDefault();
     if (!e.repeat) press();
-  } else if (e.code === 'KeyD') {
-    toggleDoors(game);
   } else if (e.code === 'Enter') {
     requestDepart(game);
   } else if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
@@ -79,7 +79,6 @@ window.addEventListener('keyup', (e) => {
 });
 window.addEventListener('blur', release);
 
-$('btn-doors').addEventListener('click', () => game && toggleDoors(game));
 $('btn-depart').addEventListener('click', () => game && requestDepart(game));
 $('offer-skip').addEventListener('click', () => game && dismissOffer(game));
 $('btn-start').addEventListener('click', start);
@@ -93,6 +92,11 @@ function start() {
   const doors = Number(q.get('doors'));
   if (cars > 0) game.stats.cars = cars;
   if (doors > 0) game.stats.doorsPerCar = doors;
+  // ?lv=capacity:2,cooler:3 で強化レベルも指定できる（見た目の確認用）
+  for (const part of (q.get('lv') ?? '').split(',')) {
+    const [id, n] = part.split(':');
+    if (id && Number(n) > 0) game.stats.levels[id] = Number(n);
+  }
   shownOffer = null;
   shownToasts = '';
   resultShown = false;
@@ -144,33 +148,14 @@ function renderHud(g: Game) {
   $('ctl-run').hidden = !running;
   $('ctl-dwell').hidden = running || g.phase === 'clear' || g.phase === 'over';
 
-  if (running) {
-    $('run-speed').textContent = String(Math.round(g.v * 3.6));
-    const remain = g.pos[g.target] - g.x;
-    $('run-dist').textContent = remain >= 0 ? `${remain.toFixed(1)} m` : `${(-remain).toFixed(1)} m 超過`;
-    $('g-brake').style.width = `${g.brake * 100}%`;
-  } else {
-    const info: string[] = [];
-    if (g.phase === 'adjust') info.push('<span class="warn">停止位置を直しています…</span>');
-    const alight = g.onboard[g.target];
-    if (alight > 0) info.push(`降車待ち ${alight}人`);
-    info.push(`乗車待ち ${g.waiting}人`);
-    const cut = doorCutCars(g);
-    if (cut > 0) info.push(`<span class="warn">${cut}両ドアカット</span>`);
-    if (load(g) >= capacity(g) && g.waiting > 0) info.push('<span class="warn">満員</span>');
-    $('dwell-info').innerHTML = info.join('');
-    const doorsBtn = $<HTMLButtonElement>('btn-doors');
-    doorsBtn.textContent = g.doorsWant ? 'ドアを閉める' : 'ドアを開ける';
-    doorsBtn.disabled = g.phase !== 'dwell';
+  if (!running) {
     const dep = $<HTMLButtonElement>('btn-depart');
     dep.disabled = g.phase !== 'dwell' || isTerminal(g) || g.departQueued;
     dep.textContent = isTerminal(g)
       ? '終点（全員降ろす）'
       : g.departQueued
         ? 'ドアを閉めています…'
-        : g.doorsWant || g.doorAnim > 0
-          ? '閉めて発車 ▶'
-          : '発車 ▶';
+        : '発車 ▶';
   }
 
   // 強化の3択
@@ -250,8 +235,8 @@ function frame(now: number) {
   last = now;
   if (game) {
     update(game, dt);
-    const r = stage.getBoundingClientRect();
-    draw(ctx, game, r.width, r.height);
+    const r = fitCanvas();
+    draw(ctx, game, r.w, r.h);
     renderHud(game);
   }
   requestAnimationFrame(frame);
