@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1F1B16" />
+    <title>試作：満員電車シェイク</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" />
+    <style>
+      :root { --paper:#f5efe3; --card:#fffdf6; --ink:#1f1b16; --sub:#5a5045; --tomato:#e4553a; --mint:#6fc3a0; --mustard:#e9b23e; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: 'Zen Maru Gothic', sans-serif; overscroll-behavior: none; }
+      #app { display: flex; flex-direction: column; height: 100dvh; max-width: 1100px; margin: 0 auto; }
+      header { padding: 10px 14px 6px; border-bottom: 2px solid var(--ink); display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: end; }
+      .eyebrow { font-size: 10px; font-weight: 700; color: var(--sub); grid-column: 1 / -1; }
+      #h-station { font-size: 18px; font-weight: 900; }
+      #h-speed { font-size: 14px; font-weight: 900; text-align: right; }
+      .rate { font-family: 'Dela Gothic One', sans-serif; font-size: 30px; line-height: 1; }
+      .rate.warm { color: #b07a10; }
+      .rate.hot { color: var(--tomato); }
+      .rate-wrap { display: flex; align-items: baseline; gap: 6px; }
+      .rate-wrap small { font-size: 11px; font-weight: 700; color: var(--sub); }
+      #h-fare { font-size: 18px; font-weight: 900; text-align: right; }
+      #h-sub { font-size: 11px; font-weight: 700; color: var(--sub); grid-column: 1 / -1; }
+      main { position: relative; flex: 1; min-height: 0; }
+      canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+      #toasts { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 5px; align-items: center; pointer-events: none; }
+      .toast { padding: 5px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 13px; white-space: nowrap; }
+      .toast.bad { background: var(--tomato); color: #fffdf6; }
+      .toast.good { background: var(--mustard); }
+      footer { padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 2px solid var(--ink); }
+      #hint { font-size: 12px; font-weight: 700; color: var(--sub); margin-bottom: 6px; text-align: center; }
+      #lever { display: grid; grid-template-columns: 1.3fr repeat(7, 1fr); gap: 4px; touch-action: none; user-select: none; }
+      .notch { height: 58px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-family: inherit; font-weight: 900; font-size: 14px; color: var(--ink); padding: 0; }
+      .notch.brake { background: #fbe3dc; }
+      .notch.power { background: #dff2e8; }
+      .notch.eb { background: #f5c6b8; }
+      .notch.on { transform: translateY(-4px); box-shadow: 0 4px 0 var(--ink); }
+      .notch.brake.on { background: var(--tomato); color: #fffdf6; }
+      .notch.power.on { background: var(--mint); }
+      .notch:not(.brake):not(.power).on { background: var(--mustard); }
+      #result { position: fixed; inset: 0; background: rgba(31,27,22,0.55); display: grid; place-items: center; padding: 16px; }
+      #result[hidden] { display: none; }
+      .card { background: var(--card); border: 2px solid var(--ink); border-radius: 16px; padding: 20px; width: min(360px, 100%); box-shadow: 0 6px 0 var(--ink); }
+      .card h2 { font-family: 'Dela Gothic One', sans-serif; font-weight: 400; margin: 0 0 12px; font-size: 24px; }
+      dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0 0 16px; font-weight: 700; }
+      dd { margin: 0; text-align: right; font-weight: 900; }
+      #retry { width: 100%; height: 50px; border: 2px solid var(--ink); border-radius: 12px; background: var(--mint); font-family: inherit; font-weight: 900; font-size: 16px; box-shadow: 0 4px 0 var(--ink); }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div class="eyebrow">試作：満員電車シェイク ― 客には触れない。加速とブレーキで寄せる</div>
+        <div id="h-station"></div>
+        <div id="h-speed"></div>
+        <div class="rate-wrap"><span id="h-rate" class="rate"></span><small>乗車率</small></div>
+        <div id="h-fare"></div>
+        <div id="h-sub"></div>
+      </header>
+      <main>
+        <canvas id="view"></canvas>
+        <div id="toasts"></div>
+      </main>
+      <footer>
+        <div id="hint"></div>
+        <div id="lever" aria-label="マスコン"></div>
+      </footer>
+    </div>
+    <div id="result" hidden>
+      <div class="card">
+        <h2>終点 鎌倉</h2>
+        <dl id="result-stats"></dl>
+        <button id="retry" type="button">もう一度</button>
+      </div>
+    </div>
+    <script type="module" src="/src/proto/shake.ts"></script>
+  </body>
+</html>
