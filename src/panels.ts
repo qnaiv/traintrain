@@ -1,6 +1,6 @@
 // キャンバス上部の情報（路線ストリップ・停止メーター・停車パネル）
 
-import { capacity, carsOnPlatform, load, type Game } from './game.ts';
+import { alightCount, capacity, carsOnPlatform, load, type Game } from './game.ts';
 
 const INK = '#1F1B16';
 const CARD = '#FFFDF6';
@@ -146,7 +146,7 @@ export function drawDwellPanel(ctx: CanvasRenderingContext2D, g: Game, w: number
   const t = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   ctx.fillText(cd >= 0 ? `発車まで ${t}` : `遅れ +${t}`, pad, top + 16);
 
-  const alight = g.onboard[g.target];
+  const alight = alightCount(g);
   ctx.font = '700 13px "Zen Maru Gothic", sans-serif';
   ctx.fillStyle = INK;
   ctx.fillText(`降車あと${alight}人　乗車待ち${g.waiting}人　車内${ld}/${cap}人`, pad, top + 64);

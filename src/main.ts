@@ -2,6 +2,9 @@ import './style.css';
 import { ENODEN } from './data.ts';
 import {
   capacity,
+  carsOnPlatform,
+  loadOfCar,
+  slotsPerCar,
   chooseOffer,
   countdown,
   DELAY_LIMIT,
@@ -158,6 +161,8 @@ function renderHud(g: Game) {
         : '発車 ▶';
   }
 
+  renderCarStrip(g);
+
   // 強化の3択
   if (g.offer !== shownOffer) {
     shownOffer = g.offer;
@@ -197,6 +202,28 @@ function renderHud(g: Game) {
     resultShown = true;
     showResult(g);
   }
+}
+
+let stripKey = '';
+function renderCarStrip(g: Game) {
+  const on = carsOnPlatform(g);
+  const per = slotsPerCar(g);
+  const cars: { load: number; alight: number; cut: boolean }[] = [];
+  for (let k = 0; k < g.stats.cars; k++) cars.push({ load: loadOfCar(g, k), alight: 0, cut: k >= on });
+  for (const p of g.passengers) if (p.dest === g.target) cars[p.car].alight++;
+  const key = JSON.stringify([per, cars, g.phase === 'running']);
+  if (key === stripKey) return;
+  stripKey = key;
+  const box = $('car-strip');
+  box.innerHTML = '';
+  cars.forEach((c, k) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'car-btn' + (c.cut ? ' cut' : '') + (c.cut && c.alight > 0 ? ' warn' : '') + (c.load >= per ? ' full' : '');
+    const right = c.load >= per ? '満' : c.alight > 0 ? `降${c.alight}${c.cut ? '！' : ''}` : '';
+    b.innerHTML = `<span class="row"><span>${k + 1}号車</span><span>${right}</span></span><span class="bar"><i style="width:${Math.round((c.load / Math.max(1, per)) * 100)}%"></i></span><span class="sub">${c.cut ? '開かない' : `${c.load}/${per}人`}</span>`;
+    box.appendChild(b);
+  });
 }
 
 function showResult(g: Game) {

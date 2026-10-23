@@ -468,3 +468,75 @@ body {
     font-size: 11px;
   }
 }
+
+.car-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin-bottom: 8px;
+  scrollbar-width: none;
+}
+
+.car-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.car-btn {
+  flex: 1 0 72px;
+  min-height: 52px;
+  padding: 5px 7px;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.car-btn .row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.car-btn .bar {
+  height: 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--card);
+}
+
+.car-btn .bar i {
+  display: block;
+  height: 100%;
+  background: var(--mint);
+}
+
+.car-btn .sub {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.car-btn.cut {
+  border-style: dashed;
+  border-color: #b53e28;
+}
+
+.car-btn.cut .sub {
+  color: #8a1f0e;
+}
+
+.car-btn.warn {
+  background: #fbe3dc;
+  color: #8a1f0e;
+}
+
+.car-btn.full .bar i {
+  background: var(--tomato);
+}
