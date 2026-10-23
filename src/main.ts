@@ -15,8 +15,15 @@ import {
   requestDepart,
   setBrake,
   update,
+  isCarFull,
+  relayout,
+  movePassengerToCar,
   type Game,
 } from './game.ts';
+import { DEST_COLORS } from './data.ts';
+import type { ExtResult } from './exterior.ts';
+import type { InteriorHit } from './interior.ts';
+import { noteFocusChange } from './interior.ts';
 import { draw } from './render.ts';
 import type { UpgradeDef } from './upgrades.ts';
 
@@ -30,6 +37,120 @@ let game: Game | null = null;
 let shownOffer: UpgradeDef[] | null = null;
 let shownToasts = '';
 let resultShown = false;
+
+// ---- 視点（外／車内） ----
+let mode: 'out' | 'in' = 'out';
+let focus = 0;
+let lastExt: ExtResult | null = null;
+let hits: InteriorHit[] = [];
+interface Drag {
+  id: number;
+  pointerId: number;
+  x0: number;
+  y0: number;
+  sx: number;
+  sy: number;
+  active: boolean;
+  over: number;
+}
+let drag: Drag | null = null;
+const backBtn = $<HTMLButtonElement>('btn-out');
+const ghost = $('drag-ghost');
+
+function openInterior(car: number) {
+  if (!game) return;
+  car = Math.max(0, Math.min(game.stats.cars - 1, car));
+  if (mode === 'in') noteFocusChange(focus, car);
+  focus = car;
+  mode = 'in';
+  stripKey = '';
+}
+function closeInterior() {
+  cancelDrag();
+  mode = 'out';
+  stripKey = '';
+}
+backBtn.addEventListener('click', closeInterior);
+
+function stagePoint(e: PointerEvent): [number, number] {
+  const r = canvas.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  if (!game) return;
+  const [x, y] = stagePoint(e);
+  if (mode === 'out') {
+    const t = lastExt?.train;
+    if (t && x >= t.x0 - 10 && x <= t.x1 + 10 && y >= t.y0 - 10 && y <= t.y1 + 10) {
+      // 押した場所に近い車両を開く（右下が先頭＝1号車）
+      const f = (x - t.x0) / Math.max(1, t.x1 - t.x0);
+      openInterior(game.stats.cars - 1 - Math.floor(f * game.stats.cars));
+    }
+    return;
+  }
+  // 頭に近い順
+  let best: InteriorHit | null = null;
+  let bd = Infinity;
+  for (const h of hits) {
+    const d = Math.hypot(h.sx - x, h.sy - y);
+    if (d < h.r && d < bd) {
+      bd = d;
+      best = h;
+    }
+  }
+  if (!best) return;
+  e.preventDefault();
+  canvas.setPointerCapture(e.pointerId);
+  drag = { id: best.id, pointerId: e.pointerId, x0: x, y0: y, sx: x, sy: y, active: false, over: -1 };
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.pointerId || !game) return;
+  const [x, y] = stagePoint(e);
+  drag.sx = x;
+  drag.sy = y;
+  if (!drag.active && Math.hypot(x - drag.x0, y - drag.y0) > 6) drag.active = true;
+  if (!drag.active) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('.car-btn');
+  const over = el ? Number(el.dataset.k) : -1;
+  drag.over = over;
+  const p = game.passengers.find((q) => q.id === drag!.id);
+  ghost.hidden = !(y > canvas.getBoundingClientRect().height - 4);
+  ghost.style.left = `${e.clientX}px`;
+  ghost.style.top = `${e.clientY}px`;
+  if (p) ghost.style.setProperty('--c', DEST_COLORS[p.dest] ?? '#E9B23E');
+  ghost.textContent = p ? `${game.line.stations[p.dest]?.name ?? ''}まで` : '';
+  document.querySelectorAll<HTMLElement>('.car-btn').forEach((b) => {
+    const k = Number(b.dataset.k);
+    b.classList.toggle('drop-ok', k === over && k !== p?.car && !isCarFull(game!, k));
+    b.classList.toggle('drop-full', k === over && k !== p?.car && isCarFull(game!, k));
+  });
+});
+function endDrag(e: PointerEvent) {
+  if (!drag || e.pointerId !== drag.pointerId || !game) return;
+  const d = drag;
+  if (d.active && d.over >= 0) {
+    const p = game.passengers.find((q) => q.id === d.id);
+    const btn = document.querySelector<HTMLElement>(`.car-btn[data-k="${d.over}"]`);
+    if (p && p.car !== d.over) {
+      if (movePassengerToCar(game, d.id, d.over)) {
+        stripKey = '';
+      } else if (btn) {
+        btn.classList.remove('shake');
+        void btn.offsetWidth;
+        btn.classList.add('shake');
+      }
+    }
+  }
+  cancelDrag();
+}
+function cancelDrag() {
+  drag = null;
+  ghost.hidden = true;
+  document.querySelectorAll('.car-btn').forEach((b) => b.classList.remove('drop-ok', 'drop-full'));
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', () => cancelDrag());
 
 // ---- 画面サイズ ----
 // 下の操作欄の高さが変わるとステージも変わるので、毎フレーム大きさを合わせる
@@ -100,8 +221,12 @@ function start() {
     const [id, n] = part.split(':');
     if (id && Number(n) > 0) game.stats.levels[id] = Number(n);
   }
+  relayout(game);
   shownOffer = null;
   shownToasts = '';
+  mode = 'out';
+  focus = 0;
+  cancelDrag();
   resultShown = false;
   $('screen-title').hidden = true;
   $('screen-result').hidden = true;
@@ -211,19 +336,34 @@ function renderCarStrip(g: Game) {
   const cars: { load: number; alight: number; cut: boolean }[] = [];
   for (let k = 0; k < g.stats.cars; k++) cars.push({ load: loadOfCar(g, k), alight: 0, cut: k >= on });
   for (const p of g.passengers) if (p.dest === g.target) cars[p.car].alight++;
-  const key = JSON.stringify([per, cars, g.phase === 'running']);
+  const key = JSON.stringify([per, cars, mode, focus]);
   if (key === stripKey) return;
   stripKey = key;
   const box = $('car-strip');
-  box.innerHTML = '';
-  cars.forEach((c, k) => {
+  // ドラッグ中に要素が作り直されないよう、数が同じなら中身だけ差し替える
+  while (box.children.length < cars.length) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'car-btn' + (c.cut ? ' cut' : '') + (c.cut && c.alight > 0 ? ' warn' : '') + (c.load >= per ? ' full' : '');
-    const right = c.load >= per ? '満' : c.alight > 0 ? `降${c.alight}${c.cut ? '！' : ''}` : '';
-    b.innerHTML = `<span class="row"><span>${k + 1}号車</span><span>${right}</span></span><span class="bar"><i style="width:${Math.round((c.load / Math.max(1, per)) * 100)}%"></i></span><span class="sub">${c.cut ? '開かない' : `${c.load}/${per}人`}</span>`;
+    b.dataset.k = String(box.children.length);
+    b.addEventListener('click', () => openInterior(Number(b.dataset.k)));
+    b.addEventListener('animationend', () => b.classList.remove('shake'));
     box.appendChild(b);
+  }
+  while (box.children.length > cars.length) box.lastElementChild!.remove();
+  cars.forEach((c, k) => {
+    const b = box.children[k] as HTMLButtonElement;
+    const keep = ['drop-ok', 'drop-full', 'shake'].filter((x) => b.classList.contains(x));
+    b.className =
+      'car-btn' +
+      (c.cut ? ' cut' : '') +
+      (c.cut && c.alight > 0 ? ' warn' : '') +
+      (c.load >= per ? ' full' : '') +
+      (mode === 'in' && k === focus ? ' cur' : '') +
+      keep.map((x) => ' ' + x).join('');
+    const right = c.load >= per ? '満' : c.alight > 0 ? `降${c.alight}${c.cut ? '！' : ''}` : '';
+    b.innerHTML = `<span class="row"><span>${k + 1}号車</span><span>${right}</span></span><span class="bar"><i style="width:${Math.round((c.load / Math.max(1, per)) * 100)}%"></i></span><span class="sub">${c.cut ? '開かない' : `${c.load}/${per}人`}</span><span class="drop-label"></span>`;
   });
+  if (mode === 'in') (box.children[focus] as HTMLElement | undefined)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
 function showResult(g: Game) {
@@ -256,14 +396,29 @@ function showResult(g: Game) {
 // ---- ループ ----
 // 確認用：?speed=4 で時間を早回し
 const SPEED = Math.max(1, Number(new URLSearchParams(location.search).get('speed')) || 1);
+const DEBUG = new URLSearchParams(location.search).has('debug');
 let last = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000) * SPEED;
   last = now;
   if (game) {
     update(game, dt);
+    // 駅が近づいたら外の視点に戻す（ブレーキの見極めは外で）
+    if (mode === 'in' && game.phase === 'running' && game.pos[game.target] - game.x < 160) closeInterior();
+    if (mode === 'in' && (game.phase === 'clear' || game.phase === 'over')) closeInterior();
+    if (focus >= game.stats.cars) focus = game.stats.cars - 1;
     const r = fitCanvas();
-    draw(ctx, game, r.w, r.h);
+    const res = draw(ctx, game, r.w, r.h, {
+      mode,
+      focus,
+      drag: drag && drag.active ? { id: drag.id, sx: drag.sx, sy: drag.sy } : null,
+      dt,
+    });
+    lastExt = res.ext;
+    hits = res.hits;
+    if (DEBUG) (window as unknown as { __hakobi: unknown }).__hakobi = { game, hits };
+    backBtn.hidden = mode !== 'in';
+    document.body.classList.toggle('view-in', mode === 'in');
     renderHud(game);
   }
   requestAnimationFrame(frame);

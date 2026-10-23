@@ -21,6 +21,10 @@ export interface PersonHit {
   sx: number;
   sy: number;
   r: number;
+  /** 頭の中心と半径（吹き出しの位置合わせ用） */
+  hx: number;
+  hy: number;
+  hr: number;
 }
 
 interface Part {
@@ -54,7 +58,7 @@ export function drawPerson(iso: Iso, x: number, y: number, z: number, look: Look
     ctx.fill();
     ctx.stroke();
     ctx.globalAlpha = 1;
-    return { sx: hx, sy: hy, r: Math.max(6, 0.5 * s) };
+    return { sx: hx, sy: hy, r: Math.max(6, 0.5 * s), hx, hy, hr: Math.max(1.2, 0.2 * s) };
   }
 
   const fx = FX[o.facing];
@@ -207,7 +211,7 @@ export function drawPerson(iso: Iso, x: number, y: number, z: number, look: Look
     }
   }
   ctx.globalAlpha = 1;
-  return { sx: hx, sy: hy + r * 1.6, r: Math.max(14, r * 2.6) };
+  return { sx: hx, sy: hy + r * 2.2, r: Math.max(16, r * 3.0), hx, hy, hr: r };
 }
 
 function easeOutBack(t: number): number {

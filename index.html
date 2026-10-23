@@ -34,6 +34,7 @@
 
       <main id="stage">
         <canvas id="view"></canvas>
+        <button id="btn-out" class="btn-out" type="button" hidden>◀ 外へ</button>
         <div id="toasts" aria-live="polite"></div>
         <div id="offer" hidden>
           <div class="offer-head">魔改造を1つ選ぶ（走行中も時計は進む）<button id="offer-skip" type="button">見送る</button></div>
@@ -51,14 +52,17 @@
         </div>
       </footer>
 
+      <div id="drag-ghost" class="drag-ghost" hidden></div>
+
       <section id="screen-title" class="screen">
         <div class="screen-inner">
-          <div class="eyebrow">ブラウザ ローグライク × 鉄道 ・ 開発コード hakobi ・ v0.3</div>
+          <div class="eyebrow">ブラウザ ローグライク × 鉄道 ・ 開発コード hakobi ・ v0.4</div>
           <h1 class="title"><span class="led">まもなく、</span><span class="title-main">魔改造電車が<br />参ります</span></h1>
           <ul class="howto">
             <li>駅が近づいたら<b>ブレーキを長押し</b>。停止位置にぴったり止めよう</li>
             <li>停車中も時計は進む。ドアは自動で開くので、乗せ終わったら時刻どおりに<b>発車</b></li>
             <li>乗り切れない客は積み残し（信頼が減る）。何を諦めるかは自分しだい</li>
+            <li>電車か下の車両ボタンを押すと<b>車内</b>へ。人を車両ボタンへドラッグして、降りる駅で開く車両に移そう</li>
             <li>駅を出るたびに<b>魔改造</b>を1つ。上限なしで重ねられる</li>
             <li><b>遅れ5分</b>か<b>信頼0</b>で運転打ち切り</li>
           </ul>

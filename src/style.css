@@ -540,3 +540,123 @@ body {
 .car-btn.full .bar i {
   background: var(--tomato);
 }
+
+.car-btn {
+  position: relative;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+
+.car-btn.cur {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 0 var(--ink);
+  background: #fff3cf;
+}
+
+.car-btn .drop-label {
+  display: none;
+}
+
+.car-btn.drop-ok {
+  background: #d5f0e2;
+  border-color: #2e6b53;
+  border-style: solid;
+  box-shadow: 0 0 0 3px var(--mint);
+}
+
+.car-btn.drop-ok .drop-label,
+.car-btn.drop-full .drop-label {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.car-btn.drop-ok .drop-label::after {
+  content: 'ここへ';
+  color: #2e6b53;
+  background: rgba(213, 240, 226, 0.88);
+  inset: 0;
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.car-btn.drop-full {
+  background: #ddd8cf;
+  color: #8a8276;
+}
+
+.car-btn.drop-full .drop-label::after {
+  content: '満';
+  color: #5a5045;
+  background: rgba(221, 216, 207, 0.9);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.car-btn.shake {
+  animation: car-shake 0.38s;
+}
+
+@keyframes car-shake {
+  0%, 100% { translate: 0 0; }
+  20% { translate: -6px 0; }
+  40% { translate: 6px 0; }
+  60% { translate: -4px 0; }
+  80% { translate: 3px 0; }
+}
+
+.btn-out {
+  position: absolute;
+  right: 12px;
+  top: 64px;
+  z-index: 3;
+  padding: 7px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font-family: inherit;
+  font-weight: 900;
+  font-size: 13px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+}
+
+.drag-ghost {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  transform: translate(-50%, -140%);
+  padding: 4px 10px 4px 22px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--card);
+  font-weight: 900;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.drag-ghost::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin-top: -6.5px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--c, var(--mustard));
+}
+
+body.view-in #view {
+  touch-action: none;
+}

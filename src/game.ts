@@ -324,6 +324,22 @@ export function movePassenger(g: Game, id: number, car: number, slot: number): b
   return true;
 }
 
+/** 乗客を別の車両へ移す（空いた席に入る）。満員なら false */
+export function movePassengerToCar(g: Game, id: number, car: number): boolean {
+  const p = g.passengers.find((q) => q.id === id);
+  if (!p || car < 0 || car >= g.stats.cars || p.car === car) return false;
+  const spot = pickFreeSlot(g, car, car + 1);
+  if (!spot) return false;
+  p.car = spot.car;
+  p.slot = spot.slot;
+  p.t = g.time;
+  return true;
+}
+
+export function isCarFull(g: Game, car: number): boolean {
+  return loadOfCar(g, car) >= slotsPerCar(g);
+}
+
 /** 強化で席の並びが変わったら、乗客をいちばん近い席へ座り直させる */
 export function relayout(g: Game): void {
   const key = layoutKey(g.stats);

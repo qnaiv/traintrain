@@ -14,7 +14,7 @@ export interface SlotDef {
   row: number;
 }
 
-const ROW_Y = [-0.88, -0.3, 0.3, 0.88];
+const ROW_Y = [-0.98, -0.3, 0.3, 0.98];
 export const DOOR_HALF = 0.62;
 
 export function decksOf(st: Stats): number {
@@ -54,7 +54,7 @@ export function buildLayout(st: Stats): SlotDef[] {
         const door = d === 0 && inDoorZone(x, doors);
         const seat = wall && !door;
         const p = seat ? 0 : wall ? 2 : 1;
-        cells.push({ deck: d, x, y: ROW_Y[r], seat, row: r, p, c });
+        cells.push({ deck: d, x, y: wall && !seat ? Math.sign(ROW_Y[r]) * 0.82 : ROW_Y[r], seat, row: r, p, c });
       }
     }
     cells.sort((a, b) => a.p - b.p || Math.abs(a.x - CAR_LEN / 2) - Math.abs(b.x - CAR_LEN / 2) || a.row - b.row);
