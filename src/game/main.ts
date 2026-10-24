@@ -14,6 +14,12 @@ import {
   LOADOUTS,
   loadoutOf,
   unlockLoadout,
+  COMBOS,
+  OFFER_TAGS,
+  PART_NAME,
+  comboDef,
+  comboHint,
+  type Tag,
   resetMeta,
   WAVE_PERIOD,
   autoArrange,
@@ -333,6 +339,11 @@ $('btn-auto').addEventListener('click', () => {
 });
 // 急ブレーキ射出
 const ebBtn = $('btn-eb');
+/** キーワードのタグ */
+const TAG_BG: Record<Tag, string> = { 射出: '#F08E78', 守り: '#A6DCC3', 突破: '#F3D27F', 満員: '#CFE6EE' };
+function tagHtml(ts: Tag[]): string {
+  return ts.map((t) => `<span class="ktag" style="background:${TAG_BG[t]}">【${t}】</span>`).join('');
+}
 /** お金はコインのアイコン＋数字で見せる */
 function coinHtml(n: number): string {
   return `<span class="cn"><i class="coin"></i>${n.toLocaleString()}</span>`;
@@ -402,6 +413,15 @@ function toHub() {
 $('btn-start').addEventListener('click', startRun);
 // データ初期化（2回押しで確定）
 let resetArmed = -Infinity;
+let hubTab: 'lo' | 'book' = 'lo';
+$('tab-lo').addEventListener('click', () => {
+  hubTab = 'lo';
+  renderHub();
+});
+$('tab-book').addEventListener('click', () => {
+  hubTab = 'book';
+  renderHub();
+});
 $('btn-reset').addEventListener('click', () => {
   const b = $('btn-reset');
   if (performance.now() - resetArmed > 4000) {
@@ -430,6 +450,21 @@ $('btn-again').addEventListener('click', startRun);
 function renderHub() {
   $('hub-bank').innerHTML = coinHtml(meta.bank);
   $('hub-sub').innerHTML = meta.runs ? `これまで ${meta.runs}回 出発・最高 ${coinHtml(meta.best)}` : 'はじめての出発。まずは1回走ってみよう';
+  const found = COMBOS.filter((c) => meta.combos[c.id]).length;
+  $('tab-book').innerHTML = `コンボ図鑑 <small>${found}/${COMBOS.length}</small>`;
+  $('ups').hidden = hubTab !== 'lo';
+  $('book').hidden = hubTab !== 'book';
+  $('tab-lo').classList.toggle('on', hubTab === 'lo');
+  $('tab-book').classList.toggle('on', hubTab === 'book');
+  $('book').innerHTML =
+    `<div class="book-bar"><i style="width:${(found / COMBOS.length) * 100}%"></i></div>` +
+    COMBOS.map((c) => {
+      const d = meta.combos[c.id];
+      if (d) return `<div class="bk"><div class="bk-head"><b>${c.name}</b>${tagHtml(c.tags)}<small>${d} 発見</small></div><span class="bk-cond">${c.cond}</span><span class="bk-eff">${coinText(c.eff)}</span></div>`;
+      const h = c.parts[0] === 'many' ? PART_NAME.many : `${PART_NAME[c.parts[0]]}と、何か`;
+      return `<div class="bk unknown"><b>？？？</b><span class="bk-cond">${h}</span></div>`;
+    }).join('') +
+    '<p class="bk-note">見つけていないコンボは片方だけヒント。発動した瞬間に名前が開く</p>';
   const box = $('ups');
   box.innerHTML = '';
   for (const l of LOADOUTS) {
@@ -457,6 +492,7 @@ function renderHub() {
 // ---------- HUD ----------
 let candKey = '';
 let offerShown: unknown = null;
+let cutinShown = -1;
 let shopOpen = false;
 let shopKey = '';
 let resultShown = false;
@@ -703,6 +739,9 @@ function renderHud() {
     if (key !== shopKey) {
       shopKey = key;
       $('shop-money').innerHTML = `所持金 ${coinHtml(R.money)}`;
+      const owned = [...R.mods];
+      const bt = owned.flatMap((m) => OFFER_TAGS[m] ?? []) as Tag[];
+      $('shop-build').innerHTML = owned.length ? `いまのビルド ${tagHtml(bt)}` : 'まだ魔改造なし。タグをそろえるとコンボが起きやすい';
       const cards = $('offer-cards');
       cards.innerHTML = '';
       R.offer.forEach((o, i) => {
@@ -711,7 +750,10 @@ function renderHud() {
         const can = !o.sold && R.money >= o.price;
         b.className = 'ocard ' + (o.kind === 'mod' ? 'o-mod' : 'o-item') + (o.sold ? ' sold' : can ? '' : ' poor');
         b.disabled = o.sold;
-        b.innerHTML = `<span class="tag">${o.kind === 'item' ? 'アイテム' : '魔改造（このラン中ずっと）'}</span><span class="price">${o.sold ? '購入済み' : (o.price < o.full ? `<s>${o.full}</s> ` : '') + coinHtml(o.price)}</span>${!o.sold && o.price < o.full ? '<span class="sale">セール</span>' : ''}<b>${o.name}</b><span class="d">${o.desc}</span>`;
+        const hint = o.sold ? null : comboHint(R, o.id);
+        const known = hint && meta.combos[hint.combo.id];
+        if (hint) b.classList.add('hint');
+        b.innerHTML = `<span class="tagrow"><span class="tag">${o.kind === 'item' ? 'アイテム' : '魔改造'}</span>${tagHtml(OFFER_TAGS[o.id] ?? [])}</span><span class="price">${o.sold ? '購入済み' : (o.price < o.full ? `<s>${o.full}</s> ` : '') + coinHtml(o.price)}</span>${!o.sold && o.price < o.full ? '<span class="sale">セール</span>' : ''}<b>${o.name}</b><span class="d">${o.desc}</span>${hint ? `<span class="combo-hint">◎ ${known ? `${hint.combo.name}：` : ''}${hint.partner}と相性${known ? '' : '（何かが起きる…）'}</span>` : ''}`;
         b.addEventListener('click', () => {
           if (buyCard(R, i)) sfx.select();
           else sfx.bad();
@@ -724,6 +766,18 @@ function renderHud() {
     }
   }
 
+  // コンボの演出
+  const ci = R.cutins[R.cutins.length - 1];
+  if (ci && ci.t !== cutinShown) {
+    cutinShown = ci.t;
+    const d = comboDef(ci.id);
+    const el = $('cutin');
+    el.className = ci.first ? 'first' : 'again';
+    el.innerHTML = `<span class="ci-kicker">${ci.first ? 'COMBO 発見！' : 'COMBO'}</span><span class="ci-name">${d.name}</span><span class="ci-sub">${tagHtml(d.tags)} ${coinText(ci.extra || d.eff.replace('¢', '¢'))}</span>`;
+    void el.offsetWidth;
+    el.classList.add('show');
+    sfx.combo(ci.first);
+  }
   // 衝撃
   const sh = R.shocks[R.shocks.length - 1];
   if (sh && sh.t !== shockShown) {
@@ -773,6 +827,7 @@ function showResult() {
     ['射出', `${R.stats.launches}回`],
     ['PERFECT / GOOD', `${R.stats.perfect} / ${R.stats.good}`],
     ['最高連続着地', `${R.stats.bestStreak}駅`],
+    ['コンボ', `${R.stats.combos}回`],
   ];
   $('result-stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   const earned = earnedOf(R);

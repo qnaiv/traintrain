@@ -234,6 +234,97 @@ export const LOADOUTS: Loadout[] = [
   { id: 'rocketd', name: 'ロケット直結', up: 'ロケットブースターを積んで出発', down: 'ブレーキ（B1〜B3）の効きが −30%', cost: 15 },
   { id: 'vipcar', name: 'VIP専用車', up: '毎駅 VIPがいる。VIPのPERFECTは ¢6', down: 'VIPを着地ミスさせると信頼 −50', cost: 20 },
 ];
+// ---------- キーワードとコンボ ----------
+export type Tag = '射出' | '守り' | '突破' | '満員';
+export const OFFER_TAGS: Record<string, Tag[]> = {
+  roof: ['射出', '満員'],
+  rocket: ['射出', '突破'],
+  mat: ['射出'],
+  chute: ['射出'],
+  kidlove: ['射出'],
+  jump: ['射出'],
+  belt: ['守り'],
+  susp: ['守り'],
+  airbag: ['守り'],
+  ram: ['突破'],
+  saw: ['突破'],
+  car: ['突破', '満員'],
+  deck: ['満員'],
+};
+export type ComboId = 'cannon' | 'retro' | 'bumper' | 'wall' | 'upper' | 'salvo';
+export interface ComboDef {
+  id: ComboId;
+  name: string;
+  /** 組み合わせる2つ（お店の◎と図鑑のヒントに使う） */
+  parts: [string, string];
+  cond: string;
+  eff: string;
+  tags: Tag[];
+}
+export const PART_NAME: Record<string, string> = {
+  roof: '屋根席の拡張',
+  jump: 'ジャンプ台',
+  rocket: 'ロケット',
+  brake: '急ブレーキ射出',
+  ram: '衝角',
+  sumo: '力士',
+  belt: 'シートベルト',
+  susp: 'エアサス',
+  deck: '二階建て',
+  many: '1回の射出で、何人も…',
+};
+export const COMBOS: ComboDef[] = [
+  { id: 'cannon', name: '人間大砲', parts: ['roof', 'jump'], cond: '屋根席の拡張 ＋ ジャンプ台（駅の手前120m以内でジャンプ）', eff: '屋根の客が空中から射出される・飛距離×1.5', tags: ['射出'] },
+  { id: 'retro', name: '逆噴射射出', parts: ['rocket', 'brake'], cond: 'ロケット ＋ 急ブレーキ射出', eff: '飛距離×1.5', tags: ['射出', '突破'] },
+  { id: 'bumper', name: '力士バンパー', parts: ['ram', 'sumo'], cond: '衝角 ＋ 力士が乗っている状態で倒木を突き破る', eff: '倒木の衝撃0・突破ボーナス2倍', tags: ['突破', '守り'] },
+  { id: 'wall', name: '鉄壁の選択射出', parts: ['belt', 'susp'], cond: '50km/h以上の射出で、屋根の客だけが2人以上飛ぶ', eff: '飛んだ客1人につき +¢1', tags: ['守り', '射出'] },
+  { id: 'upper', name: '二階席射出', parts: ['deck', 'roof'], cond: '二階建て ＋ 屋根席。2階と屋根の客が同じ射出で着地成功', eff: '+¢2', tags: ['満員', '射出'] },
+  { id: 'salvo', name: '一斉着地', parts: ['many', 'many'], cond: '1回の射出で3人以上がPERFECT', eff: '+¢3', tags: ['射出'] },
+];
+export function comboDef(id: ComboId): ComboDef {
+  return COMBOS.find((c) => c.id === id)!;
+}
+/** そのパーツを今持っているか */
+function hasPart(r: Run, part: string): boolean {
+  if (part === 'brake') return true;
+  if (part === 'jump') return r.items.jump > 0 || r.armed === 'jump';
+  if (part === 'sumo') return r.pax.some((p) => p.kind === 'sumo') || r.lo === 'sumo';
+  if (part === 'belt' || part === 'susp') return r.mods.has(part as ModId);
+  return r.mods.has(part as ModId);
+}
+/** お店の◎：このカードと組むとコンボになる相手を今持っていれば、そのコンボ */
+export function comboHint(r: Run, offerId: string): { combo: ComboDef; partner: string } | null {
+  for (const c of COMBOS) {
+    const i = c.parts.indexOf(offerId);
+    if (i < 0) continue;
+    const other = c.parts[1 - i];
+    if (other !== 'many' && hasPart(r, other)) return { combo: c, partner: PART_NAME[other] };
+  }
+  return null;
+}
+/** 人間大砲の準備ができているなら、その障害（駅の手前120m以内でジャンプする） */
+export function cannonReady(r: Run): Obstacle | null {
+  if (r.phase !== 'running' || r.armed !== 'jump' || !r.mods.has('roof')) return null;
+  const o = nextObstacle(r);
+  if (!o || o.kind === 'curve') return null;
+  const st = Math.min(r.target, LINE.stations.length - 1);
+  const d = POS[st] - o.x;
+  if (d <= 0 || d >= 120) return null;
+  return r.pax.some((p) => r.spots[p.spot]?.deck === 2 && p.dest === st) ? o : null;
+}
+/** コンボ発動（演出キューに積み、初めてなら図鑑に記録） */
+function triggerCombo(r: Run, id: ComboId, extra = '') {
+  r.meta.combos = r.meta.combos ?? {};
+  const first = !r.meta.combos[id];
+  if (first) {
+    const d = new Date();
+    r.meta.combos[id] = `${d.getMonth() + 1}/${d.getDate()}`;
+    saveMeta(r.meta);
+  }
+  r.cutins.push({ id, t: r.time, first, extra });
+  r.stats.combos++;
+}
+
 /** 改造ごとの「推し」商品（お店で出やすい） */
 const LO_SYNERGY: Record<string, string[]> = {
   rails: ['susp'],
@@ -266,6 +357,8 @@ export interface Meta {
   /** 解放済みの持ち込み改造と、次に持っていくもの */
   unlocked: string[];
   loadout: string;
+  /** コンボ図鑑：見つけた日 */
+  combos: Partial<Record<ComboId, string>>;
   /** 旧・恒久強化（もう使わない。常に0） */
   lv: Record<UpId, number>;
   runs: number;
@@ -274,7 +367,7 @@ export interface Meta {
 const META_KEY = 'hakobi.run.meta.v2';
 const OLD_META_KEY = 'hakobi.run.meta.v1';
 export function loadMeta(): Meta {
-  const base: Meta = { bank: 0, unlocked: [], loadout: 'normal', lv: { cap: 0, bench: 0, strap: 0, cushion: 0, susp: 0, motor: 0, kit: 0, grace: 0 }, runs: 0, best: 0 };
+  const base: Meta = { bank: 0, unlocked: [], loadout: 'normal', combos: {}, lv: { cap: 0, bench: 0, strap: 0, cushion: 0, susp: 0, motor: 0, kit: 0, grace: 0 }, runs: 0, best: 0 };
   try {
     const raw = localStorage.getItem(META_KEY);
     const old = raw ? null : localStorage.getItem(OLD_META_KEY);
@@ -300,6 +393,7 @@ function withFree(m: Meta): Meta {
   const u = new Set(m.unlocked ?? []);
   for (const l of LOADOUTS) if (l.cost === 0) u.add(l.id);
   m.unlocked = [...u];
+  m.combos = m.combos ?? {};
   if (!m.unlocked.includes(m.loadout)) m.loadout = 'normal';
   return m;
 }
@@ -350,6 +444,9 @@ export interface Flier {
   landX: number;
   judged: boolean;
   result: '' | 'perfect' | 'good' | 'miss' | 'lost';
+  /** どの射出で飛んだか（0 は射出以外） */
+  launch: number;
+  deck: number;
 }
 /** ホームの範囲（停止目標からの差） */
 export const PLAT_LO = -24.5;
@@ -434,10 +531,15 @@ export interface Run {
   /** 持ち込み改造 */
   lo: string;
   startCars: number;
+  /** コンボの演出待ち */
+  cutins: { id: ComboId; t: number; first: boolean; extra: string }[];
+  /** 射出ごとの着地の記録（コンボ判定用） */
+  launchSeq: number;
+  launchLog: Record<number, { perfect: number; decks: Set<number>; done: Set<string> }>;
   stuck: number; // 障害で止められている残り時間
   reverse: boolean; // バック中（ボタンを押している間）
   overReason: string;
-  stats: { carried: number; flew: number; shocks: number; maxShock: number; early: number; perfect: number; good: number; launches: number; bestStreak: number };
+  stats: { carried: number; flew: number; shocks: number; maxShock: number; early: number; perfect: number; good: number; launches: number; bestStreak: number; combos: number };
   nextId: number;
 }
 
@@ -530,10 +632,13 @@ export function newRun(meta: Meta): Run {
     rerolls: 0,
     lo: meta.loadout,
     startCars: 1,
+    cutins: [],
+    launchSeq: 0,
+    launchLog: {},
     stuck: 0,
     reverse: false,
     overReason: '',
-    stats: { carried: 0, flew: 0, shocks: 0, maxShock: 0, early: 0, perfect: 0, good: 0, launches: 0, bestStreak: 0 },
+    stats: { carried: 0, flew: 0, shocks: 0, maxShock: 0, early: 0, perfect: 0, good: 0, launches: 0, bestStreak: 0, combos: 0 },
     nextId: 1,
   };
   let t = 0;
@@ -658,15 +763,27 @@ function applyShock(r: Run, value: number, label: string, boost = 1, launch = fa
     r.shocks.push({ value, t: r.time, flew, safe: r.pax.length, label: label + '（エアバッグで全員無事）' });
     return;
   }
+  const id = launch ? ++r.launchSeq : 0;
+  if (id) r.launchLog[id] = { perfect: 0, decks: new Set(), done: new Set() };
+  const decks: number[] = [];
   for (const p of [...r.pax]) {
     if (value > effTol(r, p)) {
       flew.push(KINDS[p.kind].name);
+      decks.push(r.spots[p.spot]?.deck ?? 0);
       r.pax = r.pax.filter((q) => q !== p);
-      launchPax(r, p, boost);
+      launchPax(r, p, boost, id);
       r.stats.flew++;
     } else safe++;
   }
   r.shocks.push({ value, t: r.time, flew, safe, label });
+  if (launch && flew.length) {
+    if (r.mods.has('rocket')) triggerCombo(r, 'retro');
+    // 鉄壁：速い射出で屋根の客だけが2人以上飛び、車内の客は全員無事
+    if (kmh(r.v) >= 50 && decks.length >= 2 && decks.every((d) => d === 2) && safe > 0) {
+      r.money += decks.length;
+      triggerCombo(r, 'wall', `+¢${decks.length}`);
+    }
+  }
 }
 
 export function setNotch(r: Run, n: number) {
@@ -693,13 +810,14 @@ export function brakeLaunch(r: Run, button = true) {
     r.notch = 4;
   }
 }
-function launchPax(r: Run, p: Pax, boost = 1) {
-  const z = spotZ(r, p.spot);
+function launchPax(r: Run, p: Pax, boost = 1, launch = 0, zAdd = 0) {
+  const z = spotZ(r, p.spot) + zAdd;
   const car = r.spots[p.spot]?.car ?? 0;
+  const deck = r.spots[p.spot]?.deck ?? 0;
   const f = flight(r.v, z, p.kind, launchBoost(r, p, boost));
   const x = spotWorldX(r, p.spot);
   (p as Pax & { car?: number }).car = car;
-  r.fliers.push({ pax: p, t: r.time, x, z, vx: f.vx, vz: f.vz, tLand: f.t, landX: x + f.dist, judged: false, result: '' });
+  r.fliers.push({ pax: p, t: r.time, x, z, vx: f.vx, vz: f.vz, tLand: f.t, landX: x + f.dist, judged: false, result: '', launch, deck });
 }
 /** 着地の判定 */
 function judgeLanding(r: Run, f: Flier) {
@@ -729,6 +847,21 @@ function judgeLanding(r: Run, f: Flier) {
     }
     r.money += fare;
     r.stats.carried++;
+    const log = f.launch ? r.launchLog[f.launch] : null;
+    if (log) {
+      if (perfect) log.perfect++;
+      log.decks.add(f.deck);
+      if (log.perfect >= 3 && !log.done.has('salvo')) {
+        log.done.add('salvo');
+        r.money += 3;
+        triggerCombo(r, 'salvo', '+¢3');
+      }
+      if (log.decks.has(1) && log.decks.has(2) && !log.done.has('upper')) {
+        log.done.add('upper');
+        r.money += 2;
+        triggerCombo(r, 'upper', '+¢2');
+      }
+    }
     return;
   }
   if (at >= 0 && at !== p.dest) {
@@ -993,6 +1126,7 @@ export function update(r: Run, dt: number) {
   for (const f of r.fliers) if (!f.judged && r.time - f.t >= f.tLand) judgeLanding(r, f);
   r.fliers = r.fliers.filter((f) => r.time - f.t < f.tLand + 1.4);
   r.pops = r.pops.filter((p) => r.time - p.t < 2.6);
+  r.cutins = r.cutins.filter((c) => r.time - c.t < 2);
   r.shocks = r.shocks.filter((s) => r.time - s.t < 2.4);
 
   if (r.phase === 'dwell') {
@@ -1123,6 +1257,18 @@ function driving(r: Run, dt: number) {
         r.armed = null;
         o.state = 'passed';
         o.t = r.time;
+        // 人間大砲：屋根席の拡張あり、駅の手前でジャンプ → 屋根の客を空中から射出
+        const toSt = POS[st] - r.x;
+        const roofers = r.pax.filter((p) => r.spots[p.spot]?.deck === 2 && p.dest === st);
+        if (r.mods.has('roof') && toSt > 0 && toSt < 120 && roofers.length) {
+          const id = ++r.launchSeq;
+          r.launchLog[id] = { perfect: 0, decks: new Set(), done: new Set() };
+          for (const p of roofers) {
+            r.pax = r.pax.filter((q) => q !== p);
+            launchPax(r, p, 1.5, id, 3);
+          }
+          triggerCombo(r, 'cannon');
+        }
         o.shock = soften(r, SHOCK.jumpBase + kmh(r.v) * SHOCK.jumpK);
         applyShock(r, o.shock, `${OBS_INFO[o.kind].name}をジャンプで飛び越えた`);
         continue;
@@ -1133,7 +1279,13 @@ function driving(r: Run, dt: number) {
         o.t = r.time;
         if (kmh(r.v) >= treeNeed(r)) {
           const k = kmh(r.v);
-          const bonus = Math.floor((k - treeNeed(r)) / 10);
+          const bumper = r.mods.has('ram') && r.pax.some((p) => p.kind === 'sumo');
+          // ボーナスは40km/hを基準に（衝角で突破の速さが下がっても膨らまない）
+          const bonus = Math.floor(Math.max(0, k - Math.max(40, treeNeed(r))) / 10) * (bumper ? 2 : 1);
+          if (bumper) {
+            o.shock = 0;
+            triggerCombo(r, 'bumper', bonus > 0 ? `+¢${bonus}` : '');
+          }
           applyShock(r, o.shock, `倒木を${Math.round(k)}km/hで粉砕！${bonus > 0 ? ` +¢${bonus}` : ''}`);
           r.money += bonus;
           r.v *= k >= 60 ? 0.95 : 0.82;

@@ -22,6 +22,7 @@ import {
   spotZ,
   spotWorldX,
   launchBoost,
+  cannonReady,
   threat,
   ghostX,
   WAVE_UP,
@@ -216,6 +217,35 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
           ctx.setLineDash([]);
           iso.label(lx, 0.4, onPlat ? 1.9 : 0.9, wrong ? `${KINDS[p.kind].ch}✕` : KINDS[p.kind].ch, 11, wrong ? '#B53E28' : INK);
         }
+      }
+      // 人間大砲の予測（ジャンプの瞬間に屋根の客が飛ぶ）
+      const co = cannonReady(r);
+      if (co) {
+        const st = Math.min(r.target, LINE.stations.length - 1);
+        const matC = r.mats[st];
+        for (const p of r.pax) {
+          if (r.spots[p.spot]?.deck !== 2 || p.dest !== st) continue;
+          const z = spotZ(r, p.spot) + 3;
+          const f = flight(r.v, z, p.kind, launchBoost(r, p, 1.5));
+          const x0 = co.x - (r.x - spotWorldX(r, p.spot));
+          ctx.fillStyle = '#B98ADB';
+          for (let k = 1; k < 16; k++) {
+            const t = (f.t * k) / 16;
+            const [px, py] = iso.P(x0 + f.vx * t, 0, z + f.vz * t - (9.8 * t * t) / 2);
+            ctx.beginPath();
+            ctx.arc(px, py, 2.1, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          const lx = x0 + f.dist;
+          const onPlat = lx >= POS[st] + PLAT_LO && lx <= POS[st] + PLAT_HI;
+          const onMat = onPlat && Math.abs(lx - matC.x) <= matWidth(r) / 2;
+          const [cx, cy] = iso.P(lx, 0.4, onPlat ? 1.07 : 0);
+          ctx.setLineDash([5, 4]);
+          iso.ell(cx, cy, 1.3 * iso.s * 1.22, 1.3 * iso.s * 0.7, onMat ? 'rgba(111,195,160,0.65)' : onPlat ? 'rgba(233,178,62,0.5)' : 'rgba(185,138,219,0.35)', 2.4, onMat ? '#2E6B53' : onPlat ? '#8A5D00' : '#7A4FA0');
+          ctx.setLineDash([]);
+        }
+        const [tx, ty] = iso.P(co.x, 0, 10);
+        tagAt(ctx, tx, ty, r.meta.combos.cannon ? '人間大砲' : 'ここでジャンプすると…？', '#E8D8F4');
       }
       // 飛んでいる客
       for (const f of r.fliers) {

@@ -216,6 +216,38 @@
       .ocard .tag { align-self: flex-start; padding: 0 8px; border: 1.5px solid var(--ink); border-radius: 999px; font-size: 10px; font-weight: 900; background: #dff2e8; }
       .ocard.o-mod .tag { background: var(--mustard); }
       .ocard .d { color: var(--sub); }
+      .tagrow { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; padding-right: 64px; }
+      .ktag { padding: 0 6px; border: 1.5px solid var(--ink); border-radius: 999px; font-size: 10px; font-weight: 900; }
+      .ocard.hint { border: 3px solid #2e8f62; box-shadow: 0 0 0 3px rgba(111,195,160,.35); }
+      .combo-hint { margin-top: 3px; padding: 4px 8px; border: 2px solid #2e8f62; border-radius: 8px; background: #ddf3e6; color: #1f5c44 !important; font-size: 11.5px; font-weight: 900; }
+      #shop-build { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-size: 11px; font-weight: 900; color: var(--sub); }
+      #cutin { position: absolute; left: -20px; right: -20px; top: 120px; transform: rotate(-5deg) translateX(-110%); padding: 8px 0 10px; background: var(--tomato); border-top: 3px solid var(--ink); border-bottom: 3px solid var(--ink); display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none; z-index: 6; opacity: 0; }
+      #cutin.show { animation: cutin 1.5s cubic-bezier(.2,.8,.2,1) forwards; }
+      #cutin.again { top: 90px; padding: 4px 0 6px; }
+      #cutin .ci-kicker { font-size: 11px; font-weight: 900; color: #fff4da; letter-spacing: .2em; }
+      #cutin .ci-name { font-family: var(--dela); font-size: 40px; line-height: 1.1; color: #f2c94c; -webkit-text-stroke: 2px var(--ink); }
+      #cutin.again .ci-name { font-size: 24px; }
+      #cutin .ci-sub { display: flex; gap: 5px; align-items: center; font-size: 12px; font-weight: 900; color: #fffdf6; }
+      @keyframes cutin { 0% { opacity: 1; transform: rotate(-5deg) translateX(-110%); } 18% { transform: rotate(-5deg) translateX(0); } 80% { opacity: 1; transform: rotate(-5deg) translateX(0); } 100% { opacity: 0; transform: rotate(-5deg) translateX(30%); } }
+      .hub-tabs { display: flex; gap: 6px; }
+      .hub-tabs button { flex: 1; min-height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: #ece6db; font-size: 13px; font-weight: 900; }
+      .hub-tabs button.on { background: var(--card); box-shadow: 0 3px 0 var(--ink); }
+      .hub-tabs small { font-size: 10px; }
+      #ups[hidden] { display: none !important; }
+      #book { display: flex; flex-direction: column; gap: 8px; }
+      #book[hidden] { display: none; }
+      .book-bar { height: 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); overflow: hidden; }
+      .book-bar i { display: block; height: 100%; background: var(--mustard); }
+      .bk { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
+      .bk-head { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+      .bk-head b { font-family: var(--dela); font-weight: 400; font-size: 17px; }
+      .bk-head small { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--sub); }
+      .bk-cond { font-size: 11.5px; font-weight: 900; }
+      .bk-eff { font-size: 11px; font-weight: 700; color: #2e6b53; }
+      .bk.unknown { border: 2px dashed #9a9184; background: #ece6db; }
+      .bk.unknown b { font-family: var(--dela); font-weight: 400; font-size: 17px; color: #9a9184; }
+      .bk.unknown .bk-cond { color: var(--sub); }
+      .bk-note { margin: 0; font-size: 11px; font-weight: 700; color: var(--sub); }
       .ocard { position: relative; }
       .ocard .price { position: absolute; right: 10px; top: 9px; padding: 2px 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-family: var(--dela); font-size: 15px; }
       .ocard.poor { opacity: .55; }
@@ -308,6 +340,7 @@
         <button id="btn-eb" type="button" hidden><b>急ブレーキ射出！</b><small>Space</small></button>
         <div id="pax-card" hidden></div>
         <div id="shock"></div>
+        <div id="cutin"></div>
         <div id="toasts"></div>
       </main>
       <footer>
@@ -337,7 +370,7 @@
     </div>
 
     <div id="offer" class="modal" hidden>
-      <div class="box"><div class="shop-head"><h3>駅のお店</h3><span id="shop-money"></span></div><p>停車中は時計が止まっている。お金が続くかぎり何枚でも買える</p><div id="offer-cards"></div><div class="shop-row"><button id="btn-reroll" class="btn" type="button">並べ替え</button><button id="btn-shop-close" class="btn primary" type="button">買い物を終える</button></div></div>
+      <div class="box"><div class="shop-head"><h3>駅のお店</h3><span id="shop-money"></span></div><div id="shop-build"></div><p>停車中は時計が止まっている。お金が続くかぎり何枚でも買える</p><div id="offer-cards"></div><div class="shop-row"><button id="btn-reroll" class="btn" type="button">並べ替え</button><button id="btn-shop-close" class="btn primary" type="button">買い物を終える</button></div></div>
     </div>
 
     <div id="result" class="modal" hidden>
@@ -368,8 +401,9 @@
           <li>終点に着くと、稼ぎの半分＋残りの1/4（×ダイヤ評価）を持ち帰れる。貯金で<b>持ち込み改造</b>を解放しよう</li>
           <li>遅れが上限を超えるか、信頼0で運転打ち切り</li>
         </ul></details>
-        <div class="hub-title">持ち込み改造（1つだけ持っていける・貯金で解放すると選択肢が増える）</div>
+        <div class="hub-tabs"><button id="tab-lo" type="button" class="on">持ち込み改造</button><button id="tab-book" type="button">コンボ図鑑</button></div>
         <div id="ups"></div>
+        <div id="book" hidden></div>
         <div class="reset-row"><span>貯金・解放した改造・記録をすべて消します（音とズームの設定は残る）</span><button id="btn-reset" type="button">データ初期化</button></div>
         <button id="btn-start" class="btn primary" type="button">江ノ電へ出発 ▶</button>
       </div>

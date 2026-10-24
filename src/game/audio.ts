@@ -282,6 +282,12 @@ export const sfx = {
     const t = now();
     [72, 76, 79, 84, 79, 84, 88].forEach((m, k) => tone(t + k * 0.12, mtof(m), 0.3, 'square', 0.1, sfxBus));
   },
+  combo(first: boolean) {
+    if (!ac) return;
+    const t = now();
+    noise(t, 0.25, 0.35, sfxBus, 'highpass', 2500, 1);
+    (first ? [72, 76, 79, 84, 88, 91] : [79, 84, 88]).forEach((m, k) => tone(t + 0.05 + k * 0.07, mtof(m), 0.22, 'square', 0.12, sfxBus));
+  },
   over() {
     if (!ac) return;
     const t = now();
