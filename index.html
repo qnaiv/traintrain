@@ -247,6 +247,10 @@
       #coach .ctext { font-size: 14px; font-weight: 900; line-height: 1.45; }
       #coach .ctext .hl { color: var(--tomato); } #coach .ctext .ok { color: #2e6b53; }
       #coach .cnext { align-self: flex-end; padding: 4px 14px; border: 2px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 12px; font-weight: 900; box-shadow: 0 2px 0 var(--ink); }
+      #coach.fail { border-color: #b53e28; box-shadow: 4px 4px 0 #b53e28; background: #fff1ec; }
+      #coach .cbtns { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+      #coach .cbtn { padding: 5px 14px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-size: 12.5px; font-weight: 900; box-shadow: 0 2px 0 var(--ink); }
+      #coach .cbtn.main { background: var(--mustard); }
       #coach-ring { position: fixed; z-index: 39; border: 3px solid #f2c94c; border-radius: 14px; box-shadow: 0 0 0 4px rgba(242,201,76,.45), 0 0 0 9999px rgba(31,27,22,.32); pointer-events: none; transition: all .2s; }
       .first-only[hidden] { display: none !important; }
       .hub-first { display: flex; flex-direction: column; gap: 10px; }

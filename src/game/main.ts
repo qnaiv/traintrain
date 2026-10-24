@@ -2,7 +2,7 @@
 
 import { DEST_COLORS } from '../data.ts';
 import * as S from './state.ts';
-import { hideCoach, startCoach, updateCoach } from './coach.ts';
+import { hideCoach, setRewinder, startCoach, updateCoach } from './coach.ts';
 import { BAR_H, drawBar, drawInside, drawOutside, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
@@ -415,6 +415,19 @@ function toHub() {
 }
 $('btn-start').addEventListener('click', () => startRun());
 $('btn-tutorial').addEventListener('click', () => startRun(true));
+// 研修のやり直し：チェックポイントの状態に差し替える
+setRewinder((snap) => {
+  R = snap;
+  W.taps.clear();
+  W.states.clear();
+  W.phase = R.phase;
+  W.money = R.money;
+  candKey = '';
+  offerShown = R.offer;
+  shopOpen = false;
+  lastTrust = R.trust;
+  setMode('out');
+});
 // データ初期化（2回押しで確定）
 let resetArmed = -Infinity;
 let hubTab: 'lo' | 'book' = 'lo';
