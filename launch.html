@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1F1B16" />
+    <title>試作：射出配達</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" />
+    <style>
+      :root { --paper:#f5efe3; --card:#fffdf6; --ink:#1f1b16; --sub:#5a5045; --tomato:#e4553a; --mint:#6fc3a0; --mustard:#e9b23e; --dela:'Dela Gothic One', sans-serif; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: 'Zen Maru Gothic', sans-serif; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+      button { font-family: inherit; color: var(--ink); cursor: pointer; }
+      #app { display: flex; flex-direction: column; height: 100dvh; max-width: 760px; margin: 0 auto; }
+      header { padding: 8px 12px; background: var(--card); border-bottom: 2px solid var(--ink); display: flex; align-items: center; gap: 10px; }
+      .eyebrow { font-size: 11px; font-weight: 900; color: var(--sub); flex: 1; line-height: 1.3; }
+      #fare { font-family: var(--dela); font-size: 18px; }
+      #trust { font-weight: 900; font-size: 13px; }
+      #btn-sound { width: 32px; height: 30px; border: 2px solid var(--ink); border-radius: 8px; background: var(--card); padding: 0; }
+      main { position: relative; flex: 1; min-height: 0; }
+      canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+      #shock { position: absolute; left: 0; right: 0; top: 90px; display: flex; flex-direction: column; align-items: center; pointer-events: none; opacity: 0; }
+      #shock.show { animation: pop 1.6s ease-out forwards; }
+      #shock .num { font-family: var(--dela); font-size: 42px; color: var(--tomato); -webkit-text-stroke: 2px var(--ink); transform: rotate(-4deg); }
+      #shock .sub { padding: 3px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--mustard); font-weight: 900; }
+      @keyframes pop { 0% { opacity: 0; transform: scale(1.5); } 10% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
+      footer { padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 2px solid var(--ink); display: flex; flex-direction: column; gap: 7px; }
+      .row { display: flex; align-items: center; gap: 10px; }
+      #speed { font-family: var(--dela); font-size: 34px; line-height: 1; min-width: 70px; text-align: right; }
+      .unit { font-size: 11px; font-weight: 900; }
+      #delay { margin-left: auto; font-weight: 900; font-size: 13px; }
+      #delay.late { color: #b53e28; } #delay.early { color: #2e6b53; }
+      #pred { font-size: 12.5px; font-weight: 700; }
+      #pred b { font-family: var(--dela); font-weight: 400; color: var(--tomato); }
+      #pred .warn { color: #8a1f0e; font-weight: 900; }
+      #list { display: flex; flex-wrap: wrap; gap: 5px; }
+      .pc { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 9px 0 3px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-size: 11.5px; font-weight: 900; }
+      .pc i { width: 22px; height: 22px; border: 1.5px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 10.5px; }
+      .pc b { font-weight: 900; color: var(--sub); }
+      .pc.roof { background: #fff4da; }
+      .pc.fly { border-color: var(--tomato); box-shadow: 0 0 0 2px rgba(228,85,58,0.35); }
+      .ctl { display: flex; gap: 6px; }
+      #btn-launch { flex: 1.5; height: 64px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--tomato); color: #fffdf6; font-size: 17px; font-weight: 900; box-shadow: 0 4px 0 var(--ink); line-height: 1.2; }
+      #btn-launch:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+      #btn-launch:disabled { opacity: 0.45; }
+      #lever { flex: 3; display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+      .notch { height: 64px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-weight: 900; font-size: 13px; padding: 0; }
+      .notch.brake { background: #fbe3dc; } .notch.power { background: #dff2e8; }
+      .notch.on { transform: translateY(-4px); box-shadow: 0 4px 0 var(--ink); border-width: 3px; }
+      .notch.brake.on { background: var(--tomato); color: #fffdf6; } .notch.power.on { background: var(--mint); } .notch:not(.brake):not(.power).on { background: var(--mustard); }
+      .hint { font-size: 11px; font-weight: 700; color: var(--sub); }
+      #result { position: fixed; inset: 0; background: rgba(31,27,22,0.5); display: grid; place-items: center; padding: 14px; z-index: 20; }
+      #result[hidden] { display: none; }
+      .box { width: min(400px, 100%); background: var(--card); border: 2.5px solid var(--ink); border-radius: 16px; padding: 16px; box-shadow: 0 6px 0 var(--ink); display: flex; flex-direction: column; gap: 10px; }
+      .box h3 { margin: 0; font-family: var(--dela); font-weight: 400; font-size: 22px; }
+      dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-weight: 700; font-size: 14px; } dd { margin: 0; text-align: right; font-weight: 900; }
+      #retry { height: 52px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--mint); font-size: 16px; font-weight: 900; box-shadow: 3px 3px 0 var(--ink); }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header><span class="eyebrow">試作：射出配達<br />急ブレーキで屋根の客を飛ばし、ホームの「×2」マットに着地させる</span><span id="trust"></span><span id="fare"></span><button id="btn-sound" type="button">♪</button></header>
+      <main><canvas id="view"></canvas><div id="shock"></div></main>
+      <footer>
+        <div class="row"><span id="speed">0</span><span class="unit">km/h</span><span id="delay"></span></div>
+        <div id="pred"></div>
+        <div id="list"></div>
+        <div class="hint">客をタップで「屋根⇄座席」。屋根は飛びやすく（耐−20）、座席は飛びにくい（耐+20）。止まって降ろしてもいい（安全だけど時間がかかる）</div>
+        <div class="ctl"><button id="btn-launch" type="button">急ブレーキ<br />射出！</button><div id="lever"></div></div>
+      </footer>
+    </div>
+    <div id="result" hidden><div class="box"><h3>試作おわり</h3><dl id="result-stats"></dl><button id="retry" type="button">もう一度</button></div></div>
+    <script type="module" src="/src/proto/launch/main.ts"></script>
+  </body>
+</html>

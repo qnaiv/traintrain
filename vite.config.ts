@@ -11,6 +11,8 @@ export default defineConfig({
         shake: 'shake.html',
         // 試作：障害突破ラン（v0.7）
         run: 'run.html',
+        // 試作：射出配達
+        launch: 'launch.html',
       },
     },
   },
