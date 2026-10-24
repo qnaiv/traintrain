@@ -137,7 +137,7 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
         });
       }
       // ゴースト列車（ダイヤどおりの位置）
-      if (r.phase === 'running') {
+      if (r.phase === "running" && !r.demo) {
         const gx = ghostX(r.clock);
         if (iso.inX(gx - 12, gx) && Math.abs(gx - r.x) > 1) {
           put(gx - 6, 0.01, () => {

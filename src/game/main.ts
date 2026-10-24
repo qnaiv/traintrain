@@ -4,6 +4,7 @@ import { DEST_COLORS } from '../data.ts';
 import * as S from './state.ts';
 import { hideCoach, setRewinder, startCoach, updateCoach } from './coach.ts';
 import { setCarPalette } from '../exterior.ts';
+import { makeDemo, stepDemo } from './demo.ts';
 import { BAR_H, drawBar, drawInside, drawOutside, drawSection, ejectZone, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
@@ -1203,34 +1204,20 @@ function watchSounds() {
   }
 }
 
-// ---------- トップ画面の走行映像 ----------
+// ---------- トップ画面の走行映像（自動運転で射出・停車まで見せる） ----------
 let demo: Run | null = null;
-function makeDemo(): Run {
-  const r = newRun({ ...meta, loadout: 'normal', tips: [...meta.tips] }, false);
-  setCarPalette(S.LINE.cars);
-  r.obstacles = r.obstacles.map(() => []);
-  r.offer = null;
-  // 屋根に客を2人乗せて走る
-  for (const c of r.candidates.slice(0, 4)) togglePick(r, c.id);
-  r.pax.slice(0, 2).forEach((p) => moveToLevel(r, p.id, 0, 2));
-  r.candidates = [];
-  r.picked.clear();
-  r.phase = 'running';
-  r.x = POS[0] + 30;
-  r.v = 12;
-  r.target = 1;
-  return r;
-}
+let demoZoom = 1;
 function drawHubScene(dt: number) {
   const cv = $('hub-scene') as HTMLCanvasElement;
   const rc = cv.getBoundingClientRect();
   if (!rc.width) return;
-  if (!demo || demo.meta.line !== meta.line) demo = makeDemo();
+  if (!demo || demo.meta.line !== meta.line) {
+    demo = makeDemo(meta);
+    setCarPalette(S.LINE.cars);
+  }
+  if (!stepDemo(demo, dt)) demo = null;
+  if (!demo) return;
   const r = demo;
-  r.time += dt;
-  r.x += r.v * dt;
-  if (r.x > POS[POS.length - 1] - 30) r.x = POS[0] + 30;
-  r.target = Math.max(1, POS.findIndex((p) => p > r.x));
   const dpr = window.devicePixelRatio || 1;
   const W2 = Math.round(rc.width * dpr);
   const H2 = Math.round(rc.height * dpr);
@@ -1242,13 +1229,15 @@ function drawHubScene(dt: number) {
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.fillStyle = '#F5EFE3';
   c.fillRect(0, 0, rc.width, rc.height);
-  drawOutside(c, r, rc.width - 5, 0, rc.height - 5, [], 1.5);
+  const zt = r.phase === 'dwell' ? 1.9 : 1.15;
+  demoZoom += (zt - demoZoom) * Math.min(1, dt * 3);
+  drawOutside(c, r, rc.width, 0, rc.height - 2, [], demoZoom);
 }
 
 // ---------- ループ ----------
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get('speed')) || 1);
-if (params.has('debug')) Object.assign(window, { __hits: () => hits, __S: S, __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
+if (params.has('debug')) Object.assign(window, { __demo: () => demo, __hits: () => hits, __S: S, __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
 if (params.has('go')) startRun(params.has('tutorial'));
 else renderHub();
 let last = performance.now();

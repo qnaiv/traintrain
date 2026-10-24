@@ -441,6 +441,11 @@ export function cannonReady(r: Run): { apexX: number; apexZ: number } | null {
 }
 /** コンボ発動（演出キューに積み、初めてなら図鑑に記録） */
 function triggerCombo(r: Run, id: ComboId, extra = '') {
+  // トップ画面の映像では記録しない
+  if (r.demo) {
+    r.cutins.push({ id, t: r.time, first: false, extra });
+    return;
+  }
   r.meta.combos = r.meta.combos ?? {};
   const first = !r.meta.combos[id];
   if (first) {
@@ -702,6 +707,8 @@ export interface Run {
   startCars: number;
   /** 研修運転 */
   tutorial: boolean;
+  /** トップ画面の映像（記録しない） */
+  demo?: boolean;
   /** 時間の流れ（研修のスロー） */
   slow: number;
   /** ジャンプ中（電車が宙に浮いている） */
@@ -1857,7 +1864,7 @@ export function moveToLevel(r: Run, id: number, car: number, deck: number): bool
 
 /** 路線をクリアした記録（次の路線の解放に使う） */
 function markCleared(r: Run) {
-  if (r.tutorial) return;
+  if (r.tutorial || r.demo) return;
   r.meta.cleared = r.meta.cleared ?? [];
   if (!r.meta.cleared.includes(LINE.id)) r.meta.cleared.push(LINE.id);
 }

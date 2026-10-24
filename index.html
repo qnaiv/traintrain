@@ -270,6 +270,16 @@
       .hub-first .pitch b { font-size: 15px; } .hub-first .pitch span { font-size: 12.5px; font-weight: 700; color: var(--sub); line-height: 1.5; }
       .hub-first .note { font-size: 11.5px; font-weight: 900; color: var(--sub); text-align: center; }
       #btn-tutorial { padding: 8px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-size: 12px; font-weight: 900; }
+      .how-steps { list-style: none; margin: 10px 0 2px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+      .how-steps li { border: 2px solid var(--ink); border-radius: 14px; overflow: hidden; background: var(--card); }
+      .how-img { display: flex; flex-direction: column; background: #F5EFE3; border-bottom: 2px solid var(--ink); }
+      .how-img img { display: block; width: 100%; height: auto; }
+      .how-img img + img { border-top: 1.5px dashed #b9b0a2; }
+      .how-tx { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 3px; }
+      .how-tx > b { font-size: 14px; font-weight: 900; display: flex; align-items: center; gap: 6px; }
+      .how-tx > b i { font-style: normal; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--mustard); border: 1.5px solid var(--ink); font-size: 11px; }
+      .how-tx span { font-size: 12.5px; font-weight: 700; line-height: 1.55; color: var(--sub); }
+      .how-tx span b { color: var(--ink); }
       .hub-tabs { display: flex; gap: 6px; }
       .hub-tabs button { flex: 1; min-height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: #ece6db; font-size: 13px; font-weight: 900; }
       .hub-tabs button.on { background: var(--card); box-shadow: 0 3px 0 var(--ink); }
@@ -278,7 +288,7 @@
       .hub-tabs button.on::after { content: ' ▴'; }
       #lo-panel { display: flex; flex-direction: column; gap: 10px; }
       #lo-panel[hidden] { display: none; }
-      #hub-scene { display: block; width: 100%; height: 200px; border: 2.5px solid var(--ink); border-radius: 16px; background: #F5EFE3; box-shadow: 3px 3px 0 var(--ink); box-sizing: border-box; }
+      #hub-scene { display: block; width: calc(100% + 28px); height: min(52vh, 380px); margin: -4px -14px 0; background: #F5EFE3; border-top: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink); box-sizing: border-box; }
       #ups[hidden] { display: none !important; }
       #book { display: flex; flex-direction: column; gap: 8px; }
       #book[hidden] { display: none; }
@@ -343,7 +353,7 @@
       .rules b { color: #b53e28; }
       #ups { display: flex; flex-direction: column; gap: 8px; }
       #ups { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
-      .reset-row { display: flex; align-items: center; gap: 10px; margin: 14px 0 90px; padding-top: 12px; border-top: 1.5px dashed #b9b0a2; font-size: 11px; font-weight: 700; color: var(--sub); }
+      .reset-row { display: flex; align-items: center; gap: 10px; justify-content: space-between; margin: 14px 0 90px; padding-top: 12px; border-top: 1.5px dashed #b9b0a2; font-size: 11px; font-weight: 700; color: var(--sub); }
       .reset-row span { flex: 1; }
       .reset-row[hidden], .how[hidden], .hub-tabs[hidden], .hub-bank[hidden] { display: none !important; }
       #btn-reset { flex: none; padding: 8px 12px; border: 2px solid #b53e28; border-radius: 10px; background: var(--card); color: #b53e28; font-size: 12px; font-weight: 900; }
@@ -531,28 +541,18 @@
 
     <section id="hub">
       <div class="hub-in">
-        <div class="hub-title">ブラウザ ローグライク × 鉄道 ・ 障害突破ラン</div>
         <h1 class="hub-logo"><span>まもなく、</span>魔改造電車が参ります</h1>
         <canvas id="hub-scene"></canvas>
         <div id="hub-sub"></div>
         <div class="hub-first" id="hub-first" hidden><div class="pitch"><b>急ブレーキの勢いで、屋根の客をホームへ放り込む。</b><span>最初の1本は研修運転。見習い車掌がとなりで教えてくれる（3分くらい）</span></div><div class="note">持ち込み改造とコンボ図鑑は、1本走ると開く</div></div>
-        <details class="how"><summary>遊び方（タップで開く）</summary><ul class="rules">
-          <li>駅で<b>乗せる客を選ぶ</b>。運賃は<i class="coin"></i>1〜<i class="coin"></i>5、耐えられる衝撃は客ごとに違う</li>
-          <li>駅の手前で<b>急ブレーキ射出</b>（Space）。耐えられない客が前へ飛ぶ。点線が着地予測</li>
-          <li>ホームに着地でGOOD、<b>×2マット</b>ならPERFECTで運賃2倍。駅ごとに連続で決めると上乗せ</li>
-          <li>速すぎると<b>車内の客まで飛ぶ</b>。席・つり革・屋根の配置で「誰が飛ぶか」を決めよう</li>
-          <li>倒木は速く（速すぎると揺れる）、急カーブは遅く。鹿はタップ、電柱は連打</li>
-          <li>稼いだコインは駅の<b>お店</b>で使う（何枚でも買える）。射出で通過した駅ではお店に寄れない</li>
-          <li>終点に着くと、稼ぎの半分＋残りの1/4（×ダイヤ評価）を持ち帰れる。貯金で<b>持ち込み改造</b>を解放しよう</li>
-          <li>遅れが上限を超えるか、信頼0で運転打ち切り</li>
-        </ul></details>
+        <details class="how"><summary>遊び方（タップで開く）</summary><ol class="how-steps"><li><div class="how-img"><img src="how/pick.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>1</i>駅で客を乗せる</b><span>客ごとに運賃（コイン）と耐衝撃（🛡）が違う。★を長押しで特徴が見られる</span></div></li><li><div class="how-img"><img src="how/seat.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>2</i>席を決める</b><span>車内で客をドラッグ。座席・つり革は衝撃に強い。<b>屋根は射出台</b>（衝撃に弱く、よく飛ぶ）</span></div></li><li><div class="how-img"><img src="how/launch.webp" alt="" loading="lazy"><img src="how/lever.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>3</i>急ブレーキで射出</b><span>駅の手前でレバーを<b>非常</b>へ。耐えられない客が前へ飛ぶ。点線が着地の予測</span></div></li><li><div class="how-img"><img src="how/perfect.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>4</i>ホームに着地</b><span>ホームならGOOD、<b>×2マット</b>ならPERFECTで運賃2倍。駅ごとに続けると上乗せ</span></div></li><li><div class="how-img"><img src="how/obstacle.webp" alt="" loading="lazy"><img src="how/secbar.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>5</i>障害を越える</b><span>倒木は速く突き破り、急カーブは遅く。鹿はタップ、電柱は連打。下のバーに次の障害が出る</span></div></li><li><div class="how-img"><img src="how/shock.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>6</i>誰が飛ぶかを読む</b><span>赤い線が今の衝撃。線より左（耐衝撃が低い）の客が飛ぶ。速さと席で調整しよう</span></div></li><li><div class="how-img"><img src="how/shop.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>7</i>駅のお店</b><span>稼いだコインでアイテムや魔改造を買う。同じタグをそろえるとコンボが起きる</span></div></li><li><div class="how-img"><img src="how/gauge.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>8</i>遅れと信頼</b><span>遅れが上限を超えるか、信頼が0になると運転打ち切り。客を落とすと信頼が減る</span></div></li><li><div class="how-img"><img src="how/result.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>9</i>持ち帰って強化</b><span>終点に着くと稼ぎの一部を持ち帰れる。貯金で<b>持ち込み改造</b>を解放</span></div></li></ol></details>
         <div class="hub-tabs"><button id="tab-lo" type="button" class="on">持ち込み改造</button><button id="tab-book" type="button">コンボ図鑑</button></div>
         <div id="lo-panel" hidden>
           <div class="hub-bank"><span><b id="hub-bank">0</b></span><span style="font-weight:900">車両基地の貯金</span></div>
           <div id="ups"></div>
         </div>
         <div id="book" hidden></div>
-        <div class="reset-row"><button id="btn-tutorial" type="button">研修運転をもう一度</button><span>貯金・解放した改造・記録をすべて消します（音とズームの設定は残る）</span><button id="btn-reset" type="button">データ初期化</button></div>
+        <div class="reset-row"><button id="btn-tutorial" type="button">研修運転をもう一度</button><button id="btn-reset" type="button">データ初期化</button></div>
         <button id="btn-start" class="btn primary" type="button">江ノ電へ出発 ▶</button>
       </div>
     </section>
