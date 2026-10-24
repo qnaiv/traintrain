@@ -21,6 +21,7 @@ import {
   matWidth,
   spotZ,
   spotWorldX,
+  launchBoost,
   threat,
   ghostX,
   WAVE_UP,
@@ -186,13 +187,13 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
       const stopX = POS[Math.min(r.target, LINE.stations.length - 1)];
       if (r.phase === 'running' && r.v > 2 && stopX - r.x < 130 && stopX - r.x > -10) {
         const sh = brakeShock(r);
-        const flyers = r.pax.filter((p) => sh > effTol(r, p) && !r.airbag);
+        const flyers = r.pax.filter((p) => sh > effTol(r, p));
         const seen = new Set<string>();
         const boost = r.mods.has('rocket') ? 1.5 : 1;
         const mat = r.mats[r.target];
         for (const p of flyers) {
           const z = spotZ(r, p.spot);
-          const f = flight(r.v, z, p.kind, boost);
+          const f = flight(r.v, z, p.kind, launchBoost(r, p, boost));
           const x0 = spotWorldX(r, p.spot);
           const key = `${Math.round(x0 + f.dist)}`;
           if (seen.has(key)) continue;

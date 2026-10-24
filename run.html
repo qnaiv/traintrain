@@ -214,7 +214,22 @@
       .ocard b { font-size: 16px; }
       .ocard .tag { align-self: flex-start; padding: 0 8px; border: 1.5px solid var(--ink); border-radius: 999px; font-size: 10px; font-weight: 900; background: #dff2e8; }
       .ocard.o-mod .tag { background: var(--mustard); }
-      .ocard span:last-child { color: var(--sub); }
+      .ocard .d { color: var(--sub); }
+      .ocard { position: relative; }
+      .ocard .price { position: absolute; right: 10px; top: 9px; padding: 2px 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-family: var(--dela); font-size: 15px; }
+      .ocard.poor { opacity: .55; }
+      .ocard .price s { font-size: 11px; color: var(--sub); }
+      .ocard .sale { position: absolute; right: 12px; top: 40px; padding: 0 7px; border-radius: 999px; background: var(--tomato); color: #fffdf6; font-size: 10px; font-weight: 900; }
+      .ocard.sold { opacity: .4; }
+      .ocard.sold .price { font-family: 'Zen Maru Gothic', sans-serif; font-size: 11px; font-weight: 900; }
+      .shop-head { display: flex; align-items: center; justify-content: space-between; }
+      #shop-money { font-family: var(--dela); font-size: 17px; }
+      .shop-row { display: flex; gap: 8px; margin-top: 10px; }
+      .shop-row .btn { flex: 1; }
+      #btn-reroll:disabled { opacity: .45; }
+      #btn-shop { flex: .55; min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: #F3D27F; box-shadow: 3px 3px 0 var(--ink); font-size: 13px; font-weight: 900; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+      #btn-shop small { font-size: 10px; }
+      #btn-shop:disabled { opacity: .45; box-shadow: none; }
       #btn-reverse { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); height: 52px; padding: 0 22px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 16px; font-weight: 900; box-shadow: 0 4px 0 var(--ink); touch-action: none; z-index: 4; animation: beat 1s infinite; }
       #btn-reverse:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 1px 0 var(--ink); animation: none; }
       #btn-reverse[hidden] { display: none; }
@@ -248,6 +263,16 @@
       .rules { margin: 0; padding: 10px 12px 10px 28px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); font-size: 12.5px; font-weight: 700; line-height: 1.6; }
       .rules b { color: #b53e28; }
       #ups { display: flex; flex-direction: column; gap: 8px; }
+      #ups { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .lo { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); text-align: left; font-size: 11.5px; font-weight: 800; line-height: 1.35; }
+      .lo.sel { background: #dff2e8; box-shadow: 0 0 0 3px var(--mint); }
+      .lo.locked { background: #ece6db; border-style: dashed; }
+      .lo.locked.can { border-style: solid; background: #fbecc4; }
+      .lo-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+      .lo-head b { font-size: 14px; }
+      .lo .pill { flex: none; padding: 1px 7px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mint); font-size: 10px; font-weight: 900; }
+      .lo .pill.cost { background: var(--card); }
+      .lo-up { color: #2e6b53; } .lo-down { color: #b53e28; }
       .up { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
       .up-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
       .up-main b { font-size: 15px; }
@@ -297,7 +322,7 @@
           <div class="dhead"><b>乗せる客を選ぶ</b><span id="seats"></span><span id="seats-sub"></span></div>
           <div id="cands"></div>
           <div id="dwell-hint"></div>
-          <div class="drow"><button id="btn-auto" type="button">おまかせ配置</button><button id="btn-seat" type="button">車内で席を決める</button><button id="btn-depart" type="button">発車 ▶</button></div>
+          <div class="drow"><button id="btn-shop" type="button">お店</button><button id="btn-auto" type="button">おまかせ配置</button><button id="btn-seat" type="button">車内で席を決める</button><button id="btn-depart" type="button">発車 ▶</button></div>
         </div>
       </footer>
     </div>
@@ -307,7 +332,7 @@
     </div>
 
     <div id="offer" class="modal" hidden>
-      <div class="box"><h3>3択：ひとつ選ぶ</h3><p>選んでいる間も時計は進む</p><div id="offer-cards"></div></div>
+      <div class="box"><div class="shop-head"><h3>駅のお店</h3><span id="shop-money"></span></div><p>停車中は時計が止まっている。お金が続くかぎり何枚でも買える</p><div id="offer-cards"></div><div class="shop-row"><button id="btn-reroll" class="btn" type="button">並べ替え</button><button id="btn-shop-close" class="btn primary" type="button">買い物を終える</button></div></div>
     </div>
 
     <div id="result" class="modal" hidden>
@@ -334,9 +359,11 @@
           <li>ホームに着地でGOOD、<b>×2マット</b>ならPERFECTで運賃2倍。駅ごとに連続で決めると上乗せ</li>
           <li>速すぎると<b>車内の客まで飛ぶ</b>。席・つり革・屋根の配置で「誰が飛ぶか」を決めよう</li>
           <li>倒木は速く（速すぎると揺れる）、急カーブは遅く。鹿はタップ、電柱は連打</li>
+          <li>稼いだコインは駅の<b>お店</b>で使う（何枚でも買える）。射出で通過した駅ではお店に寄れない</li>
+          <li>終点に着くと、稼ぎの半分＋残りの1/4（×ダイヤ評価）を持ち帰れる。貯金で<b>持ち込み改造</b>を解放しよう</li>
           <li>遅れが上限を超えるか、信頼0で運転打ち切り</li>
         </ul></details>
-        <div class="hub-title">恒久強化（稼いだ運賃で）</div>
+        <div class="hub-title">持ち込み改造（1つだけ持っていける・貯金で解放すると選択肢が増える）</div>
         <div id="ups"></div>
         <button id="btn-start" class="btn primary" type="button">江ノ電へ出発 ▶</button>
       </div>

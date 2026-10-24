@@ -187,7 +187,7 @@ export function drawPerson(iso: Iso, x: number, y: number, z: number, look: Look
   if (look.hat) {
     ctx.fillStyle = shade('#E4553A', 0.85);
     ctx.beginPath();
-    ctx.ellipse(hx + dx * r * 0.55, hy + dy * r * 0.55 - r * 0.3, r * 0.62, r * 0.28, Math.atan2(dy, dx), 0, Math.PI * 2);
+    ctx.ellipse(hx + dx * r * 0.55, hy + dy * r * 0.55 - r * 0.3, Math.max(0.01, r * 0.62), Math.max(0.01, r * 0.28), Math.atan2(dy, dx), 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }

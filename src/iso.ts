@@ -163,9 +163,9 @@ export class Iso {
     const rx = r * this.s * 1.22;
     const ry = r * this.s * 0.7;
     c.beginPath();
-    c.ellipse(bx, by, rx, ry, 0, 0, Math.PI);
+    c.ellipse(bx, by, Math.max(0.01, rx), Math.max(0.01, ry), 0, 0, Math.PI);
     c.lineTo(bx - rx, ty);
-    c.ellipse(bx, ty, rx, ry, 0, Math.PI, 0, true);
+    c.ellipse(bx, ty, Math.max(0.01, rx), Math.max(0.01, ry), 0, Math.PI, 0, true);
     c.closePath();
     c.fillStyle = color;
     c.fill();
@@ -175,7 +175,7 @@ export class Iso {
       c.stroke();
     }
     c.beginPath();
-    c.ellipse(bx, ty, rx, ry, 0, 0, Math.PI * 2);
+    c.ellipse(bx, ty, Math.max(0.01, rx), Math.max(0.01, ry), 0, 0, Math.PI * 2);
     c.fillStyle = shade(color, 1.18);
     c.fill();
     if (lw > 0) c.stroke();
@@ -223,7 +223,7 @@ export class Iso {
     const c = this.ctx;
     c.fillStyle = `rgba(31,27,22,${alpha})`;
     c.beginPath();
-    c.ellipse(sx, sy, r * this.s * 1.25, r * this.s * 0.72, 0, 0, Math.PI * 2);
+    c.ellipse(sx, sy, Math.max(0.01, r * this.s * 1.25), Math.max(0.01, r * this.s * 0.72), 0, 0, Math.PI * 2);
     c.fill();
   }
 

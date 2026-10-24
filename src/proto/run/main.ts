@@ -11,13 +11,19 @@ import {
   NOTCH_NAME,
   OBS_INFO,
   POS,
-  UPGRADES,
+  LOADOUTS,
+  loadoutOf,
+  unlockLoadout,
   WAVE_PERIOD,
   autoArrange,
   brakeLaunch,
   brakeShock,
-  buyUpgrade,
-  chooseOffer,
+  buyCard,
+  carryHome,
+  rerollShop,
+  rerollCost,
+  earnedOf,
+  fareOf,
   depart,
   canReverse,
   isArmed,
@@ -309,6 +315,16 @@ $('btn-depart').addEventListener('click', () => {
   depart(R);
   if (mode === 'in') setMode('out');
 });
+$('btn-shop').addEventListener('click', () => {
+  shopOpen = true;
+  shopKey = '';
+});
+$('btn-shop-close').addEventListener('click', () => (shopOpen = false));
+$('btn-reroll').addEventListener('click', () => {
+  shopKey = '';
+  if (rerollShop(R)) sfx.select();
+  else sfx.bad();
+});
 $('btn-seat').addEventListener('click', () => setMode(mode === 'in' ? 'out' : 'in'));
 $('btn-auto').addEventListener('click', () => {
   autoArrange(R);
@@ -370,6 +386,8 @@ function startRun() {
   resultShown = false;
   candKey = '';
   offerShown = null;
+  shopOpen = false;
+  shopKey = '';
   lastTrust = 100;
   $('hub').hidden = true;
   $('result').hidden = true;
@@ -389,34 +407,33 @@ function renderHub() {
   $('hub-sub').innerHTML = meta.runs ? `これまで ${meta.runs}回 出発・最高 ${coinHtml(meta.best)}` : 'はじめての出発。まずは1回走ってみよう';
   const box = $('ups');
   box.innerHTML = '';
-  for (const u of UPGRADES) {
-    const lv = meta.lv[u.id];
-    const max = u.cost.length;
-    const cost = u.cost[lv];
-    const el = document.createElement('div');
-    el.className = 'up';
-    const dots = Array.from({ length: max }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('');
-    const can = cost != null && meta.bank >= cost;
-    el.innerHTML = `<div class="up-main"><b>${u.name}</b><span class="dots">${dots}</span><span class="desc">${cost == null ? '最大まで強化済み' : u.desc(lv)}</span></div>`;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'buy' + (can ? '' : ' no');
-    btn.disabled = cost == null || !can;
-    btn.innerHTML = cost == null ? '完了' : can ? coinHtml(cost) : `${coinHtml(cost)}<small>あと${coinHtml(cost - meta.bank)}</small>`;
-    btn.addEventListener('click', () => {
-      if (buyUpgrade(meta, u.id)) {
-        sfx.coin();
-        renderHub();
-      }
+  for (const l of LOADOUTS) {
+    const own = meta.unlocked.includes(l.id);
+    const sel = meta.loadout === l.id;
+    const can = !own && meta.bank >= l.cost;
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'lo' + (sel ? ' sel' : '') + (own ? '' : ' locked') + (can ? ' can' : '');
+    el.innerHTML = `<span class="lo-head"><b>${l.name}</b>${sel ? '<span class="pill">これで出発</span>' : own ? '' : `<span class="pill cost">${can ? '解放 ' : ''}${coinHtml(l.cost)}</span>`}</span><span class="lo-up">＋ ${l.up}</span><span class="lo-down">− ${l.down}</span>`;
+    el.addEventListener('click', () => {
+      if (own) {
+        meta.loadout = l.id;
+        saveMeta(meta);
+        sfx.select();
+      } else if (unlockLoadout(meta, l.id)) sfx.coin();
+      else sfx.bad();
+      renderHub();
     });
-    el.appendChild(btn);
     box.appendChild(el);
   }
+  $('btn-start').textContent = `「${loadoutOf(meta.loadout).name}」で出発 ▶`;
 }
 
 // ---------- HUD ----------
 let candKey = '';
 let offerShown: unknown = null;
+let shopOpen = false;
+let shopKey = '';
 let resultShown = false;
 let shockShown = 0;
 let lastAhead = 0;
@@ -473,7 +490,8 @@ function renderStatus() {
   document.body.classList.toggle('danger', R.delay > R.delayLimit * 0.8 || R.trust <= 20);
   const names: Record<string, string> = { belt: 'シートベルト', ram: '衝角', susp: 'エアサス', car: `${R.cars}両編成`, deck: '二階建て', roof: '屋根席', rocket: 'ロケット' };
   const mods = [...R.mods].map((m) => names[m]).join('・');
-  $('h-mods').textContent = mods ? `魔改造：${mods}` : '';
+  const lo = R.lo !== 'normal' ? `持ち込み：${loadoutOf(R.lo).name}` : '';
+  $('h-mods').textContent = [lo, mods ? `魔改造：${mods}` : ''].filter(Boolean).join('　');
 }
 
 /** 衝撃予測パネル */
@@ -489,7 +507,7 @@ function renderForecast() {
   const o2 = o && o.x - R.x < toStop ? o : null;
   if (R.phase === 'running' && !o2 && toStop < 160 && toStop > -60) {
     const sh = brakeShock(R);
-    const fly = R.airbag ? [] : R.pax.filter((p) => sh > effTol(R, p));
+    const fly = R.pax.filter((p) => sh > effTol(R, p));
     const here = fly.filter((p) => p.dest === R.target);
     const wrong = fly.filter((p) => p.dest !== R.target);
     shock = sh;
@@ -630,7 +648,7 @@ function renderHud() {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'cand' + (sel ? ' sel' : '') + (c.kind === 'vip' ? ' req' : '') + (risky ? ' risky' : '');
-        const fare = k.fare;
+        const fare = fareOf(R, c);
         b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="ic" style="background:${k.color}">${k.ch}</span><b>${k.name}${k.size > 1 ? `<small>席${k.size}</small>` : ''}</b><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">耐${k.tol}</span></span><span class="note ${risky ? 'warn' : ''}">${risky ? '⚠' + risky : coinText(k.note)}</span>`;
         b.addEventListener('click', () => togglePick(R, c.id));
         box.appendChild(b);
@@ -640,26 +658,45 @@ function renderHud() {
       const n = R.picked.size;
       $('btn-depart').textContent = n ? `${n}人を乗せて発車 ▶` : '誰も乗せずに発車 ▶';
     }
-    ($('btn-depart') as HTMLButtonElement).disabled = !!R.offer;
+    const left = R.offer?.filter((o) => !o.sold).length ?? 0;
+    $('btn-shop').innerHTML = `お店<small>${left}品</small>`;
+    ($('btn-shop') as HTMLButtonElement).disabled = !R.offer;
     $('btn-seat').textContent = mode === 'in' ? '◀ 客選びに戻る' : `車内で席を決める（${R.pax.length}人）`;
     $('dwell-hint').textContent = mode === 'in' ? '時計は止まっている。客をドラッグして席を決めよう（上のタブで段・車両を切り替え）' : '';
   } else candKey = '';
 
-  // 3択
+  // お店（停車中に何枚でも買える）
   if (R.offer !== offerShown) {
+    // 着いたら自動で開く
+    if (R.offer && !offerShown) shopOpen = true;
     offerShown = R.offer;
-    const box = $('offer');
-    box.hidden = !R.offer;
-    const cards = $('offer-cards');
-    cards.innerHTML = '';
-    R.offer?.forEach((o, i) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'ocard ' + (o.kind === 'mod' ? 'o-mod' : 'o-item');
-      b.innerHTML = `<span class="tag">${o.kind === 'item' ? 'アイテム' : '魔改造（このラン中ずっと）'}</span><b>${o.name}</b><span>${o.desc}</span>`;
-      b.addEventListener('click', () => chooseOffer(R, i));
-      cards.appendChild(b);
-    });
+  }
+  if (!R.offer) shopOpen = false;
+  $('offer').hidden = !shopOpen;
+  if (shopOpen && R.offer) {
+    const key = R.money + '|' + R.rerolls + '|' + R.offer.map((o) => o.id + o.price + (o.sold ? 's' : '')).join(',');
+    if (key !== shopKey) {
+      shopKey = key;
+      $('shop-money').innerHTML = `所持金 ${coinHtml(R.money)}`;
+      const cards = $('offer-cards');
+      cards.innerHTML = '';
+      R.offer.forEach((o, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        const can = !o.sold && R.money >= o.price;
+        b.className = 'ocard ' + (o.kind === 'mod' ? 'o-mod' : 'o-item') + (o.sold ? ' sold' : can ? '' : ' poor');
+        b.disabled = o.sold;
+        b.innerHTML = `<span class="tag">${o.kind === 'item' ? 'アイテム' : '魔改造（このラン中ずっと）'}</span><span class="price">${o.sold ? '購入済み' : (o.price < o.full ? `<s>${o.full}</s> ` : '') + coinHtml(o.price)}</span>${!o.sold && o.price < o.full ? '<span class="sale">セール</span>' : ''}<b>${o.name}</b><span class="d">${o.desc}</span>`;
+        b.addEventListener('click', () => {
+          if (buyCard(R, i)) sfx.select();
+          else sfx.bad();
+        });
+        cards.appendChild(b);
+      });
+      const rb = $('btn-reroll') as HTMLButtonElement;
+      rb.innerHTML = `並べ替え ${coinHtml(rerollCost(R))}`;
+      rb.disabled = R.money < rerollCost(R);
+    }
   }
 
   // 衝撃
@@ -695,8 +732,7 @@ function showResult() {
   const clear = R.phase === 'clear';
   const st = Math.min(R.target, LINE.stations.length - 1);
   const mult = clear && R.rank ? R.rank.mult : 1;
-  const bonus = Math.round(R.money * (mult - 1));
-  const total = R.money + bonus;
+  const total = carryHome(R);
   meta.bank += total;
   meta.runs += 1;
   meta.best = Math.max(meta.best, total);
@@ -714,12 +750,16 @@ function showResult() {
     ['最高連続着地', `${R.stats.bestStreak}駅`],
   ];
   $('result-stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  const earned = earnedOf(R);
   const money: [string, string][] = [
-    ['運賃', coinHtml(R.money - R.earlyBonus)],
-    ['早着ボーナス', coinHtml(R.earlyBonus)],
+    ['稼いだコイン', coinHtml(earned)],
+    ['（うち早着ボーナス）', coinHtml(R.earlyBonus)],
+    ['お店で使った', `−${coinHtml(R.spent)}`],
+    ['残り', coinHtml(R.money)],
   ];
-  if (clear) money.push([`ダイヤ評価「${R.rank?.name}」×${mult}`, `${bonus >= 0 ? '' : '−'}${coinHtml(Math.abs(bonus))}`]);
-  $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">今回の稼ぎ</dt><dd class="sum">${coinHtml(total)}</dd>`;
+  if (clear && R.lo === 'debt') money.push(['借金の返済', R.money >= 15 ? `−${coinHtml(15)}` : '返せない…持ち帰り0']);
+  money.push([clear ? `持ち帰り＝（稼ぎ÷2＋残り÷4）×${mult}（${R.rank?.name}）` : '運転打ち切り：稼ぎ÷4', '']);
+  $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">持ち帰り</dt><dd class="sum">${coinHtml(total)}</dd>`;
   $('result-bank').innerHTML = `貯金 ${coinHtml(meta.bank)}`;
   $('result').hidden = false;
 }
@@ -912,8 +952,6 @@ function watchSounds() {
   }
   if (R.picked.size !== W.picked) sfx.pick(R.picked.size > W.picked);
   W.picked = R.picked.size;
-  if (W.offer && !R.offer) sfx.select();
-  W.offer = !!R.offer;
   for (const list of R.obstacles) {
     for (const o of list) {
       const pt = W.taps.get(o);
