@@ -176,7 +176,7 @@ export const START_MONEY = 3;
 /** 大きな魔改造（お店の3枚目にたまに出る） */
 const BIG_MODS: string[] = ['roof', 'rocket', 'deck', 'car'];
 export const OFFERS: Offer[] = [
-  { id: 'jump', name: 'ジャンプ台', desc: '次の障害を飛び越える（着地の衝撃 40＋速度×0.4）', kind: 'item', price: 2 },
+  { id: 'jump', name: 'ジャンプ台', desc: '次の障害の手前で電車ごと跳ぶ。速いほど高く遠くへ、空中でも少し加減速できる（着地の衝撃 40＋速度×0.4）', kind: 'item', price: 2 },
   { id: 'saw', name: 'チェーンソー', desc: '電柱か倒木を一瞬で片付ける', kind: 'item', price: 2 },
   { id: 'airbag', name: 'エアバッグ', desc: '次の衝撃で誰も飛ばない', kind: 'item', price: 3 },
   { id: 'belt', name: '全席シートベルト', desc: '座席の軽減 −20 → −50', kind: 'mod', price: 5 },
@@ -302,15 +302,16 @@ export function comboHint(r: Run, offerId: string): { combo: ComboDef; partner: 
   }
   return null;
 }
-/** 人間大砲の準備ができているなら、その障害（駅の手前120m以内でジャンプする） */
-export function cannonReady(r: Run): Obstacle | null {
-  if (r.phase !== 'running' || r.armed !== 'jump' || !r.mods.has('roof')) return null;
-  const o = nextObstacle(r);
-  if (!o || o.kind === 'curve') return null;
+/** 人間大砲の準備ができているなら、ジャンプの頂点（そこで屋根の客が飛ぶ） */
+export function cannonReady(r: Run): { apexX: number; apexZ: number } | null {
+  if (r.phase !== 'running' || !r.mods.has('roof')) return null;
+  if (r.air && (!r.cannonArm || r.vz <= 0)) return null;
+  const plan = jumpPlan(r);
+  if (!plan) return null;
   const st = Math.min(r.target, LINE.stations.length - 1);
-  const d = POS[st] - o.x;
-  if (d <= 0 || d >= 120) return null;
-  return r.pax.some((p) => r.spots[p.spot]?.deck === 2 && p.dest === st) ? o : null;
+  const d = POS[st] - plan.apexX;
+  if (d <= 0 || d >= 160) return null;
+  return r.pax.some((p) => r.spots[p.spot]?.deck === 2 && p.dest === st) ? { apexX: plan.apexX, apexZ: plan.apexZ } : null;
 }
 /** コンボ発動（演出キューに積み、初めてなら図鑑に記録） */
 function triggerCombo(r: Run, id: ComboId, extra = '') {
@@ -463,10 +464,36 @@ export function flight(v: number, z: number, kind: Kind, boost = 1) {
 /** 段ごとの高さ（飛び出す高さ） */
 export function spotZ(r: Run, spot: number): number {
   const sp = r.spots[spot];
-  if (!sp) return 1.5;
-  if (sp.deck === 2) return 0.95 + 2.9 * r.decks + 0.3;
-  if (sp.deck === 1) return 4.6;
-  return 1.6;
+  const lift = r.z;
+  if (!sp) return 1.5 + lift;
+  if (sp.deck === 2) return 0.95 + 2.9 * r.decks + 0.3 + lift;
+  if (sp.deck === 1) return 4.6 + lift;
+  return 1.6 + lift;
+}
+// ---------- ジャンプ ----------
+/** 踏み切りの上向きの速さ：速いほど高く遠くへ */
+export function jumpVz(v: number): number {
+  return 3 + v * 0.33;
+}
+/** 構えたジャンプ台の位置（次の障害の8m手前） */
+export function rampX(r: Run): number | null {
+  if (r.armed !== 'jump' || r.air || r.phase !== 'running') return null;
+  const o = nextObstacle(r);
+  if (!o) return null;
+  return o.x - 8;
+}
+/** 着地の予測：今の速さのまま跳んだら（跳んでいたら）どこに降りるか */
+export function jumpPlan(r: Run): { from: number; land: number; apexX: number; apexZ: number } | null {
+  if (r.air) {
+    const t = (r.vz + Math.sqrt(r.vz * r.vz + 2 * 9.8 * Math.max(0, r.z))) / 9.8;
+    const ta = Math.max(0, r.vz / 9.8);
+    return { from: r.x, land: r.x + r.v * t, apexX: r.x + r.v * ta, apexZ: r.z + (r.vz > 0 ? (r.vz * r.vz) / 19.6 : 0) };
+  }
+  const rx = rampX(r);
+  if (rx == null) return null;
+  const from = Math.max(rx, r.x);
+  const vz = jumpVz(r.v);
+  return { from, land: from + (r.v * 2 * vz) / 9.8, apexX: from + (r.v * vz) / 9.8, apexZ: (vz * vz) / 19.6 };
 }
 export interface ShockEvt {
   value: number;
@@ -531,6 +558,12 @@ export interface Run {
   /** 持ち込み改造 */
   lo: string;
   startCars: number;
+  /** ジャンプ中（電車が宙に浮いている） */
+  air: boolean;
+  z: number;
+  vz: number;
+  /** 人間大砲の待機（頂点で屋根の客を飛ばす） */
+  cannonArm: boolean;
   /** コンボの演出待ち */
   cutins: { id: ComboId; t: number; first: boolean; extra: string }[];
   /** 射出ごとの着地の記録（コンボ判定用） */
@@ -632,6 +665,10 @@ export function newRun(meta: Meta): Run {
     rerolls: 0,
     lo: meta.loadout,
     startCars: 1,
+    air: false,
+    z: 0,
+    vz: 0,
+    cannonArm: false,
     cutins: [],
     launchSeq: 0,
     launchLog: {},
@@ -1169,10 +1206,12 @@ function driving(r: Run, dt: number) {
   if (r.lo === 'rocketd' && r.notch >= 1 && r.notch <= 3) a *= 0.7;
   if (a > 0) a *= (1 + r.meta.lv.motor * 0.15) * (r.mods.has('rocket') ? 1.8 : 1) * Math.pow(0.92, r.cars - 1) * Math.max(0.08, 1 - r.v / vmaxOf(r));
   a -= 0.05;
+  // 空中ではモーターもブレーキも半分だけ効く（着地点の微調整）
+  if (r.air) a *= 0.5;
   const obs = r.obstacles[sec] ?? [];
   // 電柱に止められる
   for (const o of obs) {
-    if (o.state !== 'wait' || o.kind !== 'pole' || r.armed === 'jump') continue;
+    if (o.state !== 'wait' || o.kind !== 'pole' || r.air) continue;
     if (r.x >= o.x - 6 && r.x < o.x + 2) {
       if (r.v > 0) {
         if (r.v > 1) applyShock(r, soften(r, kmh(r.v) * SHOCK.hit), `電柱にぶつかって停止（${Math.round(kmh(r.v))}km/h）`);
@@ -1190,7 +1229,45 @@ function driving(r: Run, dt: number) {
   }
   r.v = Math.max(0, r.v + a * dt);
   const x0 = r.x;
+  const ramp = rampX(r);
   r.x += r.v * dt;
+  // 踏み切り
+  if (ramp != null && r.x >= ramp && r.v > 1) {
+    r.armed = null;
+    r.air = true;
+    r.z = 0.01;
+    r.vz = jumpVz(r.v);
+    r.cannonArm = r.mods.has('roof');
+    toast(r, `ジャンプ！（${Math.round(kmh(r.v))}km/h）`, 'good');
+  }
+  // 空中
+  if (r.air) {
+    const vz0 = r.vz;
+    r.vz -= 9.8 * dt;
+    r.z += r.vz * dt;
+    // 頂点：人間大砲
+    if (vz0 > 0 && r.vz <= 0 && r.cannonArm) {
+      r.cannonArm = false;
+      const toSt = POS[st] - r.x;
+      const roofers = r.pax.filter((p) => r.spots[p.spot]?.deck === 2 && p.dest === st);
+      if (toSt > 0 && toSt < 160 && roofers.length) {
+        const id = ++r.launchSeq;
+        r.launchLog[id] = { perfect: 0, decks: new Set(), done: new Set() };
+        for (const p of roofers) {
+          r.pax = r.pax.filter((q) => q !== p);
+          launchPax(r, p, 1.2, id);
+        }
+        triggerCombo(r, 'cannon');
+      }
+    }
+    if (r.z <= 0) {
+      r.z = 0;
+      r.vz = 0;
+      r.air = false;
+      r.cannonArm = false;
+      applyShock(r, soften(r, SHOCK.jumpBase + kmh(r.v) * SHOCK.jumpK), `着地（${Math.round(kmh(r.v))}km/h）`);
+    }
+  }
   // バック（止まっているときだけ。停止位置より手前までは戻らない）
   if (r.reverse && r.v < 0.05 && r.notch <= 4) {
     r.x = Math.max(POS[st] + STOP_LO - 2, r.x - REVERSE_V * dt);
@@ -1210,6 +1287,15 @@ function driving(r: Run, dt: number) {
   // 障害の判定
   for (const o of obs) {
     if (o.state !== 'wait') continue;
+    // 空中なら下をくぐり抜ける
+    if (r.air) {
+      if (x0 < o.x + o.len && r.x >= o.x) {
+        o.state = 'passed';
+        o.t = r.time;
+        toast(r, `${OBS_INFO[o.kind].name}を飛び越えた！`, 'good');
+      }
+      continue;
+    }
     if (o.kind === 'curve') {
       if (x0 < o.x && r.x >= o.x && kmh(r.v) > CURVE_V + 0.5 && r.armed !== 'jump') {
         const k = kmh(r.v);
@@ -1233,7 +1319,6 @@ function driving(r: Run, dt: number) {
     }
     if (o.kind === 'wave') {
       if (r.x >= o.x && x0 < o.x + o.len && waveUp(r.time)) {
-        if (r.armed === 'jump') continue;
         o.state = 'hit';
         o.t = r.time;
         o.shock = predictShock(r, o);
@@ -1244,35 +1329,9 @@ function driving(r: Run, dt: number) {
         o.t = r.time;
         toast(r, '大波のすきをすり抜けた！', 'good');
       }
-      if (r.armed === 'jump' && x0 < o.x && r.x >= o.x) {
-        r.armed = null;
-        o.state = 'passed';
-        o.t = r.time;
-        applyShock(r, soften(r, SHOCK.jumpBase + kmh(r.v) * SHOCK.jumpK), '大波をジャンプで飛び越えた');
-      }
       continue;
     }
     if (x0 < o.x && r.x >= o.x) {
-      if (r.armed === 'jump') {
-        r.armed = null;
-        o.state = 'passed';
-        o.t = r.time;
-        // 人間大砲：屋根席の拡張あり、駅の手前でジャンプ → 屋根の客を空中から射出
-        const toSt = POS[st] - r.x;
-        const roofers = r.pax.filter((p) => r.spots[p.spot]?.deck === 2 && p.dest === st);
-        if (r.mods.has('roof') && toSt > 0 && toSt < 120 && roofers.length) {
-          const id = ++r.launchSeq;
-          r.launchLog[id] = { perfect: 0, decks: new Set(), done: new Set() };
-          for (const p of roofers) {
-            r.pax = r.pax.filter((q) => q !== p);
-            launchPax(r, p, 1.5, id, 3);
-          }
-          triggerCombo(r, 'cannon');
-        }
-        o.shock = soften(r, SHOCK.jumpBase + kmh(r.v) * SHOCK.jumpK);
-        applyShock(r, o.shock, `${OBS_INFO[o.kind].name}をジャンプで飛び越えた`);
-        continue;
-      }
       if (o.kind === 'tree') {
         o.shock = predictShock(r, o);
         o.state = 'hit';

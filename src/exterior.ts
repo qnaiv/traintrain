@@ -283,7 +283,8 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
   const atStation = g.phase === 'dwell' || g.phase === 'adjust';
   const onPlat = atStation ? carsOnPlatform(g) : g.stats.cars;
   const decks = decksOf(g.stats);
-  const bob = g.v > 0.5 ? Math.sin(t * 9) * 0.03 : 0;
+  const lift = (g as unknown as { lift?: number }).lift ?? 0;
+  const bob = (g.v > 0.5 && lift <= 0 ? Math.sin(t * 9) * 0.03 : 0) + lift;
   const per = slotsPerCar(g);
   let tx0 = Infinity;
   let ty0 = Infinity;
@@ -293,7 +294,16 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
     const x1 = g.x - k * CAR_LEN - (k ? 0.3 : 0);
     const x0 = g.x - (k + 1) * CAR_LEN + 0.3;
     const load = per > 0 ? loadOfCar(g, k) / per : 0;
-    put((x0 + x1) / 2, 0, () =>
+    // 宙に浮いているときは地面に影
+    if (lift > 0.05) {
+      put((x0 + x1) / 2, -0.2, () => {
+        const k2 = Math.max(0.35, 1 - lift / 14);
+        const [ax, ay] = iso.P((x0 + x1) / 2, 0, 0.32);
+        iso.ell(ax, ay, ((x1 - x0) / 2) * iso.s * 0.95 * k2, 1.4 * iso.s * 0.5 * k2, `rgba(31,27,22,${0.22 * k2})`, 0);
+      });
+    }
+    // 宙に浮いた電車は家より手前に描く
+    put((x0 + x1) / 2, lift > 0.3 ? 1e7 : 0, () =>
       car(iso, x0, x1, bob, carColor(k), {
         lead: k === 0,
         decks,
@@ -305,7 +315,7 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
         cut: atStation && k >= onPlat,
       }),
     );
-    const top = 0.95 + 2.9 * decks + 0.8;
+    const top = 0.95 + 2.9 * decks + 0.8 + lift;
     for (const [px, py, pz] of [
       [x0, W0 * 0 - 1.3, 0],
       [x0, 1.3, 0],
@@ -409,14 +419,14 @@ function car(iso: Iso, x0: number, x1: number, bob: number, color: string, o: Ca
   const top = 0.95 + 2.9 * o.decks + bob;
   const L = x1 - x0;
   const zb = 0.95 + bob;
-  iso.box(x0 + 1.4, x0 + 3.8, -1.05, 1.05, 0.12, 0.72, '#24211D');
-  iso.box(x1 - 3.8, x1 - 1.4, -1.05, 1.05, 0.12, 0.72, '#24211D');
+  iso.box(x0 + 1.4, x0 + 3.8, -1.05, 1.05, 0.12 + bob, 0.72 + bob, '#24211D');
+  iso.box(x1 - 3.8, x1 - 1.4, -1.05, 1.05, 0.12 + bob, 0.72 + bob, '#24211D');
   for (const wx of [x0 + 1.9, x0 + 3.3, x1 - 3.3, x1 - 1.9]) {
     if (!iso.inX(wx - 0.4, wx + 0.4)) continue;
-    const [px, py] = iso.P(wx, 1.06, 0.45);
+    const [px, py] = iso.P(wx, 1.06, 0.45 + bob);
     iso.ell(px, py, 0.42 * iso.s, 0.42 * iso.s, '#3A3631', iso.lw * 0.6);
   }
-  iso.box(x0 + 0.6, x1 - 0.6, -1.15, 1.15, 0.6, zb, '#3A3631');
+  iso.box(x0 + 0.6, x1 - 0.6, -1.15, 1.15, zb - 0.35, zb, '#3A3631');
   iso.box(x0, x1, -1.3, 1.3, zb, top, color);
   iso.rectY(1.3, x0, x1, zb + 0.3, zb + 0.55, '#FFFDF6', 0);
   const dxs: number[] = [];

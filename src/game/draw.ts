@@ -23,6 +23,8 @@ import {
   spotWorldX,
   launchBoost,
   cannonReady,
+  jumpPlan,
+  jumpVz,
   threat,
   ghostX,
   WAVE_UP,
@@ -58,6 +60,7 @@ function fakeGame(r: Run): Game {
     doorAnim: r.doorAnim,
     layout: new Array(5),
     passengers: r.pax.map((p) => ({ car: r.spots[p.spot]?.car ?? 0 })),
+    lift: r.z,
   } as unknown as Game;
 }
 
@@ -106,8 +109,10 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
   const sec = r.phase === 'dwell' ? r.target : r.target - 1;
   const obs = r.obstacles[sec] ?? [];
   const labels: (() => void)[] = [];
+  // ジャンプの着地点まで見えるように前を広げる
+  const jp0 = jumpPlan(r);
   const res = drawExterior(ctx, g, w, top, bottom, {
-    ahead: 46,
+    ahead: jp0 ? Math.max(46, Math.min(80, jp0.land - r.x + 10)) : 46,
     zoom,
     // 停車中は編成の真ん中、走行中は先頭の少し先を中心に寄る
     focus: r.phase === 'dwell' ? r.x - (r.cars * 12) / 2 : r.x + 4,
@@ -159,7 +164,7 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
     },
     after: (iso) => {
       // 屋根の上の客
-      const top = 0.95 + 2.9 * r.decks + 0.24;
+      const top = 0.95 + 2.9 * r.decks + 0.24 + r.z;
       if (r.roof) {
         const riders = r.pax.filter((p) => r.spots[p.spot]?.deck === 2);
         const x1 = r.x - 0.3;
@@ -221,13 +226,14 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
       // 人間大砲の予測（ジャンプの瞬間に屋根の客が飛ぶ）
       const co = cannonReady(r);
       if (co) {
+        const lift0 = r.z;
         const st = Math.min(r.target, LINE.stations.length - 1);
         const matC = r.mats[st];
         for (const p of r.pax) {
           if (r.spots[p.spot]?.deck !== 2 || p.dest !== st) continue;
-          const z = spotZ(r, p.spot) + 3;
-          const f = flight(r.v, z, p.kind, launchBoost(r, p, 1.5));
-          const x0 = co.x - (r.x - spotWorldX(r, p.spot));
+          const z = spotZ(r, p.spot) - lift0 + co.apexZ;
+          const f = flight(r.v, z, p.kind, launchBoost(r, p, 1.2));
+          const x0 = co.apexX - (r.x - spotWorldX(r, p.spot));
           ctx.fillStyle = '#B98ADB';
           for (let k = 1; k < 16; k++) {
             const t = (f.t * k) / 16;
@@ -244,8 +250,37 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
           iso.ell(cx, cy, 1.3 * iso.s * 1.22, 1.3 * iso.s * 0.7, onMat ? 'rgba(111,195,160,0.65)' : onPlat ? 'rgba(233,178,62,0.5)' : 'rgba(185,138,219,0.35)', 2.4, onMat ? '#2E6B53' : onPlat ? '#8A5D00' : '#7A4FA0');
           ctx.setLineDash([]);
         }
-        const [tx, ty] = iso.P(co.x, 0, 10);
-        tagAt(ctx, tx, ty, r.meta.combos.cannon ? '人間大砲' : 'ここでジャンプすると…？', '#E8D8F4');
+        const [tx, ty] = iso.P(co.apexX, 0, co.apexZ + 7);
+        tagAt(ctx, tx, ty, r.meta.combos.cannon ? '人間大砲' : '頂点で何かが起きる…？', '#E8D8F4');
+      }
+      // ジャンプ：踏み切り台と着地の予測
+      const jp = jumpPlan(r);
+      if (jp) {
+        if (!r.air) {
+          // 黄色い踏み切り台（線路の上）
+          const rx = jp.from;
+          iso.poly([[rx - 5, -0.9, 0.3], [rx, -0.9, 1.5], [rx, 0.9, 1.5], [rx - 5, 0.9, 0.3]], '#F3D27F', iso.lw);
+          iso.poly([[rx, -0.9, 0.3], [rx, -0.9, 1.5], [rx, 0.9, 1.5], [rx, 0.9, 0.3]], '#C9A04A', iso.lw);
+        }
+        // 電車の先頭の軌道（点線）
+        const vz = r.air ? r.vz : jumpVz(r.v);
+        const z0 = r.air ? r.z : 0;
+        const T = (vz + Math.sqrt(vz * vz + 2 * 9.8 * z0)) / 9.8;
+        ctx.fillStyle = 'rgba(46,107,83,0.85)';
+        for (let k = 1; k < 18; k++) {
+          const t = (T * k) / 18;
+          const [px, py] = iso.P(jp.from + r.v * t, 0, 1 + z0 + vz * t - 4.9 * t * t);
+          ctx.beginPath();
+          ctx.arc(px, py, 1.9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        const [lx, ly] = iso.P(jp.land, 0, 0.5);
+        ctx.setLineDash([6, 4]);
+        iso.ell(lx, ly, 2.4 * iso.s * 1.22, 1.2 * iso.s * 0.7, 'rgba(111,195,160,0.35)', 2.4, '#2E6B53');
+        ctx.setLineDash([]);
+        const sec2 = r.phase === 'dwell' ? r.target : r.target - 1;
+        const over = (r.obstacles[sec2] ?? []).filter((o) => o.state === 'wait' && o.x + o.len > jp.from && o.x < jp.land).length;
+        labels.push(() => tagAt(ctx, lx, ly - 18, over ? `着地（${over}つ飛び越え）` : '着地', '#DDF3E6'));
       }
       // 飛んでいる客
       for (const f of r.fliers) {
@@ -303,6 +338,9 @@ function tagAt(ctx: CanvasRenderingContext2D, x: number, y: number, text: string
 }
 
 function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => void, r: Run, o: Obstacle, labels: (() => void)[], hits: Hit[]) {
+  // ジャンプで越える障害は、突破のヒントを出さない（電車と重ならないように）
+  const jp = jumpPlan(r);
+  const L: (() => void)[] = jp && o.x + o.len > jp.from && o.x < jp.land ? [] : labels;
   const ctx = iso.ctx;
   const age = r.time - o.t;
   const x = o.x;
@@ -316,7 +354,7 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
         iso.box(x - 1.7, x + 1.5, -0.6, 2.2, 0.5, 1.9, '#6FC3A0');
         iso.box(x - 1.1, x + 1.2, 1.9, 3.4, 0.4, 1.5, '#4E9E7E');
       });
-      if (next) labels.push(() => {
+      if (next) L.push(() => {
         const [sx, sy] = iso.P(x, -1, 5.5);
         pill(ctx, sx, sy - 14, `${treeNeed(r)}km/h以上で突き破れ`, '#E9B23E', INK, 11);
       });
@@ -342,7 +380,7 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
       const [cx, cy] = iso.P(x, 0.5, 0.6);
       const rr = 3.2 * iso.s;
       hits.push({ kind: 'obstacle', ref: o, x: cx, y: cy, r: Math.max(44, rr * 1.2) });
-      labels.push(() => {
+      L.push(() => {
         ctx.setLineDash([7, 5]);
         iso.ell(cx, cy, rr, rr * 0.58, 'rgba(228,85,58,0.12)', 2.4, '#E4553A');
         ctx.setLineDash([]);
@@ -368,7 +406,7 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
         const [cx, cy] = iso.P(x, 0, 1);
         const rr = 2.6 * iso.s;
         hits.push({ kind: 'obstacle', ref: o, x: cx, y: cy, r: Math.max(44, rr * 1.2) });
-        labels.push(() => {
+        L.push(() => {
           ctx.setLineDash([7, 5]);
           iso.ell(cx, cy, rr, rr * 0.6, 'rgba(228,85,58,0.1)', 2.2, '#E4553A');
           ctx.setLineDash([]);
@@ -390,7 +428,7 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
         }
       }
     });
-    if (next) labels.push(() => {
+    if (next) L.push(() => {
       const [sx, sy] = iso.P(x + o.len / 2, 0, 5);
       pill(ctx, sx, sy - 10, up ? '波が来ている！' : `波が引いた！ 今のうち（${(WAVE_PERIOD - ph).toFixed(1)}秒）`, up ? '#E4553A' : '#6FC3A0', up ? '#FFFDF6' : INK, 12);
     });
@@ -412,7 +450,7 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
       for (let k = 0; k < o.len; k += 1) iso.rectZ(x + k, x + k + 1, -1.9, -1.5, 0.21, k % 2 ? '#1F1B16' : '#E9B23E', 0);
       for (let k = 0; k < o.len; k += 1) iso.rectZ(x + k, x + k + 1, 1.5, 1.9, 0.21, k % 2 ? '#1F1B16' : '#E9B23E', 0);
     });
-    if (next) labels.push(() => {
+    if (next) L.push(() => {
       const [sx, sy] = iso.P(x + o.len / 2, 0, 5.0);
       pill(ctx, sx, sy - 10, `急カーブ ${CURVE_V}km/h以下で通過`, '#FFFDF6', INK, 11);
     });

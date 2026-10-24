@@ -29,6 +29,7 @@ import {
   carryHome,
   rerollShop,
   rerollCost,
+  jumpPlan,
   earnedOf,
   fareOf,
   depart,
@@ -592,7 +593,11 @@ function renderForecast() {
     // ヒント
     const fly = wouldFly(R, shock);
     let hint = '';
-    if (R.armed === 'jump') hint = 'ジャンプ台で飛び越える（着地の衝撃あり）';
+    const jp = jumpPlan(R);
+    if (jp) {
+      const n = (R.obstacles[R.target - 1] ?? []).filter((q) => q.state === 'wait' && q.x + q.len > jp.from && q.x < jp.land).length;
+      hint = R.air ? `空中！ レバーで着地点を調整（あと${Math.max(0, Math.round(jp.land - R.x))}m）` : `今の速さなら${Math.round(jp.land - jp.from)}m跳んで障害${n}つ越え（速いほど遠く）`;
+    }
     else if (fly.length === 0) hint = shock > 0 ? '全員耐えられる' : '';
     else if (o.kind === 'tree') {
       const atNeed = predictShock(R, o, (treeNeed(R) + 0.5) / 3.6);
