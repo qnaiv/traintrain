@@ -364,7 +364,7 @@ $('btn-inv2').addEventListener('click', openInv);
 $('btn-inv-x').addEventListener('click', closeInv);
 $('btn-inv-close').addEventListener('click', closeInv);
 const ITEM_DESC: Record<ItemId, string> = {
-  jump: '次の障害の手前で電車ごと跳ぶ。速いほど遠く',
+  jump: '次の障害を衝撃なしで飛び越える。速いほど遠く。空中で非常を引けば空から射出',
   saw: '倒木か電柱を一瞬で片付ける',
   airbag: '次の衝撃で誰も飛ばない（射出では開かない）',
   nitro: 'その場で +20km/h。坂の手前や遅れの取り戻しに（空中では使えない）',
@@ -665,7 +665,7 @@ function renderForecast() {
   const o2 = o && o.x - R.x < toStop ? o : null;
   if (R.phase === 'running' && !o2 && toStop < 160 && toStop > -60) {
     const sh = brakeShock(R);
-    const fly = R.pax.filter((p) => sh > effTol(R, p));
+    const fly = R.pax.filter((p) => sh > effTol(R, p, true));
     const here = fly.filter((p) => p.dest === R.target);
     const wrong = fly.filter((p) => p.dest !== R.target);
     shock = sh;
@@ -695,7 +695,7 @@ function renderForecast() {
     const jp = jumpPlan(R);
     if (jp) {
       const n = (R.obstacles[R.target - 1] ?? []).filter((q) => q.state === 'wait' && q.x + q.len > jp.from && q.x < jp.land).length;
-      hint = R.air ? `空中！ レバーで着地点を調整（あと${Math.max(0, Math.round(jp.land - R.x))}m）` : `今の速さなら${Math.round(jp.land - jp.from)}m跳んで障害${n}つ越え（速いほど遠く）`;
+      hint = R.air ? `空中！ レバーで着地点を調整・非常で空から射出（着地まで${Math.max(0, Math.round(jp.land - R.x))}m）` : `今の速さなら${Math.round(jp.land - jp.from)}m跳んで障害${n}つ越え（速いほど遠く）`;
     }
     else if (fly.length === 0) hint = shock > 0 ? '全員耐えられる' : '';
     else if (o.kind === 'tree') {

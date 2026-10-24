@@ -199,9 +199,9 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
       }
       // 予測の放物線（駅が近いとき、今急ブレーキしたら）
       const stopX = POS[Math.min(r.target, LINE.stations.length - 1)];
-      if (r.phase === 'running' && r.v > 2 && stopX - r.x < 130 && stopX - r.x > -10) {
+      if (r.phase === 'running' && r.v > 2 && stopX - r.x < (r.air ? 200 : 130) && stopX - r.x > -10) {
         const sh = brakeShock(r);
-        const flyers = r.pax.filter((p) => sh > effTol(r, p));
+        const flyers = r.pax.filter((p) => sh > effTol(r, p, true));
         const seen = new Set<string>();
         const boost = r.mods.has('rocket') ? 1.5 : 1;
         const mat = r.mats[r.target];

@@ -116,9 +116,6 @@ export const SHOCK = {
   joltBase: 50,
   joltK: 2,
   joltEvery: 3.2,
-  /** ジャンプの着地：基本 ＋ 速度 × */
-  jumpBase: 40,
-  jumpK: 0.4,
   /** 大波：基本 ＋ 速度 × */
   waveBase: 30,
   waveK: 0.5,
@@ -285,7 +282,7 @@ export const START_MONEY = 3;
 /** 大きな魔改造（お店の3枚目にたまに出る） */
 const BIG_MODS: string[] = ['roof', 'rocket', 'deck', 'car'];
 export const OFFERS: Offer[] = [
-  { id: 'jump', name: 'ジャンプ台', desc: '次の障害の手前で電車ごと跳ぶ。速いほど高く遠くへ、空中でも少し加減速できる（着地の衝撃 40＋速度×0.4）', kind: 'item', price: 2 },
+  { id: 'jump', name: 'ジャンプ台', desc: '次の障害の手前で電車ごと跳ぶ。速いほど高く遠くへ、空中でも少し加減速できる。着地の衝撃なし。空中で非常ブレーキを引くと、空から客を射出できる', kind: 'item', price: 2 },
   { id: 'saw', name: 'チェーンソー', desc: '電柱か倒木を一瞬で片付ける', kind: 'item', price: 2 },
   { id: 'airbag', name: 'エアバッグ', desc: '次の衝撃で誰も飛ばない', kind: 'item', price: 3 },
   { id: 'nitro', name: 'ニトロ', desc: 'その場で +20km/h。空中では使えない', kind: 'item', price: 2 },
@@ -998,7 +995,8 @@ export function obsTag(r: Run, q: Obstacle): string {
 /** 障害の衝撃の見込み（この速さで入ったら） */
 export function predictShock(r: Run, o: Obstacle, v = r.v): number {
   const k = kmh(v);
-  if (r.armed === 'jump' && o.kind !== 'curve' && o.kind !== 'slope') return soften(r, SHOCK.jumpBase + k * SHOCK.jumpK);
+  // ジャンプで越える障害は衝撃なし（着地も衝撃なし）
+  if (r.armed === 'jump' && o.kind !== 'curve' && o.kind !== 'slope') return 0;
   switch (o.kind) {
     case 'tree':
       // 突破できる速さなら「超過分」だけ響く。届かなければ正面衝突
@@ -1591,7 +1589,7 @@ function driving(r: Run, dt: number) {
       r.vz = 0;
       r.air = false;
       r.cannonArm = false;
-      applyShock(r, soften(r, SHOCK.jumpBase + kmh(r.v) * SHOCK.jumpK), `着地（${Math.round(kmh(r.v))}km/h）`);
+      toast(r, '着地！', 'good');
     }
   }
   // バック（止まっているときだけ。停止位置より手前までは戻らない）

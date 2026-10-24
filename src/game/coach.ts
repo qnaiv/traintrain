@@ -316,7 +316,7 @@ function tip(r: Run, meta: Meta, shopOpen: boolean, _now: number): Say | null {
     if (o.kind === 'flood' && !seen('flood')) return fire('flood', '<b>浸水区間</b>：15km/hまで落とせば衝撃なし。速すぎるとモーターが水をかぶって止まる。ジャンプで越えてもいい');
     if (o.kind === 'tree' && r.meta.line === 'ginza' && !seen('rubble')) return fire('rubble', '<b>ガレキ</b>：倒木と同じ。40km/h以上で突き破れ');
   }
-  if (r.items.jump > 0 && o && !seen('jump')) return fire('jump', '<b>ジャンプ台</b>：押すと次の障害の手前で電車ごと跳ぶ。<b>速いほど遠く</b>へ');
+  if (r.items.jump > 0 && o && !seen('jump')) return fire('jump', '<b>ジャンプ台</b>：押すと次の障害の手前で電車ごと跳んで<b>衝撃なしで越える</b>。速いほど遠く。空中で<b>非常</b>を引けば空から射出！');
   const sumo = r.pax.find((p) => p.kind === 'sumo');
   if (sumo && !seen('sumo')) return fire('sumo', `<b>${KINDS.sumo.name}</b>は席を3つ使うけど、隣の客の耐衝撃が上がる`);
   return null;
