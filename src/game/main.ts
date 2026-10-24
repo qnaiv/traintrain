@@ -2,6 +2,7 @@
 
 import { DEST_COLORS } from '../data.ts';
 import * as S from './state.ts';
+import { hideCoach, startCoach, updateCoach } from './coach.ts';
 import { BAR_H, drawBar, drawInside, drawOutside, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
@@ -387,8 +388,9 @@ window.addEventListener('keyup', (e) => {
 });
 
 // ---------- 画面の切り替え ----------
-function startRun() {
-  R = newRun(meta);
+function startRun(tutorial = !meta.tutorialDone) {
+  R = newRun(meta, tutorial);
+  startCoach(R);
   W.taps.clear();
   W.states.clear();
   W.phase = '';
@@ -411,7 +413,8 @@ function toHub() {
   renderHub();
   $('hub').hidden = false;
 }
-$('btn-start').addEventListener('click', startRun);
+$('btn-start').addEventListener('click', () => startRun());
+$('btn-tutorial').addEventListener('click', () => startRun(true));
 // データ初期化（2回押しで確定）
 let resetArmed = -Infinity;
 let hubTab: 'lo' | 'book' = 'lo';
@@ -446,15 +449,22 @@ $('btn-reset').addEventListener('click', () => {
   renderHub();
 });
 $('btn-hub').addEventListener('click', toHub);
-$('btn-again').addEventListener('click', startRun);
+$('btn-again').addEventListener('click', () => startRun());
 
 function renderHub() {
   $('hub-bank').innerHTML = coinHtml(meta.bank);
   $('hub-sub').innerHTML = meta.runs ? `これまで ${meta.runs}回 出発・最高 ${coinHtml(meta.best)}` : 'はじめての出発。まずは1回走ってみよう';
+  // はじめて：研修運転だけを見せる
+  const first = !meta.tutorialDone && meta.runs === 0;
+  $('hub-first').hidden = !first;
+  for (const sel of ['.how', '.hub-tabs', '.reset-row', '#hub-bank']) {
+    const el = document.querySelector<HTMLElement>(sel);
+    if (el) (sel === '#hub-bank' ? (el.closest('.hub-bank') as HTMLElement) : el).hidden = first;
+  }
   const found = COMBOS.filter((c) => meta.combos[c.id]).length;
   $('tab-book').innerHTML = `コンボ図鑑 <small>${found}/${COMBOS.length}</small>`;
-  $('ups').hidden = hubTab !== 'lo';
-  $('book').hidden = hubTab !== 'book';
+  $('ups').hidden = first || hubTab !== 'lo';
+  $('book').hidden = first || hubTab !== 'book';
   $('tab-lo').classList.toggle('on', hubTab === 'lo');
   $('tab-book').classList.toggle('on', hubTab === 'book');
   $('book').innerHTML =
@@ -487,7 +497,7 @@ function renderHub() {
     });
     box.appendChild(el);
   }
-  $('btn-start').textContent = `「${loadoutOf(meta.loadout).name}」で出発 ▶`;
+  $('btn-start').textContent = first ? 'はじめての運転 ▶' : `「${loadoutOf(meta.loadout).name}」で出発 ▶`;
 }
 
 // ---------- HUD ----------
@@ -713,6 +723,7 @@ function renderHud() {
         const risky = worst > k.tol + 20 ? '座席でも危ない' : worst > k.tol ? '座らせないと飛ぶ' : '';
         const b = document.createElement('button');
         b.type = 'button';
+        b.dataset.id = String(c.id);
         b.className = 'cand' + (sel ? ' sel' : '') + (c.kind === 'vip' ? ' req' : '') + (risky ? ' risky' : '');
         const fare = fareOf(R, c);
         b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="ic" style="background:${k.color}">${k.ch}</span><b>${k.name}${k.size > 1 ? `<small>席${k.size}</small>` : ''}</b><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">耐${k.tol}</span></span><span class="note ${risky ? 'warn' : ''}">${risky ? '⚠' + risky : coinText(k.note)}</span>`;
@@ -1056,15 +1067,16 @@ function watchSounds() {
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get('speed')) || 1);
 if (params.has('debug')) Object.assign(window, { __S: S, __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
-if (params.has('go')) startRun();
+if (params.has('go')) startRun(params.has('tutorial'));
 else renderHub();
 let last = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000) * SPEED;
   last = now;
   if (screen === 'run') {
-    const steps = Math.ceil(dt / 0.02);
-    for (let i = 0; i < steps; i++) update(R, dt / steps);
+    const sdt = dt * R.slow;
+    const steps = Math.ceil(sdt / 0.02);
+    for (let i = 0; i < steps; i++) update(R, sdt / steps);
     if (mode === 'in' && R.phase === 'running') {
       const o = nextObstacle(R);
       const near = (o && o.x - R.x < 40 && o.x - R.x > -5 && o.kind !== 'curve') || POS[R.target] - R.x < 80;
@@ -1088,7 +1100,8 @@ function frame(now: number) {
     }
     drawBar(ctx, R, w, 22);
     renderHud();
-  }
+    updateCoach(R, meta, shopOpen && !!R.offer, now);
+  } else hideCoach();
   watchSounds();
   requestAnimationFrame(frame);
 }

@@ -229,6 +229,32 @@
       #cutin.again .ci-name { font-size: 24px; }
       #cutin .ci-sub { display: flex; gap: 5px; align-items: center; font-size: 12px; font-weight: 900; color: #fffdf6; }
       @keyframes cutin { 0% { opacity: 1; transform: rotate(-5deg) translateX(-110%); } 18% { transform: rotate(-5deg) translateX(0); } 80% { opacity: 1; transform: rotate(-5deg) translateX(0); } 100% { opacity: 0; transform: rotate(-5deg) translateX(30%); } }
+      #coach { position: fixed; z-index: 40; box-sizing: border-box; padding: 10px 12px; border: 2.5px solid var(--ink); border-radius: 16px; background: var(--card); box-shadow: 4px 4px 0 var(--ink); display: flex; gap: 10px; align-items: flex-start; }
+      #coach[hidden], #coach-ring[hidden] { display: none; }
+      #coach.above::after, #coach.below::after { content: ''; position: absolute; left: var(--ax, 30px); width: 0; height: 0; border-left: 11px solid transparent; border-right: 11px solid transparent; }
+      #coach.above::after { bottom: -12px; border-top: 12px solid var(--ink); }
+      #coach.below::after { top: -12px; border-bottom: 12px solid var(--ink); }
+      #coach .face { position: relative; flex: none; width: 44px; height: 44px; border: 2.5px solid var(--ink); border-radius: 50%; background: #f3d9b8; overflow: hidden; box-sizing: border-box; }
+      #coach .face i { position: absolute; display: block; }
+      #coach .cap { left: -2px; right: -2px; top: -2px; height: 16px; background: #2c47a0; border-bottom: 2.5px solid var(--ink); }
+      #coach .badge { left: 14px; top: 3px; width: 11px; height: 7px; border-radius: 3px; background: var(--mustard); }
+      #coach .eye { top: 22px; width: 5px; height: 6px; border-radius: 50%; background: var(--ink); } #coach .eye.l { left: 10px; } #coach .eye.r { right: 10px; }
+      #coach .mouth { left: 15px; top: 30px; width: 10px; height: 5px; border-bottom: 2.5px solid var(--ink); border-radius: 0 0 8px 8px; }
+      #coach .cbody { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+      #coach .chead { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 900; }
+      #coach .who { color: #2c47a0; } #coach .step { color: #9a9184; }
+      #coach .skip { margin-left: auto; padding: 0; border: 0; background: none; font-size: 11px; font-weight: 900; color: var(--sub); text-decoration: underline; }
+      #coach .ctext { font-size: 14px; font-weight: 900; line-height: 1.45; }
+      #coach .ctext .hl { color: var(--tomato); } #coach .ctext .ok { color: #2e6b53; }
+      #coach .cnext { align-self: flex-end; padding: 4px 14px; border: 2px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 12px; font-weight: 900; box-shadow: 0 2px 0 var(--ink); }
+      #coach-ring { position: fixed; z-index: 39; border: 3px solid #f2c94c; border-radius: 14px; box-shadow: 0 0 0 4px rgba(242,201,76,.45), 0 0 0 9999px rgba(31,27,22,.32); pointer-events: none; transition: all .2s; }
+      .first-only[hidden] { display: none !important; }
+      .hub-first { display: flex; flex-direction: column; gap: 10px; }
+      .hub-first[hidden] { display: none; }
+      .hub-first .pitch { padding: 12px; border: 2.5px solid var(--ink); border-radius: 16px; background: #fff4da; display: flex; flex-direction: column; gap: 6px; }
+      .hub-first .pitch b { font-size: 15px; } .hub-first .pitch span { font-size: 12.5px; font-weight: 700; color: var(--sub); line-height: 1.5; }
+      .hub-first .note { font-size: 11.5px; font-weight: 900; color: var(--sub); text-align: center; }
+      #btn-tutorial { padding: 8px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-size: 12px; font-weight: 900; }
       .hub-tabs { display: flex; gap: 6px; }
       .hub-tabs button { flex: 1; min-height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: #ece6db; font-size: 13px; font-weight: 900; }
       .hub-tabs button.on { background: var(--card); box-shadow: 0 3px 0 var(--ink); }
@@ -299,6 +325,7 @@
       #ups { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
       .reset-row { display: flex; align-items: center; gap: 10px; margin: 14px 0 90px; padding-top: 12px; border-top: 1.5px dashed #b9b0a2; font-size: 11px; font-weight: 700; color: var(--sub); }
       .reset-row span { flex: 1; }
+      .reset-row[hidden], .how[hidden], .hub-tabs[hidden], .hub-bank[hidden] { display: none !important; }
       #btn-reset { flex: none; padding: 8px 12px; border: 2px solid #b53e28; border-radius: 10px; background: var(--card); color: #b53e28; font-size: 12px; font-weight: 900; }
       #btn-reset.armed { background: #b53e28; color: #fffdf6; max-width: 170px; }
       .lo { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); text-align: left; font-size: 11.5px; font-weight: 800; line-height: 1.35; }
@@ -323,6 +350,8 @@
     </style>
   </head>
   <body>
+    <div id="coach-ring" hidden></div>
+    <div id="coach" hidden></div>
     <div id="app">
       <header>
         <div class="row"><span class="chip">江ノ島電鉄</span><span id="h-station"></span><span id="h-money"></span><button id="btn-sound" type="button" aria-label="音">♪</button></div>
@@ -391,6 +420,7 @@
         <h1 class="hub-logo"><span>まもなく、</span>魔改造電車が参ります</h1>
         <div class="hub-bank"><span><b id="hub-bank">0</b></span><span style="font-weight:900">車両基地の貯金</span></div>
         <div id="hub-sub"></div>
+        <div class="hub-first" id="hub-first" hidden><div class="pitch"><b>急ブレーキの勢いで、屋根の客をホームへ放り込む。</b><span>最初の1本は研修運転。見習い車掌がとなりで教えてくれる（3分くらい）</span></div><div class="note">持ち込み改造とコンボ図鑑は、1本走ると開く</div></div>
         <details class="how"><summary>遊び方（タップで開く）</summary><ul class="rules">
           <li>駅で<b>乗せる客を選ぶ</b>。運賃は<i class="coin"></i>1〜<i class="coin"></i>5、耐えられる衝撃は客ごとに違う</li>
           <li>駅の手前で<b>急ブレーキ射出</b>（Space）。耐えられない客が前へ飛ぶ。点線が着地予測</li>
@@ -404,7 +434,7 @@
         <div class="hub-tabs"><button id="tab-lo" type="button" class="on">持ち込み改造</button><button id="tab-book" type="button">コンボ図鑑</button></div>
         <div id="ups"></div>
         <div id="book" hidden></div>
-        <div class="reset-row"><span>貯金・解放した改造・記録をすべて消します（音とズームの設定は残る）</span><button id="btn-reset" type="button">データ初期化</button></div>
+        <div class="reset-row"><button id="btn-tutorial" type="button">研修運転をもう一度</button><span>貯金・解放した改造・記録をすべて消します（音とズームの設定は残る）</span><button id="btn-reset" type="button">データ初期化</button></div>
         <button id="btn-start" class="btn primary" type="button">江ノ電へ出発 ▶</button>
       </div>
     </section>

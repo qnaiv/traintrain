@@ -358,6 +358,9 @@ export interface Meta {
   /** 解放済みの持ち込み改造と、次に持っていくもの */
   unlocked: string[];
   loadout: string;
+  /** 研修運転を終えたか・見た初回ヒント */
+  tutorialDone: boolean;
+  tips: string[];
   /** コンボ図鑑：見つけた日 */
   combos: Partial<Record<ComboId, string>>;
   /** 旧・恒久強化（もう使わない。常に0） */
@@ -368,21 +371,21 @@ export interface Meta {
 const META_KEY = 'hakobi.run.meta.v2';
 const OLD_META_KEY = 'hakobi.run.meta.v1';
 export function loadMeta(): Meta {
-  const base: Meta = { bank: 0, unlocked: [], loadout: 'normal', combos: {}, lv: { cap: 0, bench: 0, strap: 0, cushion: 0, susp: 0, motor: 0, kit: 0, grace: 0 }, runs: 0, best: 0 };
+  const base: Meta = { bank: 0, unlocked: [], loadout: 'normal', combos: {}, tutorialDone: false, tips: [], lv: { cap: 0, bench: 0, strap: 0, cushion: 0, susp: 0, motor: 0, kit: 0, grace: 0 }, runs: 0, best: 0 };
   try {
     const raw = localStorage.getItem(META_KEY);
     const old = raw ? null : localStorage.getItem(OLD_META_KEY);
     if (old) {
       // 円 → コインへの切り替え：貯金を 1/80 に
       const m = JSON.parse(old) as Partial<Meta>;
-      return withFree({ ...base, ...m, bank: Math.floor((m.bank ?? 0) / 80), best: Math.floor((m.best ?? 0) / 80), lv: { ...base.lv } });
+      return withFree({ ...base, ...m, tutorialDone: m.tutorialDone ?? (m.runs ?? 0) > 0, bank: Math.floor((m.bank ?? 0) / 80), best: Math.floor((m.best ?? 0) / 80), lv: { ...base.lv } });
     }
     if (raw) {
       const m = JSON.parse(raw) as Partial<Meta>;
       // 旧・恒久強化に使ったコインは返す（持ち込み改造に切り替えたため）
       let refund = 0;
       if (!m.unlocked && m.lv) for (const u of UPGRADES) for (let i = 0; i < (m.lv[u.id] ?? 0); i++) refund += u.cost[i] ?? 0;
-      return withFree({ ...base, ...m, bank: (m.bank ?? 0) + refund, lv: { ...base.lv } });
+      return withFree({ ...base, ...m, tutorialDone: m.tutorialDone ?? (m.runs ?? 0) > 0, bank: (m.bank ?? 0) + refund, lv: { ...base.lv } });
     }
   } catch {
     // 保存できない環境では毎回まっさらから
@@ -395,6 +398,7 @@ function withFree(m: Meta): Meta {
   for (const l of LOADOUTS) if (l.cost === 0) u.add(l.id);
   m.unlocked = [...u];
   m.combos = m.combos ?? {};
+  m.tips = m.tips ?? [];
   if (!m.unlocked.includes(m.loadout)) m.loadout = 'normal';
   return m;
 }
@@ -558,6 +562,10 @@ export interface Run {
   /** 持ち込み改造 */
   lo: string;
   startCars: number;
+  /** 研修運転 */
+  tutorial: boolean;
+  /** 時間の流れ（研修のスロー） */
+  slow: number;
   /** ジャンプ中（電車が宙に浮いている） */
   air: boolean;
   z: number;
@@ -614,7 +622,7 @@ function genCandidates(r: Run, st: number): Pax[] {
   return out;
 }
 
-export function newRun(meta: Meta): Run {
+export function newRun(meta: Meta, tutorial = false): Run {
   const r: Run = {
     meta,
     spots: [...lowerSpots(meta, 0), ...roofSpots(0).slice(0, 2)],
@@ -663,8 +671,10 @@ export function newRun(meta: Meta): Run {
     spent: 0,
     startMoney: START_MONEY,
     rerolls: 0,
-    lo: meta.loadout,
+    lo: tutorial ? 'normal' : meta.loadout,
     startCars: 1,
+    tutorial,
+    slow: 1,
     air: false,
     z: 0,
     vz: 0,
@@ -688,7 +698,15 @@ export function newRun(meta: Meta): Run {
   r.candidates = genCandidates(r, 0);
   r.rerolls = 0;
   r.offer = rollShop(r);
+  if (tutorial) setupTutorial(r);
   return r;
+}
+/** 研修運転：最初の区間は倒木1本だけ、鵠沼行きの子どもが待っている */
+function setupTutorial(r: Run) {
+  r.offer = null;
+  const mk = (kind: Kind, dest: number): Pax => ({ id: r.nextId++, kind, look: randomLook(rnd), from: 0, dest, spot: -1 });
+  r.candidates = [mk('kid', 1), mk('sal', 2), mk('stu', 3), mk('old', 2)];
+  r.obstacles[0] = [{ kind: 'tree', x: POS[0] + 190, len: 0, taps: 0, need: 0, state: 'wait', t: 0 }];
 }
 function applyLoadout(r: Run) {
   const lo = r.lo;
