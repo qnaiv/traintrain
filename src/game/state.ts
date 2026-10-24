@@ -19,6 +19,14 @@ export interface RunLine extends LineDef {
   /** 見出しに出す短い名前と、車両の色 */
   short: string;
   cars: string[] | null;
+  /** 路線ごとの運賃の上書き・持ち帰りの倍率・早着ボーナスの刻み[秒]・電柱の連打の追加 */
+  fares: Partial<Record<Kind, number>>;
+  carry: number;
+  earlyPer: number;
+  poleAdd: number;
+  /** 乗客の出やすさ・観光客の行きたい駅 */
+  weights: Record<Kind, number>;
+  sights: number[];
 }
 const mkSt = (name: string) => ({ name, platformCars: 2, demand: 0 });
 export const LINES: Record<string, RunLine> = {
@@ -36,21 +44,33 @@ export const LINES: Record<string, RunLine> = {
     color: '#6FC3A0',
     short: '江ノ島電鉄',
     cars: null,
+    fares: {},
+    carry: 1,
+    earlyPer: 10,
+    poleAdd: 0,
+    weights: { old: 1, kid: 1, sal: 2, stu: 1, sumo: 1, vip: 0, bride: 0.3, carp: 0.5, tour: 0.6 },
+    sights: [2, 6],
   },
   ginza: {
     id: 'ginza',
     name: '東京メトロ銀座線',
     blurb: '日本最古の地下鉄。工事区間・坂・急カーブ、浅草の手前に浸水区間',
     stations: ['渋谷', '表参道', '赤坂見附', '銀座', '日本橋', '上野', '浅草'].map(mkSt),
-    sections: [400, 420, 440, 400, 460, 480],
+    sections: [460, 520, 480, 420, 560, 500],
     scenery: ['street', 'tunnel', 'tunnel', 'tunnel', 'tunnel', 'tunnel'],
     delayLimit: 100,
-    planV: 10.5,
+    planV: 11,
     fareBonus: 0,
     needs: 'enoden',
     color: '#F39800',
     short: '銀座線',
     cars: ['#F3B81C', '#F39800', '#F3B81C', '#E9B23E'],
+    fares: { sal: 3 },
+    carry: 1.2,
+    earlyPer: 8,
+    poleAdd: 4,
+    weights: { old: 1, kid: 0.5, sal: 3, stu: 1, sumo: 0.5, vip: 0, bride: 0.4, carp: 0.6, tour: 1.2 },
+    sights: [3, 6],
   },
 };
 export let LINE: RunLine = LINES.enoden;
@@ -62,8 +82,11 @@ export function setLine(id: string) {
   POS = [0];
   for (const d of LINE.sections) POS.push(POS[POS.length - 1] + d);
   N_ST = LINE.stations.length;
+  // 地下に倒木はない：見た目と名前だけガレキに
+  const under = LINE.scenery.includes('tunnel');
+  OBS_INFO.tree.name = under ? 'ガレキ' : '倒木';
+  OBS_INFO.tree.ch = under ? '瓦' : '木';
 }
-setLine('enoden');
 /** 停止できる範囲（先頭の位置。停止目標からの差） */
 export const STOP_LO = -14;
 export const STOP_HI = 4;
@@ -104,7 +127,7 @@ export const TREE_V = 40; // km/h 以上で突き破る
 export const CURVE_V = 20; // km/h 以下で通過
 
 // ---------- 乗客 ----------
-export type Kind = 'old' | 'kid' | 'sal' | 'stu' | 'sumo' | 'vip';
+export type Kind = 'old' | 'kid' | 'sal' | 'stu' | 'sumo' | 'vip' | 'bride' | 'carp' | 'tour';
 export interface KindDef {
   name: string;
   ch: string;
@@ -113,14 +136,46 @@ export interface KindDef {
   size: number; // 席をいくつ使うか
   note: string;
   color: string;
+  /** 長押しで出る、ちょっとした人となり */
+  flavor: string[];
 }
 export const KINDS: Record<Kind, KindDef> = {
-  old: { name: 'お年寄り', ch: '老', tol: 10, fare: 2, size: 1, note: '無事に届けると信頼+5', color: '#B9B0A2' },
-  kid: { name: '子ども', ch: '子', tol: 15, fare: 1, size: 1, note: '軽くてよく飛ぶ', color: '#E9B23E' },
-  sal: { name: '会社員', ch: '会', tol: 30, fare: 2, size: 1, note: '遅れ30秒超で運賃半分', color: '#FFFDF6' },
-  stu: { name: '学生', ch: '学', tol: 45, fare: 1, size: 1, note: '連打を手伝う（毎秒3回）', color: '#8299E0' },
-  sumo: { name: '力士', ch: '力', tol: 90, fare: 3, size: 3, note: '席3つ。隣の客は耐衝撃+20', color: '#F0C9A0' },
-  vip: { name: 'VIP', ch: 'V', tol: 5, fare: 5, size: 1, note: '無傷で届けると¢5', color: '#B98ADB' },
+  old: {
+    name: 'お年寄り', ch: '老', tol: 10, fare: 2, size: 1, note: '無事に届けると信頼+5', color: '#B9B0A2',
+    flavor: ['「若い頃は車掌だった」と3駅ごとに言う。毎回違う路線名で。', '飛んでも着地してもまず「ありがとうねえ」。', '飴を3種類持っている。誰にあげるかは決めていない。'],
+  },
+  kid: {
+    name: '子ども', ch: '子', tol: 15, fare: 1, size: 1, note: '軽くてよく飛ぶ', color: '#E9B23E',
+    flavor: ['降りる駅より、電車そのものが目的。', '射出されたあと「もう1回！」と言う。', '運転席の真後ろは自分の席だと思っている。'],
+  },
+  sal: {
+    name: '会社員', ch: '会', tol: 30, fare: 2, size: 1, note: '遅れ30秒超で運賃半分', color: '#FFFDF6',
+    flavor: ['遅刻の言い訳を3つ用意してある。今日は全部使う予定。', '空中でもスマホでメールを返している。', '会議の資料は、たぶん前の駅のホームにある。'],
+  },
+  stu: {
+    name: '学生', ch: '学', tol: 45, fare: 1, size: 1, note: '連打を手伝う（毎秒3回）', color: '#8299E0',
+    flavor: ['定期の範囲はとうに過ぎた。帰りのことは考えていない。', '連打の速さだけは学年一位。', '単語帳を開いているが、ずっと同じページ。'],
+  },
+  sumo: {
+    name: '力士', ch: '力', tol: 90, fare: 3, size: 3, note: '席3つ。隣の客は耐衝撃+20', color: '#F0C9A0',
+    flavor: ['つり革を握ると、たまに取れる。', '急ブレーキは立ち合いだと思っている。', 'ちゃんこが冷める前に部屋へ帰りたい。'],
+  },
+  vip: {
+    name: 'VIP', ch: 'V', tol: 5, fare: 5, size: 1, note: '無傷で届けると¢5', color: '#B98ADB',
+    flavor: ['自分の到着を「お越し」と呼ぶよう秘書に言ってある。', '電車に乗るのは人生で2回目。1回目は買収の下見。', '着地の瞬間だけは、なぜかいつも笑顔。'],
+  },
+  bride: {
+    name: '花嫁', ch: '嫁', tol: 20, fare: 3, size: 2, note: '乗っている間、早着ボーナス×2。遅れると運賃半分', color: '#FFFFFF',
+    flavor: ['式場に早く着くほど機嫌がいい。ブーケはいつでも投げられる。', 'ドレスの裾で座席が2つ埋まる。本人は気にしていない。', '「人生最高の日」に電車から射出されるとは聞いていない。'],
+  },
+  carp: {
+    name: '大工', ch: '工', tol: 50, fare: 2, size: 1, note: '倒木を10km/h遅くても突破できる。工事区間の安全速度+10', color: '#E9A23E',
+    flavor: ['倒木を見ると「いい材だ」とつぶやく。', '車内の手すりのぐらつきを、勝手に直している。', '工事現場の人とはだいたい知り合い。'],
+  },
+  tour: {
+    name: '観光客', ch: '観', tol: 25, fare: 2, size: 1, note: '屋根から届けると運賃+¢1', color: '#7EC8E3',
+    flavor: ['屋根の上が一番の名所だとガイドブックに書いてあった（書いてない）。', '飛んでいる間もずっと自撮りしている。', '行き先は「いちばん有名なところ」。'],
+  },
 };
 
 export interface Pax {
@@ -170,7 +225,7 @@ export const DECK_TOL = [0, -10, -10];
 export const DECK_NAME = ['1階', '2階', '屋根の上'];
 
 // ---------- 障害 ----------
-export type ObsKind = 'tree' | 'curve' | 'deer' | 'pole' | 'wave';
+export type ObsKind = 'tree' | 'curve' | 'deer' | 'pole' | 'wave' | 'work' | 'slope' | 'flood';
 export interface Obstacle {
   kind: ObsKind;
   x: number; // 障害の位置（先頭がここに来たら判定）
@@ -181,6 +236,8 @@ export interface Obstacle {
   t: number; // 状態が変わった時刻（演出用）
   shock?: number;
   acc?: number; // 学生の連打のたまり
+  /** 坂の向き（1：上り、−1：下り） */
+  dir?: number;
 }
 export const OBS_INFO: Record<ObsKind, { name: string; ch: string }> = {
   tree: { name: '倒木', ch: '木' },
@@ -188,7 +245,17 @@ export const OBS_INFO: Record<ObsKind, { name: string; ch: string }> = {
   deer: { name: '鹿', ch: '鹿' },
   pole: { name: '倒れた電柱', ch: '柱' },
   wave: { name: '江ノ島の大波', ch: '波' },
+  work: { name: '工事区間', ch: '工' },
+  slope: { name: '坂', ch: '坂' },
+  flood: { name: '浸水区間', ch: '水' },
 };
+setLine('enoden');
+/** 工事区間：これ以下なら衝撃なし。浸水区間：これ以下なら衝撃なし */
+export const WORK_V = 30;
+export const FLOOD_V = 15;
+/** 工事区間を連打できる距離と、作業員が退くまでの時間 */
+export const WORK_REACH = 50;
+export const WORK_EVAC = 1.0;
 /** 大波：周期と、波が線路にかかっている時間 */
 export const WAVE_PERIOD = 5;
 export const WAVE_UP = 2.2;
@@ -197,8 +264,8 @@ export function waveUp(t: number): boolean {
 }
 
 // ---------- 3択（ランの中だけ） ----------
-export type ItemId = 'jump' | 'saw' | 'airbag';
-export type ModId = 'belt' | 'ram' | 'susp' | 'car' | 'deck' | 'roof' | 'rocket' | 'mat' | 'kidlove' | 'chute';
+export type ItemId = 'jump' | 'saw' | 'airbag' | 'nitro' | 'net' | 'dia';
+export type ModId = 'belt' | 'ram' | 'susp' | 'car' | 'deck' | 'roof' | 'rocket' | 'mat' | 'kidlove' | 'chute' | 'rubber' | 'hbrake' | 'sand' | 'magnet';
 export interface Offer {
   id: ItemId | ModId;
   name: string;
@@ -221,6 +288,9 @@ export const OFFERS: Offer[] = [
   { id: 'jump', name: 'ジャンプ台', desc: '次の障害の手前で電車ごと跳ぶ。速いほど高く遠くへ、空中でも少し加減速できる（着地の衝撃 40＋速度×0.4）', kind: 'item', price: 2 },
   { id: 'saw', name: 'チェーンソー', desc: '電柱か倒木を一瞬で片付ける', kind: 'item', price: 2 },
   { id: 'airbag', name: 'エアバッグ', desc: '次の衝撃で誰も飛ばない', kind: 'item', price: 3 },
+  { id: 'nitro', name: 'ニトロ', desc: 'その場で +20km/h。空中では使えない', kind: 'item', price: 2 },
+  { id: 'net', name: '着地ネット', desc: '次の射出だけ、ホームから4mはみ出してもGOOD', kind: 'item', price: 2 },
+  { id: 'dia', name: '臨時ダイヤ', desc: '遅れを20秒なかったことに（予定より早くはならない）', kind: 'item', price: 3 },
   { id: 'belt', name: '全席シートベルト', desc: '座席の軽減 −20 → −50', kind: 'mod', price: 5 },
   { id: 'ram', name: '衝角', desc: '倒木を突き破る速さ 40 → 20km/h', kind: 'mod', price: 4 },
   { id: 'susp', name: 'エアサス', desc: 'すべての衝撃 −10', kind: 'mod', price: 4 },
@@ -231,6 +301,10 @@ export const OFFERS: Offer[] = [
   { id: 'kidlove', name: '子ども好き', desc: '子どもがPERFECT着地すると運賃がさらに×2', kind: 'mod', price: 3 },
   { id: 'chute', name: 'パラシュート傘', desc: '着地がホームから3m以内のはみ出しならホームに届く', kind: 'mod', price: 4 },
   { id: 'rocket', name: 'ロケットブースター', desc: '加速×1.8、最高速度がさらに伸びる', kind: 'mod', price: 6 },
+  { id: 'rubber', name: 'ゴムの手すり', desc: '射出以外の衝撃では、屋根の客の耐衝撃 +30', kind: 'mod', price: 4 },
+  { id: 'hbrake', name: '強力ブレーキ', desc: '非常ブレーキの射出が ×1.3 強くなる。車内の客も飛びやすい', kind: 'mod', price: 3 },
+  { id: 'sand', name: '砂まき装置', desc: '急カーブの安全な速さ 20 → 30km/h', kind: 'mod', price: 3 },
+  { id: 'magnet', name: '磁石マット', desc: '×2マットに吸い寄せる。PERFECTの幅 両側+2m', kind: 'mod', price: 5 },
 ];
 /** 何度でも取れる魔改造 */
 const REPEAT_MODS: ModId[] = ['car'];
@@ -292,8 +366,15 @@ export const OFFER_TAGS: Record<string, Tag[]> = {
   saw: ['突破'],
   car: ['突破', '満員'],
   deck: ['満員'],
+  nitro: ['突破'],
+  net: ['射出'],
+  dia: ['突破'],
+  rubber: ['守り', '射出'],
+  hbrake: ['射出'],
+  sand: ['突破', '守り'],
+  magnet: ['射出'],
 };
-export type ComboId = 'cannon' | 'retro' | 'bumper' | 'wall' | 'upper' | 'salvo';
+export type ComboId = 'cannon' | 'retro' | 'bumper' | 'wall' | 'upper' | 'salvo' | 'sling' | 'tour';
 export interface ComboDef {
   id: ComboId;
   name: string;
@@ -314,6 +395,9 @@ export const PART_NAME: Record<string, string> = {
   susp: 'エアサス',
   deck: '二階建て',
   many: '1回の射出で、何人も…',
+  rubber: 'ゴムの手すり',
+  hbrake: '強力ブレーキ',
+  tour: '観光客',
 };
 export const COMBOS: ComboDef[] = [
   { id: 'cannon', name: '人間大砲', parts: ['roof', 'jump'], cond: '屋根席の拡張 ＋ ジャンプ台（駅の手前120m以内でジャンプ）', eff: '屋根の客が空中から射出される・飛距離×1.5', tags: ['射出'] },
@@ -322,6 +406,8 @@ export const COMBOS: ComboDef[] = [
   { id: 'wall', name: '鉄壁の選択射出', parts: ['belt', 'susp'], cond: '50km/h以上の射出で、屋根の客だけが2人以上飛ぶ', eff: '飛んだ客1人につき +¢1', tags: ['守り', '射出'] },
   { id: 'upper', name: '二階席射出', parts: ['deck', 'roof'], cond: '二階建て ＋ 屋根席。2階と屋根の客が同じ射出で着地成功', eff: '+¢2', tags: ['満員', '射出'] },
   { id: 'salvo', name: '一斉着地', parts: ['many', 'many'], cond: '1回の射出で3人以上がPERFECT', eff: '+¢3', tags: ['射出'] },
+  { id: 'sling', name: 'ゴム鉄砲', parts: ['rubber', 'hbrake'], cond: 'ゴムの手すり ＋ 強力ブレーキで、屋根の客を射出', eff: '屋根の客の飛距離×1.3', tags: ['射出'] },
+  { id: 'tour', name: '観光ツアー', parts: ['tour', 'many'], cond: '1回の射出で観光客3人がPERFECT', eff: '+¢5（一斉着地のかわり）', tags: ['射出'] },
 ];
 export function comboDef(id: ComboId): ComboDef {
   return COMBOS.find((c) => c.id === id)!;
@@ -331,6 +417,7 @@ function hasPart(r: Run, part: string): boolean {
   if (part === 'brake') return true;
   if (part === 'jump') return r.items.jump > 0 || r.armed === 'jump';
   if (part === 'sumo') return r.pax.some((p) => p.kind === 'sumo') || r.lo === 'sumo';
+  if (part === 'tour') return r.pax.some((p) => p.kind === 'tour');
   if (part === 'belt' || part === 'susp') return r.mods.has(part as ModId);
   return r.mods.has(part as ModId);
 }
@@ -380,7 +467,7 @@ const LO_SYNERGY: Record<string, string[]> = {
   packed: ['belt'],
   bullet: ['mat', 'chute'],
   rocketd: ['chute', 'mat'],
-  vipcar: ['airbag', 'belt', 'chute'],
+  vipcar: ['airbag', 'belt', 'chute', 'net'],
 };
 export function loadoutOf(id: string): Loadout {
   return LOADOUTS.find((l) => l.id === id) ?? LOADOUTS[0];
@@ -504,12 +591,14 @@ export interface Flier {
   /** どの射出で飛んだか（0 は射出以外） */
   launch: number;
   deck: number;
+  /** 着地ネットつき */
+  net?: boolean;
 }
 /** ホームの範囲（停止目標からの差） */
 export const PLAT_LO = -24.5;
 export const PLAT_HI = 4;
 const G = 9.8;
-const KIND_W: Record<Kind, number> = { old: 1.0, kid: 1.25, sal: 1.0, stu: 1.05, sumo: 0.65, vip: 1.1 };
+const KIND_W: Record<Kind, number> = { old: 1.0, kid: 1.25, sal: 1.0, stu: 1.05, sumo: 0.65, vip: 1.1, bride: 0.9, carp: 0.95, tour: 1.05 };
 /** 速度 v で飛び出したときの飛び方 */
 export function flight(v: number, z: number, kind: Kind, boost = 1) {
   const vz = 3 + v * 0.12;
@@ -628,7 +717,9 @@ export interface Run {
   cutins: { id: ComboId; t: number; first: boolean; extra: string }[];
   /** 射出ごとの着地の記録（コンボ判定用） */
   launchSeq: number;
-  launchLog: Record<number, { perfect: number; decks: Set<number>; done: Set<string> }>;
+  launchLog: Record<number, { perfect: number; tours: number; decks: Set<number>; done: Set<string> }>;
+  /** 着地ネットを構えている */
+  net: boolean;
   stuck: number; // 障害で止められている残り時間
   reverse: boolean; // バック中（ボタンを押している間）
   overReason: string;
@@ -642,33 +733,56 @@ const pick = <T,>(a: T[]): T => a[Math.floor(rnd() * a.length)];
 function genObstacles(sec: number): Obstacle[] {
   const len = LINE.sections[sec];
   const last = sec === LINE.sections.length - 1;
+  const under = LINE.id === 'ginza';
   const n = sec === 0 ? 2 : sec <= 2 ? 3 : 4;
-  const kinds: ObsKind[] = sec === 0 ? ['pole', 'tree'] : sec === 1 ? ['curve'] : [];
-  const pool: ObsKind[] = LINE.scenery[sec] === 'coast' ? ['tree', 'curve', 'deer', 'pole', 'deer'] : ['tree', 'curve', 'deer', 'pole'];
-  while (kinds.length < (last ? n - 1 : n)) kinds.push(pick(pool));
+  const kinds: ObsKind[] = under ? (sec === 0 ? ['work', 'slope'] : sec === 1 ? ['curve', 'slope'] : []) : sec === 0 ? ['pole', 'tree'] : sec === 1 ? ['curve'] : [];
+  const pool: ObsKind[] = under ? ['work', 'work', 'curve', 'pole', 'slope', 'tree'] : LINE.scenery[sec] === 'coast' ? ['tree', 'curve', 'deer', 'pole', 'deer'] : ['tree', 'curve', 'deer', 'pole'];
+  const want = under ? [2, 3, 3, 4, 4, 3][sec] ?? 3 : n;
+  while (kinds.length < (last && !under ? want - 1 : want)) kinds.splice(kinds.length && sec === 1 && under ? 1 : kinds.length, 0, pick(pool));
   // 並びをばらす（最初の区間は教える順のまま）
   if (sec > 1) kinds.sort(() => rnd() - 0.5);
+  // 序盤の坂は区間の最後に（坂の直後に工事やカーブを置かない）
+  if (under && sec <= 2) kinds.sort((a, b) => (a === 'slope' ? 1 : 0) - (b === 'slope' ? 1 : 0));
   const out: Obstacle[] = [];
   const start = POS[sec] + 80;
   const span = len - (last ? 260 : 170);
   kinds.forEach((kind, i) => {
     const x = start + (span * (i + 0.25 + rnd() * 0.5)) / kinds.length;
-    const need = kind === 'pole' ? 16 + Math.min(16, sec * 3) + Math.floor(rnd() * 3) * 2 : kind === 'deer' ? 1 : 0;
-    out.push({ kind, x, len: kind === 'curve' ? 30 : 0, taps: need, need, state: 'wait', t: 0 });
+    const need = kind === 'pole' ? 16 + Math.min(16, sec * 3) + Math.floor(rnd() * 3) * 2 + LINE.poleAdd : kind === 'deer' ? 1 : kind === 'work' ? (sec <= 2 ? 1 : 2) : 0;
+    const slen = kind === 'curve' ? 30 : kind === 'slope' ? 40 + Math.floor(rnd() * 21) : 0;
+    const o: Obstacle = { kind, x, len: slen, taps: need, need, state: 'wait', t: 0 };
+    if (kind === 'slope') o.dir = under && sec === 0 ? -1 : under && sec === 1 ? 1 : rnd() < 0.5 ? 1 : -1;
+    out.push(o);
   });
-  if (last) out.push({ kind: 'wave', x: POS[sec + 1] - 120, len: 16, taps: 0, need: 0, state: 'wait', t: 0 });
+  if (last && under) out.push({ kind: 'flood', x: POS[sec + 1] - 140, len: 40, taps: 0, need: 0, state: 'wait', t: 0 });
+  else if (last) out.push({ kind: 'wave', x: POS[sec + 1] - 120, len: 16, taps: 0, need: 0, state: 'wait', t: 0 });
   return out;
 }
 
 function genCandidates(r: Run, st: number): Pax[] {
   const out: Pax[] = [];
   const n = r.lo === 'bullet' ? 4 : r.lo === 'trip' ? 9 : 7;
-  const kinds: Kind[] = ['old', 'kid', 'sal', 'sal', 'stu', 'sumo'];
+  const w = LINE.weights;
+  let bride = false;
+  const draw = (): Kind => {
+    const ks = (Object.keys(w) as Kind[]).filter((k) => w[k] > 0 && !(k === 'bride' && bride));
+    let t = rnd() * ks.reduce((a, k) => a + w[k], 0);
+    for (const k of ks) if ((t -= w[k]) < 0) return k;
+    return 'sal';
+  };
   for (let i = 0; i < n; i++) {
-    let kind: Kind = i === 0 && (r.lo === 'vipcar' || rnd() < 0.55) ? 'vip' : pick(kinds);
+    let kind: Kind = i === 0 && (r.lo === 'vipcar' || rnd() < 0.55) ? 'vip' : draw();
     if (r.lo === 'sumo' && i === 1) kind = 'sumo';
     if (r.lo === 'trip' && i >= n - 2) kind = 'kid';
-    const dest = st + 1 + Math.floor(rnd() * Math.min(3, N_ST - 1 - st));
+    if (kind === 'bride') bride = true;
+    const reach = Math.min(3, N_ST - 1 - st);
+    let dest = st + 1 + Math.floor(rnd() * reach);
+    // 観光客は名所の駅に行きたがる（重み×2）
+    if (kind === 'tour') {
+      const opts: number[] = [];
+      for (let d = st + 1; d <= st + reach; d++) opts.push(d, ...(LINE.sights.includes(d) ? [d] : []));
+      dest = pick(opts);
+    }
     out.push({ id: r.nextId++, kind, look: randomLook(rnd), from: st, dest, spot: -1 });
   }
   return out;
@@ -702,7 +816,7 @@ export function newRun(meta: Meta, tutorial = false): Run {
     candidates: [],
     picked: new Set(),
     obstacles: LINE.sections.map((_, i) => genObstacles(i)),
-    items: { jump: 1, saw: meta.lv.kit >= 1 ? 1 : 0, airbag: meta.lv.kit >= 2 ? 1 : 0 },
+    items: { jump: 1, saw: meta.lv.kit >= 1 ? 1 : 0, airbag: meta.lv.kit >= 2 ? 1 : 0, nitro: 0, net: 0, dia: 0 },
     mods: new Set(),
     armed: null,
     airbag: false,
@@ -732,6 +846,7 @@ export function newRun(meta: Meta, tutorial = false): Run {
     z: 0,
     vz: 0,
     cannonArm: false,
+    net: false,
     cutins: [],
     launchSeq: 0,
     launchLog: {},
@@ -779,7 +894,7 @@ function applyLoadout(r: Run) {
 }
 /** 運賃（持ち込み改造の補正つき） */
 export function fareOf(r: Run, p: Pax | { kind: Kind }, car = 0): number {
-  let f = KINDS[p.kind].fare;
+  let f = LINE.fares[p.kind] ?? KINDS[p.kind].fare;
   if (p.kind === 'kid' && r.lo === 'trip') f += 1;
   if (r.lo === 'cargo' && car === 1) f = Math.max(1, Math.floor(f / 2));
   return f;
@@ -787,7 +902,13 @@ export function fareOf(r: Run, p: Pax | { kind: Kind }, car = 0): number {
 /** 射出の飛距離の倍率 */
 export function launchBoost(r: Run, p: Pax, base: number): number {
   const sp = r.spots[p.spot];
-  return base * (r.lo === 'rails' && sp?.deck === 2 ? 1.15 : 1);
+  let b = base * (r.lo === 'rails' && sp?.deck === 2 ? 1.15 : 1);
+  if (sp?.deck === 2 && slingReady(r)) b = Math.min(2, b * 1.3);
+  return b;
+}
+/** ゴム鉄砲：ゴムの手すり＋強力ブレーキ */
+export function slingReady(r: Run): boolean {
+  return r.mods.has('rubber') && r.mods.has('hbrake');
 }
 
 export function toast(r: Run, text: string, kind = '') {
@@ -802,10 +923,12 @@ const minus = (r: Run) => (r.mods.has('susp') ? 10 : 0) + r.meta.lv.susp * 3;
 const soften = (r: Run, v: number) => Math.max(0, Math.round(v - minus(r)));
 
 /** 客の今の耐衝撃（席と力士の隣を足したもの） */
-export function effTol(r: Run, p: Pax): number {
+export function effTol(r: Run, p: Pax, launch = false): number {
   let t = KINDS[p.kind].tol;
   const s = r.spots[p.spot];
   if (!s) return t;
+  // ゴムの手すり：射出以外では屋根の客がしがみつける
+  if (s.deck === 2 && !launch && r.mods.has('rubber')) t += 30;
   if (s.kind === 'seat') t += (r.mods.has('belt') ? 50 : 20) + r.meta.lv.cushion * 5;
   else if (s.kind === 'strap') t += 10;
   t += DECK_TOL[s.deck] ?? 0;
@@ -824,9 +947,9 @@ export function effTol(r: Run, p: Pax): number {
   return t;
 }
 /** この衝撃で飛ぶ客 */
-export function wouldFly(r: Run, shock: number): Pax[] {
-  if (r.airbag) return [];
-  return r.pax.filter((p) => shock > effTol(r, p));
+export function wouldFly(r: Run, shock: number, launch = false): Pax[] {
+  if (r.airbag && !launch) return [];
+  return r.pax.filter((p) => shock > effTol(r, p, launch));
 }
 
 /** 次の障害（まだ片付いていないもの） */
@@ -837,19 +960,62 @@ export function nextObstacle(r: Run): Obstacle | null {
 }
 
 export function treeNeed(r: Run): number {
-  return r.mods.has('ram') ? 20 : TREE_V;
+  const base = r.mods.has('ram') ? 20 : TREE_V;
+  return hasCarp(r) ? Math.max(15, base - 10) : base;
+}
+const hasCarp = (r: Run) => r.pax.some((p) => p.kind === 'carp');
+/** 急カーブを衝撃なしで曲がれる速さ */
+export function curveV(r: Run): number {
+  return r.mods.has('sand') ? 30 : CURVE_V;
+}
+/** 工事区間を衝撃なしで通れる速さ */
+export function workV(r: Run): number {
+  return WORK_V + (hasCarp(r) ? 10 : 0);
 }
 
+
+/** 障害バーの短い条件（「40↑」「20↓」など） */
+export function obsTag(r: Run, q: Obstacle): string {
+  switch (q.kind) {
+    case 'tree':
+      return `${treeNeed(r)}↑`;
+    case 'curve':
+      return `${curveV(r)}↓`;
+    case 'pole':
+      return `連打${q.need}`;
+    case 'wave':
+      return 'すきに';
+    case 'work':
+      return `${workV(r)}↓`;
+    case 'slope':
+      return (q.dir ?? 1) > 0 ? '上り' : '下り';
+    case 'flood':
+      return `${FLOOD_V}↓`;
+    default:
+      return 'タップ';
+  }
+}
 /** 障害の衝撃の見込み（この速さで入ったら） */
 export function predictShock(r: Run, o: Obstacle, v = r.v): number {
   const k = kmh(v);
-  if (r.armed === 'jump' && o.kind !== 'curve') return soften(r, SHOCK.jumpBase + k * SHOCK.jumpK);
+  if (r.armed === 'jump' && o.kind !== 'curve' && o.kind !== 'slope') return soften(r, SHOCK.jumpBase + k * SHOCK.jumpK);
   switch (o.kind) {
     case 'tree':
       // 突破できる速さなら「超過分」だけ響く。届かなければ正面衝突
       return k >= treeNeed(r) ? soften(r, (k - treeNeed(r)) * SHOCK.treeOver) : soften(r, k * SHOCK.tree);
-    case 'curve':
-      return k > CURVE_V ? soften(r, (k - CURVE_V) * SHOCK.curveOver + (k > CURVE_V + 15 ? SHOCK.curveBase : 0)) : 0;
+    case 'curve': {
+      const cv = curveV(r);
+      return k > cv ? soften(r, (k - cv) * SHOCK.curveOver + (k > cv + 15 ? SHOCK.curveBase : 0)) : 0;
+    }
+    case 'work': {
+      if (k <= workV(r)) return 0;
+      const full = soften(r, 15 + (k - workV(r)) * 1.2);
+      return o.taps === 0 ? Math.round(full / 2) : full;
+    }
+    case 'slope':
+      return 0;
+    case 'flood':
+      return k > FLOOD_V ? soften(r, 25 + (k - FLOOD_V) * 1.0) : 0;
     case 'deer':
       return o.taps > 0 ? soften(r, k * SHOCK.hit) : 0;
     case 'pole':
@@ -872,19 +1038,26 @@ function applyShock(r: Run, value: number, label: string, boost = 1, launch = fa
     return;
   }
   const id = launch ? ++r.launchSeq : 0;
-  if (id) r.launchLog[id] = { perfect: 0, decks: new Set(), done: new Set() };
+  if (id) r.launchLog[id] = { perfect: 0, tours: 0, decks: new Set(), done: new Set() };
   const decks: number[] = [];
+  const net = launch && r.net;
   for (const p of [...r.pax]) {
-    if (value > effTol(r, p)) {
+    if (value > effTol(r, p, launch)) {
       flew.push(KINDS[p.kind].name);
       decks.push(r.spots[p.spot]?.deck ?? 0);
       r.pax = r.pax.filter((q) => q !== p);
       launchPax(r, p, boost, id);
+      if (net) r.fliers[r.fliers.length - 1].net = true;
       r.stats.flew++;
     } else safe++;
   }
   r.shocks.push({ value, t: r.time, flew, safe, label });
+  if (net && flew.length) {
+    r.net = false;
+    toast(r, '着地ネットを広げた！', 'good');
+  }
   if (launch && flew.length) {
+    if (decks.includes(2) && slingReady(r)) triggerCombo(r, 'sling');
     if (r.mods.has('rocket')) triggerCombo(r, 'retro');
     // 鉄壁：速い射出で屋根の客だけが2人以上飛び、車内の客は全員無事
     if (kmh(r.v) >= 50 && decks.length >= 2 && decks.every((d) => d === 2) && safe > 0) {
@@ -903,7 +1076,8 @@ export function setNotch(r: Run, n: number) {
 export function brakeShock(r: Run, v = r.v): number {
   const k = kmh(v);
   const rocket = r.mods.has('rocket') ? 1.5 : 1;
-  return soften(r, k * SHOCK.brake * rocket);
+  const hb = r.mods.has('hbrake') ? 1.3 : 1;
+  return soften(r, k * SHOCK.brake * rocket * hb);
 }
 /** 急ブレーキ射出：衝撃に耐えられない客が前へ飛ぶ。ボタンなら速度を落として走り続ける */
 export function brakeLaunch(r: Run, button = true) {
@@ -931,13 +1105,13 @@ function launchPax(r: Run, p: Pax, boost = 1, launch = 0, zAdd = 0) {
 function judgeLanding(r: Run, f: Flier) {
   f.judged = true;
   const p = f.pax;
-  const slack = r.mods.has('chute') ? 3 : 0;
+  const slack = (r.mods.has('chute') ? 3 : 0) + (f.net ? 4 : 0);
   const at = POS.findIndex((pos, i) => i > 0 && f.landX >= pos + PLAT_LO - slack && f.landX <= pos + PLAT_HI + slack);
   const big = p.kind === 'old' || p.kind === 'kid' || p.kind === 'vip';
   const k = KINDS[p.kind];
   if (at >= 0 && at === p.dest) {
     const mat = r.mats[at];
-    const perfect = Math.abs(f.landX - mat.x) <= matWidth(r) / 2;
+    const perfect = Math.abs(f.landX - mat.x) <= perfectHalf(r);
     const car = (p as Pax & { car?: number }).car ?? 0;
     let fare = p.kind === 'vip' ? (perfect ? (r.lo === 'vipcar' ? 6 : 5) : 3) : fareOf(r, p, car);
     if (perfect) {
@@ -946,10 +1120,13 @@ function judgeLanding(r: Run, f: Flier) {
       if (p.kind !== 'vip') fare *= 2;
       if (r.lo !== 'bigmat') fare += r.streak;
       if (p.kind === 'kid' && r.mods.has('kidlove')) fare *= 2;
+      if (p.kind === 'tour' && f.deck === 2) fare += 1;
       r.stats.perfect++;
       r.pops.push({ text: `PERFECT ¢${fare}${r.streak && r.lo !== 'bigmat' ? `（連続+${r.streak}）` : ''}`, x: f.landX, t: r.time, good: true });
     } else {
       f.result = 'good';
+      if (p.kind === 'bride' && r.ahead > 0) fare = Math.ceil(fare / 2);
+      if (p.kind === 'tour' && f.deck === 2) fare += 1;
       r.stats.good++;
       r.pops.push({ text: `GOOD ¢${fare}`, x: f.landX, t: r.time, good: true });
     }
@@ -958,7 +1135,16 @@ function judgeLanding(r: Run, f: Flier) {
     const log = f.launch ? r.launchLog[f.launch] : null;
     if (log) {
       if (perfect) log.perfect++;
+      if (perfect && p.kind === 'tour') log.tours++;
       log.decks.add(f.deck);
+      // 観光ツアー：一斉着地のかわりに +¢5（先に一斉着地が出ていれば差額）
+      if (log.tours >= 3 && !log.done.has('tour')) {
+        log.done.add('tour');
+        const add = log.done.has('salvo') ? 2 : 5;
+        log.done.add('salvo');
+        r.money += add;
+        triggerCombo(r, 'tour', `+¢${add}`);
+      }
       if (log.perfect >= 3 && !log.done.has('salvo')) {
         log.done.add('salvo');
         r.money += 3;
@@ -982,11 +1168,15 @@ function judgeLanding(r: Run, f: Flier) {
   f.result = 'miss';
   r.trust -= p.kind === 'vip' && r.lo === 'vipcar' ? 50 : big ? 18 : 12;
   r.missHere++;
-  r.pops.push({ text: `${k.name}が${LINE.scenery[Math.max(0, Math.min(LINE.sections.length - 1, POS.findIndex((pos) => pos > f.landX) - 1))] === 'coast' ? '海' : '田んぼ'}にポチャン`, x: f.landX, t: r.time, good: false });
+  r.pops.push({ text: `${k.name}が${LINE.scenery[Math.max(0, Math.min(LINE.sections.length - 1, POS.findIndex((pos) => pos > f.landX) - 1))] === 'coast' ? '海' : LINE.scenery.includes('tunnel') ? '線路わき' : '田んぼ'}にポチャン`, x: f.landX, t: r.time, good: false });
 }
 export function matWidth(r: Run): number {
   const w = 5 + (r.mods.has('mat') ? 4 : 0);
   return r.lo === 'bigmat' ? Math.min(16, w * 1.8) : w;
+}
+/** PERFECTになる、マットの中心からの距離（磁石で広がる。最大8m） */
+export function perfectHalf(r: Run): number {
+  return r.mods.has('magnet') ? Math.min(8, matWidth(r) / 2 + 2) : matWidth(r) / 2;
 }
 
 export function tapObstacle(r: Run, o: Obstacle) {
@@ -995,6 +1185,11 @@ export function tapObstacle(r: Run, o: Obstacle) {
     o.taps = 0;
     o.state = 'cleared';
     o.t = r.time;
+  } else if (o.kind === 'work') {
+    if (o.taps <= 0 || (r.phase === 'running' && o.x - r.x > WORK_REACH)) return;
+    o.taps--;
+    o.t = r.time;
+    if (o.taps === 0) toast(r, '警笛！ 作業員が退避中…', 'good');
   } else if (o.kind === 'pole') {
     o.taps = Math.max(0, o.taps - 1);
     if (o.taps === 0) {
@@ -1008,14 +1203,50 @@ export function tapObstacle(r: Run, o: Obstacle) {
 
 /** アイテムは「構える」→ 次の該当する場面で自動で使われる。もう一度押すと取り消し */
 export function isArmed(r: Run, id: ItemId): boolean {
-  return id === 'jump' ? r.armed === 'jump' : id === 'saw' ? r.sawArmed : r.airbag;
+  if (id === 'nitro' || id === 'dia') return false;
+  return id === 'jump' ? r.armed === 'jump' : id === 'saw' ? r.sawArmed : id === 'net' ? r.net : r.airbag;
+}
+/** その場で効くアイテム（構えない） */
+export const INSTANT: ItemId[] = ['nitro', 'dia'];
+/** 今使えるか（使えないならその理由） */
+export function itemBlock(r: Run, id: ItemId): string {
+  if (id === 'nitro') return r.phase !== 'running' ? '走っているときに使う' : r.air ? '空中では使えない' : '';
+  if (id === 'dia') return diaGain(r) <= 0 ? '遅れていないときは使えない' : '';
+  return '';
+}
+/** 臨時ダイヤで取り戻せる秒数（予定より早くはならない） */
+export function diaGain(r: Run): number {
+  const late = r.phase === 'running' ? r.ahead : r.clock - r.schedule[r.target];
+  return Math.min(20, Math.max(0, late));
 }
 export function useItem(r: Run, id: ItemId) {
   if (r.phase !== 'running' && r.phase !== 'dwell') return;
+  if (INSTANT.includes(id)) {
+    if (r.items[id] <= 0) return;
+    const why = itemBlock(r, id);
+    if (why) {
+      toast(r, why, 'bad');
+      return;
+    }
+    r.items[id]--;
+    if (id === 'nitro') {
+      r.v += 20 / 3.6;
+      toast(r, 'ニトロ点火！ +20km/h', 'good');
+    } else {
+      const g = diaGain(r);
+      r.clock -= g;
+      if (r.phase === 'running') r.ahead = scheduleDiff(r);
+      else r.ahead -= g;
+      r.delay = Math.max(0, r.ahead);
+      toast(r, `臨時ダイヤ：遅れを${Math.round(g)}秒取り戻した`, 'good');
+    }
+    return;
+  }
   if (isArmed(r, id)) {
     r.items[id]++;
     if (id === 'jump') r.armed = null;
     else if (id === 'saw') r.sawArmed = false;
+    else if (id === 'net') r.net = false;
     else r.airbag = false;
     toast(r, `${ITEM_NAME[id]}を取り消した`, '');
     return;
@@ -1028,12 +1259,15 @@ export function useItem(r: Run, id: ItemId) {
   } else if (id === 'saw') {
     r.sawArmed = true;
     toast(r, '次の電柱か倒木をチェーンソーで切る（もう一度押すと取り消し）', 'good');
+  } else if (id === 'net') {
+    r.net = true;
+    toast(r, '次の射出で着地ネットを広げる（もう一度押すと取り消し）', 'good');
   } else {
     r.airbag = true;
     toast(r, '次の衝撃でエアバッグ（もう一度押すと取り消し）', 'good');
   }
 }
-export const ITEM_NAME: Record<ItemId, string> = { jump: 'ジャンプ台', saw: 'チェーンソー', airbag: 'エアバッグ' };
+export const ITEM_NAME: Record<ItemId, string> = { jump: 'ジャンプ台', saw: 'チェーンソー', airbag: 'エアバッグ', nitro: 'ニトロ', net: '着地ネット', dia: '臨時ダイヤ' };
 
 /** 選んだ客はその場で乗り込む（停車中に席を決められる）。もう一度押すとホームに戻る */
 export function togglePick(r: Run, id: number) {
@@ -1122,7 +1356,7 @@ export function rerollShop(r: Run): boolean {
   return true;
 }
 function rollShop(r: Run): ShopCard[] {
-  const avail = OFFERS.filter((o) => o.kind === 'item' || REPEAT_MODS.includes(o.id as ModId) || !r.mods.has(o.id as ModId));
+  const avail = OFFERS.filter((o) => (o.kind === 'item' || REPEAT_MODS.includes(o.id as ModId) || !r.mods.has(o.id as ModId)) && !(o.id === 'rubber' && r.lo === 'rails'));
   const syn = LO_SYNERGY[r.lo] ?? [];
   const draw = (pool: Offer[]): Offer | null => {
     const left = pool.filter((o) => !opts.includes(o));
@@ -1162,7 +1396,7 @@ export function carryHome(r: Run): number {
     if (left < 15) return 0;
     left -= 15;
   }
-  return Math.max(0, Math.floor((r.rank?.mult ?? 1) * (earned / 2 + left / 4)));
+  return Math.max(0, Math.floor((r.rank?.mult ?? 1) * LINE.carry * (earned / 2 + left / 4)));
 }
 /** このランで稼いだコイン（使った分も含む） */
 export function earnedOf(r: Run): number {
@@ -1188,6 +1422,8 @@ function arrive(r: Run) {
     if (p.dest !== st) continue;
     let fare = fareOf(r, p, r.spots[p.spot]?.car ?? 0);
     if (p.kind === 'sal' && r.delay > 30) fare = Math.ceil(fare / 2);
+    if (p.kind === 'bride' && diff > 0) fare = Math.ceil(fare / 2);
+    if (p.kind === 'tour' && r.spots[p.spot]?.deck === 2) fare += 1;
     if (p.kind === 'old') r.trust = Math.min(100, r.trust + 5);
     earned += fare;
     r.stats.carried++;
@@ -1198,6 +1434,7 @@ function arrive(r: Run) {
   if (st >= N_ST - 1) {
     r.phase = 'clear';
     r.rank = rankOf(diff);
+    markCleared(r);
     return;
   }
   r.candidates = genCandidates(r, st);
@@ -1255,6 +1492,14 @@ export function update(r: Run, dt: number) {
       r.delay = Math.max(0, r.ahead);
     }
   }
+  // 工事区間：最後の警笛から少しで作業員が退く
+  for (const o of r.obstacles[r.target - 1] ?? []) {
+    if (o.kind === 'work' && o.state === 'wait' && o.taps === 0 && r.time - o.t >= WORK_EVAC) {
+      o.state = 'cleared';
+      o.t = r.time;
+      toast(r, '作業員が退避した！', 'good');
+    }
+  }
   // 学生の連打
   const stu = r.pax.filter((p) => p.kind === 'stu').length;
   if (stu && r.phase === 'running') {
@@ -1288,6 +1533,8 @@ function driving(r: Run, dt: number) {
   // 空中ではモーターもブレーキも半分だけ効く（着地点の微調整）
   if (r.air) a *= 0.5;
   const obs = r.obstacles[sec] ?? [];
+  // 坂：上りは鈍り、下りは勝手に速くなる
+  if (!r.air) for (const o of obs) if (o.kind === 'slope' && r.x >= o.x && r.x < o.x + o.len) a += (o.dir ?? 1) > 0 ? -1.0 : 0.8;
   // 電柱に止められる
   for (const o of obs) {
     if (o.state !== 'wait' || o.kind !== 'pole' || r.air) continue;
@@ -1331,7 +1578,7 @@ function driving(r: Run, dt: number) {
       const roofers = r.pax.filter((p) => r.spots[p.spot]?.deck === 2 && p.dest === st);
       if (toSt > 0 && toSt < 160 && roofers.length) {
         const id = ++r.launchSeq;
-        r.launchLog[id] = { perfect: 0, decks: new Set(), done: new Set() };
+        r.launchLog[id] = { perfect: 0, tours: 0, decks: new Set(), done: new Set() };
         for (const p of roofers) {
           r.pax = r.pax.filter((q) => q !== p);
           launchPax(r, p, 1.2, id);
@@ -1375,11 +1622,54 @@ function driving(r: Run, dt: number) {
       }
       continue;
     }
-    if (o.kind === 'curve') {
-      if (x0 < o.x && r.x >= o.x && kmh(r.v) > CURVE_V + 0.5 && r.armed !== 'jump') {
+    if (o.kind === 'slope') {
+      if (x0 < o.x + o.len && r.x >= o.x + o.len) {
+        o.state = 'passed';
+        o.t = r.time;
+      }
+      continue;
+    }
+    if (o.kind === 'flood') {
+      if (r.x >= o.x && x0 < o.x + o.len && kmh(r.v) > FLOOD_V + 0.5) {
+        const k = kmh(r.v);
+        o.state = 'hit';
+        o.t = r.time;
+        o.shock = predictShock(r, o);
+        applyShock(r, o.shock, `浸水区間に${Math.round(k)}km/hで突っ込んだ！`);
+        r.v *= 0.35;
+        if (k > 45) {
+          r.v = 0;
+          r.stuck = 4;
+          toast(r, 'モーターが水をかぶった！ 4秒停止', 'bad');
+        }
+      } else if (x0 < o.x + o.len && r.x >= o.x + o.len) {
+        o.state = 'passed';
+        o.t = r.time;
+        toast(r, '浸水区間をそろそろと通過', 'good');
+      }
+      continue;
+    }
+    if (o.kind === 'work') {
+      if (x0 < o.x && r.x >= o.x) {
         const k = kmh(r.v);
         o.shock = predictShock(r, o);
-        if (k > CURVE_V + 15) {
+        o.state = o.shock > 0 ? 'hit' : 'passed';
+        o.t = r.time;
+        if (o.shock > 0) {
+          applyShock(r, o.shock, `工事区間を${Math.round(k)}km/hで通過`);
+          r.v *= 0.5;
+          r.trust -= 8;
+          toast(r, '作業員に怒られた（信頼−8）', 'bad');
+        } else toast(r, '工事区間を徐行で通過', 'good');
+      }
+      continue;
+    }
+    if (o.kind === 'curve') {
+      const cv = curveV(r);
+      if (x0 < o.x && r.x >= o.x && kmh(r.v) > cv + 0.5 && r.armed !== 'jump') {
+        const k = kmh(r.v);
+        o.shock = predictShock(r, o);
+        if (k > cv + 15) {
           o.state = 'hit';
           o.t = r.time;
           applyShock(r, o.shock, `急カーブを${Math.round(k)}km/hで曲がって脱輪`);
@@ -1420,15 +1710,16 @@ function driving(r: Run, dt: number) {
           const bumper = r.mods.has('ram') && r.pax.some((p) => p.kind === 'sumo');
           // ボーナスは40km/hを基準に（衝角で突破の速さが下がっても膨らまない）
           const bonus = Math.floor(Math.max(0, k - Math.max(40, treeNeed(r))) / 10) * (bumper ? 2 : 1);
+          const tn = OBS_INFO.tree.name;
           if (bumper) {
             o.shock = 0;
             triggerCombo(r, 'bumper', bonus > 0 ? `+¢${bonus}` : '');
           }
-          applyShock(r, o.shock, `倒木を${Math.round(k)}km/hで粉砕！${bonus > 0 ? ` +¢${bonus}` : ''}`);
+          applyShock(r, o.shock, `${tn}を${Math.round(k)}km/hで粉砕！${bonus > 0 ? ` +¢${bonus}` : ''}`);
           r.money += bonus;
           r.v *= k >= 60 ? 0.95 : 0.82;
         } else {
-          applyShock(r, o.shock, '倒木に止められた');
+          applyShock(r, o.shock, `${OBS_INFO.tree.name}に止められた`);
           r.v = 0;
           r.stuck = 6;
           toast(r, `${treeNeed(r)}km/h に届かず止められた。撤去に6秒`, 'bad');
@@ -1465,6 +1756,7 @@ function driving(r: Run, dt: number) {
         r.ahead = diff;
         r.delay = Math.max(0, diff);
         r.rank = rankOf(diff);
+        markCleared(r);
       } else {
         r.phase = 'over';
         r.overReason = '終点を通り過ぎた（客が残っている）';
@@ -1565,6 +1857,12 @@ export function moveToLevel(r: Run, id: number, car: number, deck: number): bool
   return true;
 }
 
+/** 路線をクリアした記録（次の路線の解放に使う） */
+function markCleared(r: Run) {
+  if (r.tutorial) return;
+  r.meta.cleared = r.meta.cleared ?? [];
+  if (!r.meta.cleared.includes(LINE.id)) r.meta.cleared.push(LINE.id);
+}
 function rankOf(diff: number) {
   return diff <= 0 ? { name: '定時運行', mult: 1.5 } : diff <= 20 ? { name: 'ほぼ定時', mult: 1.2 } : diff <= 60 ? { name: '遅れあり', mult: 1.0 } : { name: '大遅延', mult: 0.8 };
 }
@@ -1581,7 +1879,9 @@ function stationDone(r: Run, diff: number) {
   r.perfectHere = 0;
   r.missHere = 0;
   if (diff < 0) {
-    const bonus = Math.floor(-diff / 10);
+    let bonus = Math.floor(-diff / LINE.earlyPer);
+    // 花嫁が乗っていると早着ボーナス×2（上乗せは1駅¢3まで）
+    if (bonus > 0 && r.pax.some((p) => p.kind === 'bride')) bonus += Math.min(3, bonus);
     r.money += bonus;
     r.earlyBonus += bonus;
     r.stats.early++;

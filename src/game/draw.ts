@@ -6,7 +6,12 @@ import type { Game } from '../game.ts';
 import { C30, INK, Iso, hash, shade } from '../iso.ts';
 import { drawPerson, type Facing } from '../people.ts';
 import {
-  CURVE_V,
+  curveV,
+  workV,
+  obsTag,
+  FLOOD_V,
+  WORK_EVAC,
+  WORK_REACH,
   KINDS,
   LINE,
   OBS_INFO,
@@ -71,6 +76,9 @@ function look(p: Pax) {
   if (p.kind === 'old') return { ...l, shirt: '#B9B0A2', pants: '#6B655C', hair: '#E6E1D8', hairStyle: 2, hat: 0 };
   if (p.kind === 'vip') return { ...l, shirt: '#B98ADB', pants: '#3A3631', hat: 0, bag: 1 };
   if (p.kind === 'kid') return { ...l, shirt: '#E9B23E', hat: 1 };
+  if (p.kind === 'bride') return { ...l, shirt: '#FFFFFF', pants: '#FFFFFF', hairStyle: 2, hat: 0, bag: 0, dress: true };
+  if (p.kind === 'carp') return { ...l, shirt: '#E9A23E', pants: '#5E6E8C', hat: 1, hatColor: '#F3D27F', bag: 0 };
+  if (p.kind === 'tour') return { ...l, shirt: '#7EC8E3', pants: '#E9DCC0', hat: 1, hatColor: '#FFF4DA', bag: 2, camera: true };
   return { ...l, shirt: '#FFFDF6', pants: '#4A4540', bag: 1 };
 }
 const scaleOf = (p: Pax) => (p.kind === 'sumo' ? 1.35 : p.kind === 'kid' ? 0.72 : 1);
@@ -347,28 +355,119 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
   if (!iso.inX(x - 8, x + o.len + 8)) return;
   const next = nextObstacle(r) === o;
   if (o.kind === 'tree') {
+    const rubble = LINE.scenery.includes('tunnel');
+    const [c1, c2, c3] = rubble ? ['#A9A196', '#C9C2B6', '#8A8278'] : ['#8E6640', '#6FC3A0', '#4E9E7E'];
     if (o.state === 'wait') {
       put(x, -1, () => {
-        iso.box(x - 0.45, x + 0.45, -6.2, 2.8, 0.1, 0.95, '#8E6640');
-        iso.box(x - 0.5, x + 0.5, -7.0, -6.0, 0, 1.4, '#8E6640');
-        iso.box(x - 1.7, x + 1.5, -0.6, 2.2, 0.5, 1.9, '#6FC3A0');
-        iso.box(x - 1.1, x + 1.2, 1.9, 3.4, 0.4, 1.5, '#4E9E7E');
+        if (rubble) {
+          // 天井から落ちたコンクリート片と鉄筋
+          iso.box(x - 1.2, x + 0.6, -2.4, 0.2, 0.1, 1.3, c1);
+          iso.box(x - 0.4, x + 1.4, 0.0, 2.6, 0.1, 0.9, c2);
+          iso.box(x - 0.9, x + 0.3, -1.0, 1.0, 1.3, 2.0, c3);
+          iso.line([x - 0.5, -1.6, 1.3], [x + 0.6, -2.4, 2.8], '#7A4A32', iso.lw * 1.3);
+          iso.line([x + 0.4, 1.0, 0.9], [x + 1.6, 1.6, 2.4], '#7A4A32', iso.lw * 1.3);
+        } else {
+          iso.box(x - 0.45, x + 0.45, -6.2, 2.8, 0.1, 0.95, c1);
+          iso.box(x - 0.5, x + 0.5, -7.0, -6.0, 0, 1.4, c1);
+          iso.box(x - 1.7, x + 1.5, -0.6, 2.2, 0.5, 1.9, c2);
+          iso.box(x - 1.1, x + 1.2, 1.9, 3.4, 0.4, 1.5, c3);
+        }
       });
       if (next) L.push(() => {
         const [sx, sy] = iso.P(x, -1, 5.5);
         pill(ctx, sx, sy - 14, `${treeNeed(r)}km/h以上で突き破れ`, '#E9B23E', INK, 11);
       });
     } else if (age < 1.2) {
-      // 木っ端
+      // 木っ端（ガレキなら石くず）
       for (let i = 0; i < 12; i++) {
         const bx = x + 2 + hash(i, 3) * 10 * (age + 0.2);
         const by = -3 + hash(i, 4) * 6;
         const bz = 0.4 + hash(i, 5) * 5 * Math.sin(Math.min(1, age / 1.2) * Math.PI);
-        put(bx, by, () => iso.box(bx - 0.3, bx + 0.3, by - 0.15, by + 0.15, bz, bz + 0.3, i % 3 ? '#8E6640' : '#6FC3A0', { lw: iso.lw * 0.6 }));
+        put(bx, by, () => iso.box(bx - 0.3, bx + 0.3, by - 0.15, by + 0.15, bz, bz + 0.3, i % 3 ? c1 : c2, { lw: iso.lw * 0.6 }));
       }
     } else if (o.state === 'hit' && r.v < 0.1) {
-      put(x, -1, () => iso.box(x - 0.45, x + 0.45, 3.0, 6.0, 0.05, 0.8, '#8E6640'));
+      put(x, -1, () => iso.box(x - 0.45, x + 0.45, 3.0, 6.0, 0.05, 0.8, c1));
     }
+  } else if (o.kind === 'work') {
+    // 工事区間：柵とコーン、線路の上の作業員（警笛で端へ退く）
+    const evac = o.state !== 'wait' ? 1 : o.taps === 0 ? Math.min(1, (r.time - o.t) / WORK_EVAC) : 0;
+    put(x - 3, 2.6, () => {
+      for (const cx of [x - 4, x - 1.5, x + 9, x + 11.5]) {
+        iso.box(cx - 0.35, cx + 0.35, 2.3, 2.9, 0, 0.25, '#E4553A');
+        iso.box(cx - 0.22, cx + 0.22, 2.4, 2.8, 0.25, 1.1, '#F39800', { top: '#FFFDF6' });
+      }
+      iso.box(x - 0.2, x + 8.2, 2.5, 2.7, 0.7, 1.15, '#F3D27F');
+      for (let k = 0; k < 8; k += 2) iso.box(x + k, x + k + 1, 2.48, 2.72, 0.7, 1.15, '#3A3631', { lw: iso.lw * 0.5 });
+    });
+    for (let i = 0; i < 2; i++) {
+      const wx = x + 2 + i * 3.5;
+      const wy = -0.8 + i * 1.4 + evac * (3.6 - i * 0.4);
+      put(wx, wy, () => worker(iso, wx, wy, o.state === 'wait' && o.taps > 0 ? Math.sin(r.time * 6 + i) : 0, evac > 0 && evac < 1 ? Math.sin(r.time * 22) * 0.15 : 0));
+    }
+    if (o.state === 'wait' && o.taps > 0) {
+      const [cx, cy] = iso.P(x + 3.5, 0, 1);
+      const rr = 3 * iso.s;
+      const reach = o.x - r.x <= WORK_REACH;
+      if (reach || r.phase !== 'running') hits.push({ kind: 'obstacle', ref: o, x: cx, y: cy, r: Math.max(44, rr * 1.2) });
+      if (next) L.push(() => {
+        if (reach) {
+          ctx.setLineDash([7, 5]);
+          iso.ell(cx, cy, rr, rr * 0.58, 'rgba(228,85,58,0.12)', 2.4, '#E4553A');
+          ctx.setLineDash([]);
+        }
+        pill(ctx, cx, cy - rr * 0.6 - 16, reach ? `タップで警笛！ あと${o.taps}回` : `${workV(r)}km/h以下で通過／近づいて警笛`, reach ? '#E4553A' : '#FFFDF6', reach ? '#FFFDF6' : INK, 12);
+      });
+    }
+  } else if (o.kind === 'slope') {
+    // 坂：勾配標と、坂の区間の線路わきの帯
+    const up = (o.dir ?? 1) > 0;
+    put(x, 2.2, () => {
+      iso.box(x - 0.08, x + 0.08, 2.1, 2.3, 0, 2.4, '#3A3631');
+      iso.box(x - 0.1, x + 0.1, 1.6, 2.8, 2.0, 2.9, '#FFFDF6');
+      iso.line([x, 1.75, up ? 2.15 : 2.75], [x, 2.65, up ? 2.75 : 2.15], '#3A3631', iso.lw * 1.6);
+    });
+    put(x + o.len / 2, -2.4, () => {
+      const n = Math.ceil(o.len / 4);
+      const col = up ? '228,85,58' : '91,184,201';
+      for (let k = 0; k < n; k++) {
+        const t = k / n;
+        const a0 = 0.45 + 0.45 * (up ? t : 1 - t);
+        // 線路わきの帯と、レールの間の「く」の字（坂の向き）
+        iso.rectZ(x + k * 4, x + k * 4 + 2.6, -2.6, -2.1, 0.06, `rgba(${col},${a0})`, 0);
+        iso.rectZ(x + k * 4, x + k * 4 + 2.6, 2.1, 2.6, 0.06, `rgba(${col},${a0})`, 0);
+        const cx = x + k * 4 + 1.3;
+        const tip = up ? 0.7 : -0.7;
+        iso.line([cx - tip, -0.9, 0.25], [cx + tip, 0, 0.25], `rgba(${col},${a0 + 0.1})`, iso.lw * 2.2);
+        iso.line([cx + tip, 0, 0.25], [cx - tip, 0.9, 0.25], `rgba(${col},${a0 + 0.1})`, iso.lw * 2.2);
+      }
+    });
+    if (next) L.push(() => {
+      const [sx, sy] = iso.P(x + o.len / 2, 0, 4);
+      pill(ctx, sx, sy - 10, up ? '上り坂：速さが落ちる' : '下り坂：勝手に速くなる', up ? '#F3D27F' : '#CFE6EE', INK, 11);
+    });
+  } else if (o.kind === 'flood') {
+    // 浸水区間：線路が水につかっている
+    put(x + o.len / 2, -2, () => {
+      iso.rectZ(x - 1, x + o.len + 1, -3.4, 3.4, 0.32, 'rgba(91,184,201,0.55)', 0);
+      for (let i = 0; i < 9; i++) {
+        const fx = x + ((i * 4.7 + r.time * 2) % o.len);
+        const fy = -2.6 + hash(i, 7) * 5.2;
+        iso.rectZ(fx, fx + 1.4, fy, fy + 0.12, 0.34, 'rgba(255,253,246,0.8)', 0);
+      }
+      if (o.state === 'hit' && r.time - o.t < 1.2) {
+        const k = (r.time - o.t) / 1.2;
+        for (let i = 0; i < 10; i++) {
+          const bx = o.t ? r.x + hash(i, 2) * 4 : x;
+          const by = -2 + hash(i, 3) * 4;
+          const bz = 0.4 + Math.sin(k * Math.PI) * (2 + hash(i, 4) * 3);
+          iso.box(bx - 0.25, bx + 0.25, by - 0.25, by + 0.25, bz, bz + 0.4, '#5BB8C9', { top: '#CFE6EE', lw: iso.lw * 0.5 });
+        }
+      }
+    });
+    if (next) L.push(() => {
+      const [sx, sy] = iso.P(x + o.len / 2, 0, 4);
+      pill(ctx, sx, sy - 10, `浸水区間 ${FLOOD_V}km/h以下でそろそろと`, '#5BB8C9', '#FFFDF6', 12);
+    });
   } else if (o.kind === 'pole') {
     if (o.state === 'wait') {
       put(x, 0.5, () => {
@@ -443,7 +542,7 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
         ctx.font = `900 ${Math.max(9, iso.s * 1.0)}px "Zen Maru Gothic", sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(CURVE_V), px, py + 0.5);
+        ctx.fillText(String(curveV(r)), px, py + 0.5);
       });
     }
     put(x + o.len / 2, -1.5, () => {
@@ -452,9 +551,20 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
     });
     if (next) L.push(() => {
       const [sx, sy] = iso.P(x + o.len / 2, 0, 5.0);
-      pill(ctx, sx, sy - 10, `急カーブ ${CURVE_V}km/h以下で通過`, '#FFFDF6', INK, 11);
+      pill(ctx, sx, sy - 10, `急カーブ ${curveV(r)}km/h以下で通過`, '#FFFDF6', INK, 11);
     });
   }
+}
+
+/** 作業員（ヘルメットと反射ベスト）。wave は旗振り、shake は慌てて走る揺れ */
+function worker(iso: Iso, x: number, y: number, wave: number, shake: number) {
+  const z = Math.abs(shake);
+  iso.box(x - 0.18, x + 0.18, y - 0.22, y + 0.22, z, z + 0.8, '#3A3631');
+  iso.box(x - 0.24, x + 0.24, y - 0.3, y + 0.3, z + 0.8, z + 1.55, '#F39800');
+  iso.box(x - 0.24, x + 0.24, y - 0.31, y + 0.31, z + 1.1, z + 1.22, '#F3D27F', { lw: iso.lw * 0.4 });
+  iso.box(x - 0.17, x + 0.17, y - 0.17, y + 0.17, z + 1.55, z + 1.9, '#F0C9A0');
+  iso.box(x - 0.23, x + 0.23, y - 0.23, y + 0.23, z + 1.9, z + 2.08, '#F3D27F');
+  if (wave) iso.line([x, y + 0.3, z + 1.45], [x + wave * 0.4, y + 0.6, z + 2.4], '#E4553A', iso.lw * 1.6);
 }
 
 function deer(iso: Iso, x: number, y: number, hop: number) {
@@ -604,7 +714,7 @@ export function drawSection(ctx: CanvasRenderingContext2D, r: Run, w: number, yb
     ctx.globalAlpha = done ? 0.35 : 1;
     ctx.beginPath();
     ctx.arc(ox, yb + 4.5, 13, 0, Math.PI * 2);
-    ctx.fillStyle = o.kind === 'pole' || o.kind === 'deer' ? '#FBE3DC' : o.kind === 'tree' ? '#FFF4DA' : o.kind === 'wave' ? '#CFE6EE' : '#FFFDF6';
+    ctx.fillStyle = o.kind === 'pole' || o.kind === 'deer' || o.kind === 'work' ? '#FBE3DC' : o.kind === 'tree' ? '#FFF4DA' : o.kind === 'wave' || o.kind === 'flood' ? '#CFE6EE' : '#FFFDF6';
     ctx.fill();
     ctx.strokeStyle = INK;
     ctx.stroke();
@@ -614,7 +724,7 @@ export function drawSection(ctx: CanvasRenderingContext2D, r: Run, w: number, yb
     ctx.textBaseline = 'middle';
     ctx.fillText(OBS_INFO[o.kind].ch, ox, yb + 5);
     ctx.font = '900 10px "Zen Maru Gothic", sans-serif';
-    const sub = o.kind === 'tree' ? `${treeNeed(r)}↑` : o.kind === 'curve' ? `${CURVE_V}↓` : o.kind === 'pole' ? `連打${o.need}` : o.kind === 'wave' ? 'すきに' : 'タップ';
+    const sub = obsTag(r, o);
     ctx.fillText(sub, ox, yb + 27);
     ctx.globalAlpha = 1;
   }

@@ -311,6 +311,10 @@ function tip(r: Run, meta: Meta, shopOpen: boolean, _now: number): Say | null {
     if (o.kind === 'deer' && !seen('deer')) return fire('deer', '<b>鹿！</b> 画面の鹿をタップして警笛で追い払え');
     if (o.kind === 'pole' && !seen('pole')) return fire('pole', '<b>倒れた電柱</b>：タップ連打で片付ける。学生が乗っていると手伝ってくれる');
     if (o.kind === 'wave' && !seen('wave')) return fire('wave', '<b>江ノ島の大波</b>：波が引いたすきに通れば衝撃なし。ジャンプで越えてもいい');
+    if (o.kind === 'work' && !seen('work')) return fire('work', '<b>工事区間</b>：30km/hまで落とせば衝撃なし。50m以内に近づいて<b>タップで警笛</b>を鳴らせば、作業員が1秒で退く');
+    if (o.kind === 'slope' && !seen('slope')) return fire('slope', '<b>坂</b>：上りは速さが落ち、下りは勝手に速くなる。次の障害に備えて');
+    if (o.kind === 'flood' && !seen('flood')) return fire('flood', '<b>浸水区間</b>：15km/hまで落とせば衝撃なし。速すぎるとモーターが水をかぶって止まる。ジャンプで越えてもいい');
+    if (o.kind === 'tree' && r.meta.line === 'ginza' && !seen('rubble')) return fire('rubble', '<b>ガレキ</b>：倒木と同じ。40km/h以上で突き破れ');
   }
   if (r.items.jump > 0 && o && !seen('jump')) return fire('jump', '<b>ジャンプ台</b>：押すと次の障害の手前で電車ごと跳ぶ。<b>速いほど遠く</b>へ');
   const sumo = r.pax.find((p) => p.kind === 'sumo');

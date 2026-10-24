@@ -87,7 +87,24 @@ export function drawPerson(iso: Iso, x: number, y: number, z: number, look: Look
   const pants = look.pants;
   const shirt = look.shirt;
   let headZ: number;
-  if (sit) {
+  if (sit && look.dress) {
+    // ドレスの裾が座席からあふれる
+    pbox(0.14, 0, 0.6, 0.62, 0.3, 0.6, '#FFFFFF');
+    pbox(0.36, 0, 0.3, 0.66, 0.0, 0.36, '#F4F1EA');
+    pbox(-0.08, 0, 0.24, 0.4, 0.52, 1.08, shirt);
+    pbox(0.0, -0.26, 0.14, 0.1, 0.62, 1.04, look.skin);
+    pbox(0.0, 0.26, 0.14, 0.1, 0.62, 1.04, look.skin);
+    headZ = 1.27;
+  } else if (!sit && look.dress) {
+    pbox(0, 0, 0.62, 0.7, 0.0, 0.3, '#F4F1EA');
+    pbox(0, 0, 0.46, 0.54, 0.3, 0.78, '#FFFFFF');
+    pbox(0, 0, 0.24, 0.4, 0.76, 1.36, shirt);
+    pbox(0, -0.27, 0.13, 0.1, 0.9, 1.32, look.skin);
+    pbox(0, 0.27, 0.13, 0.1, 0.9, 1.32, look.skin);
+    // ブーケ
+    pbox(0.2, 0, 0.16, 0.2, 0.86, 1.02, '#F08E78');
+    headZ = 1.56;
+  } else if (sit) {
     // 太もも（前へ）とすね（下へ）
     pbox(0.16, -0.1, 0.44, 0.15, 0.4, 0.56, pants);
     pbox(0.16, 0.1, 0.44, 0.15, 0.4, 0.56, pants);
@@ -116,6 +133,8 @@ export function drawPerson(iso: Iso, x: number, y: number, z: number, look: Look
   // かばん
   if (look.bag === 1) pbox(sit ? -0.3 : -0.2, 0, 0.14, 0.3, sit ? 0.6 : 0.86, sit ? 0.98 : 1.26, '#8E6640');
   else if (look.bag === 2) pbox(0.02, 0.36, 0.26, 0.1, sit ? 0.5 : 0.62, sit ? 0.82 : 0.94, '#E9B23E');
+  // 首から下げたカメラ
+  if (look.camera) pbox(sit ? 0.06 : 0.16, 0, 0.12, 0.2, sit ? 0.74 : 1.0, sit ? 0.88 : 1.14, '#3A3631');
   // 首
   pbox(sit ? -0.08 : 0, 0, 0.1, 0.1, sit ? 1.06 : 1.34, sit ? 1.12 : 1.4, look.skin);
 
@@ -138,6 +157,16 @@ export function drawPerson(iso: Iso, x: number, y: number, z: number, look: Look
   dy /= dl;
   const toward = o.facing === 0 || o.facing === 2;
 
+  // ベール（頭の後ろ）
+  if (look.dress) {
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.roundRect(hx - r * 1.15 - dx * r * 0.3, hy - r * 0.9, r * 2.3, r * 2.6, r * 0.6);
+    ctx.fill();
+    ctx.stroke();
+  }
   // 長い髪（頭の後ろ）
   if (look.hairStyle === 1) {
     ctx.fillStyle = look.hair;
@@ -159,7 +188,8 @@ export function drawPerson(iso: Iso, x: number, y: number, z: number, look: Look
   ctx.beginPath();
   ctx.arc(hx, hy, r * 1.04, 0, Math.PI * 2);
   ctx.clip();
-  ctx.fillStyle = look.hat ? '#E4553A' : look.hair;
+  const hc = look.hatColor ?? '#E4553A';
+  ctx.fillStyle = look.hat ? hc : look.hair;
   ctx.beginPath();
   if (look.hairStyle === 3 && !look.hat) {
     ctx.arc(hx - dx * r * 0.5, hy - r * 0.62, r * 0.8, 0, Math.PI * 2);
@@ -185,7 +215,7 @@ export function drawPerson(iso: Iso, x: number, y: number, z: number, look: Look
   }
   // 帽子のつば
   if (look.hat) {
-    ctx.fillStyle = shade('#E4553A', 0.85);
+    ctx.fillStyle = shade(hc, 0.85);
     ctx.beginPath();
     ctx.ellipse(hx + dx * r * 0.55, hy + dy * r * 0.55 - r * 0.3, Math.max(0.01, r * 0.62), Math.max(0.01, r * 0.28), Math.atan2(dy, dx), 0, Math.PI * 2);
     ctx.fill();

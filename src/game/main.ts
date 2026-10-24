@@ -7,7 +7,6 @@ import { setCarPalette } from '../exterior.ts';
 import { BAR_H, drawBar, drawInside, drawOutside, drawSection, ejectZone, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
-  CURVE_V,
   KINDS,
   LINE,
   NOTCH_NAME,
@@ -36,6 +35,13 @@ import {
   depart,
   canReverse,
   isArmed,
+  itemBlock,
+  INSTANT,
+  curveV,
+  workV,
+  FLOOD_V,
+  WORK_REACH,
+  obsTag,
   moveToCar,
   moveToLevel,
   DECK_NAME,
@@ -328,6 +334,9 @@ const ITEM_DEF: { id: ItemId; name: string; ch: string; col: string; tip: string
   { id: 'jump', name: 'ジャンプ', ch: '跳', col: '#8299E0', tip: '次の障害を飛び越える' },
   { id: 'saw', name: 'チェーンソー', ch: '鋸', col: '#E9B23E', tip: '電柱か倒木を即撤去' },
   { id: 'airbag', name: 'エアバッグ', ch: '袋', col: '#F0A79C', tip: '次の衝撃で誰も飛ばない' },
+  { id: 'nitro', name: 'ニトロ', ch: '爆', col: '#F08E78', tip: 'その場で +20km/h' },
+  { id: 'net', name: '着地ネット', ch: '網', col: '#A6DCC3', tip: '次の射出だけホーム外4mまでGOOD' },
+  { id: 'dia', name: '臨時ダイヤ', ch: '時', col: '#CFE6EE', tip: '遅れを20秒取り戻す' },
 ];
 // 持ち物：全画面のダイアログ。開いている間は時間が止まる
 let invOpen = false;
@@ -352,19 +361,29 @@ const ITEM_DESC: Record<ItemId, string> = {
   jump: '次の障害の手前で電車ごと跳ぶ。速いほど遠く',
   saw: '倒木か電柱を一瞬で片付ける',
   airbag: '次の衝撃で誰も飛ばない（射出では開かない）',
+  nitro: 'その場で +20km/h。坂の手前や遅れの取り戻しに（空中では使えない）',
+  net: '次の射出だけ、ホームから4mはみ出してもGOOD',
+  dia: '遅れを20秒なかったことに（予定より早くはならない）',
 };
 function renderInv() {
-  $('inv-items').innerHTML = ITEM_DEF.map((it) => {
+  // 持っているものを先に、持っていないものは後ろへ
+  const list = [...ITEM_DEF].sort((a, b) => (R.items[a.id] > 0 || isArmed(R, a.id) ? 0 : 1) - (R.items[b.id] > 0 || isArmed(R, b.id) ? 0 : 1));
+  $('inv-items').innerHTML = list.map((it) => {
     const n = R.items[it.id];
     const armed = isArmed(R, it.id);
     const zero = n <= 0 && !armed;
-    return `<div class="ivr${zero ? ' zero' : ''}"><span class="ic" style="background:${it.col}">${it.ch}<b>${n}</b></span><span class="tx"><b>${it.name}</b><span>${ITEM_DESC[it.id]}</span></span>${zero ? '<span class="none">なし</span>' : `<button type="button" class="use${armed ? ' on' : ''}" data-id="${it.id}">${armed ? '準備中・やめる' : '使う'}</button>`}</div>`;
+    const why = !zero && !armed ? itemBlock(R, it.id) : '';
+    const btn = zero ? '<span class="none">なし</span>' : why ? `<span class="none">${why}</span>` : `<button type="button" class="use${armed ? ' on' : ''}" data-id="${it.id}">${armed ? '準備中・やめる' : '使う'}</button>`;
+    return `<div class="ivr${zero ? ' zero' : ''}"><span class="ic" style="background:${it.col}">${it.ch}<b>${n}</b></span><span class="tx"><b>${it.name}</b><span>${ITEM_DESC[it.id]}</span></span>${btn}</div>`;
   }).join('');
   $('inv-items').querySelectorAll<HTMLButtonElement>('.use').forEach((b) =>
     b.addEventListener('click', () => {
-      useItem(R, b.dataset.id as ItemId);
+      const id = b.dataset.id as ItemId;
+      useItem(R, id);
       sfx.select();
-      renderInv();
+      // その場で効くものは、閉じて効き目を見せる
+      if (INSTANT.includes(id)) closeInv();
+      else renderInv();
     }),
   );
   const names: Record<string, string> = Object.fromEntries(OFFERS.map((o) => [o.id, o.name]));
@@ -656,7 +675,10 @@ function renderForecast() {
     const when = d < 0 ? '通過中' : secs == null ? `あと${Math.round(d)}m` : `あと${secs.toFixed(0)}秒`;
     let cond = '';
     if (o.kind === 'tree') cond = k >= treeNeed(R) ? '突破できる速さ' : `${treeNeed(R)}km/h 未満だと止められる`;
-    else if (o.kind === 'curve') cond = k > CURVE_V ? `${CURVE_V}km/h まで落とせ` : '安全な速さ';
+    else if (o.kind === 'curve') cond = k > curveV(R) ? `${curveV(R)}km/h まで落とせ` : '安全な速さ';
+    else if (o.kind === 'work') cond = o.taps === 0 ? '作業員が退避中' : k > workV(R) ? `${workV(R)}km/h まで落とすか、近づいて警笛${o.taps}回` : '安全な速さ';
+    else if (o.kind === 'slope') cond = (o.dir ?? 1) > 0 ? '上り坂：速さが落ちる' : '下り坂：勝手に速くなる';
+    else if (o.kind === 'flood') cond = k > FLOOD_V ? `${FLOOD_V}km/h まで落とせ` : 'そろそろと';
     else if (o.kind === 'deer') cond = 'タップで追い払え';
     else if (o.kind === 'pole') cond = `連打 あと${o.taps}回`;
     else if (o.kind === 'wave') cond = waveUp(R.time) ? '波が来ている' : `今なら通れる（${(WAVE_PERIOD - (R.time % WAVE_PERIOD)).toFixed(1)}秒）`;
@@ -674,7 +696,9 @@ function renderForecast() {
       const atNeed = predictShock(R, o, (treeNeed(R) + 0.5) / 3.6);
       const flyNeed = wouldFly(R, atNeed);
       hint = flyNeed.length < fly.length ? `${Math.round(treeNeed(R) + 1)}km/h まで落とせば ${fly.length - flyNeed.length}人助かる` : `${fly.map((p) => KINDS[p.kind].name).join('・')}を座席へ移せ`;
-    } else if (o.kind === 'curve') hint = `${CURVE_V}km/h 以下なら衝撃0`;
+    } else if (o.kind === 'curve') hint = `${curveV(R)}km/h 以下なら衝撃0`;
+    else if (o.kind === 'work') hint = o.x - R.x > WORK_REACH ? `${WORK_REACH}m まで近づいたらタップで警笛` : 'タップで警笛！ 作業員が退く';
+    else if (o.kind === 'flood') hint = `${FLOOD_V}km/h 以下なら衝撃0。ジャンプで越えてもいい`;
     else if (o.kind === 'deer') hint = '追い払えば衝撃0';
     else if (o.kind === 'wave') hint = '波が引いたすきに通れば衝撃0';
     line3.textContent = hint;
@@ -684,7 +708,7 @@ function renderForecast() {
     const worst = Math.max(0, ...nxt.map((q) => (q.kind === 'tree' ? predictShock(R, q, (treeNeed(R) + 2) / 3.6) : 0)));
     shock = worst;
     // 走行中の障害バーと同じ書き方：アイコン＋条件
-    const cond = (q: Obstacle) => (q.kind === 'tree' ? `${treeNeed(R)}↑` : q.kind === 'curve' ? `${CURVE_V}↓` : q.kind === 'pole' ? `連打${q.need}` : q.kind === 'wave' ? 'すきに' : 'タップ');
+    const cond = (q: Obstacle) => obsTag(R, q);
     line1.innerHTML = `<span class="obs">次の区間</span><span class="chips">${nxt.map((q) => `<span><i>${OBS_INFO[q.kind].ch}</i>${cond(q)}</span>`).join('')}</span>`;
     void worst;
     line3.textContent = '乗せる客と席を考えよう';

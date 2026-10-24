@@ -30,6 +30,12 @@ export interface Look {
   hairStyle: number;
   bag: number;
   hat: number;
+  /** 帽子・ヘルメットの色 */
+  hatColor?: string;
+  /** 花嫁：ドレスとベール */
+  dress?: boolean;
+  /** 観光客：首から下げたカメラ */
+  camera?: boolean;
 }
 
 export interface Passenger {
