@@ -29,6 +29,14 @@ const BANDS: Record<Scenery, Band[]> = {
     ...FRONT,
   ],
   town: [[-11, -2.0, 0, '#C8DFA8', '#9CC07F'], [-2.0, 2.0, 0, '#DCCFB6', '#B9AC93'], ...FRONT],
+  // 地下：コンクリートの床とバラスト、手前はホーム側の通路
+  tunnel: [
+    [-11, -3.6, 0, '#6B655C', '#4F4A44'],
+    [-3.6, -2.0, 0, '#8C857B', '#6B655C'],
+    [-2.0, 2.0, 0, '#7A746C', '#5E5852'],
+    [2.0, 6.4, 0, '#9A9184', '#7A746C'],
+    [6.4, 11, 0, '#6B655C', '#4F4A44'],
+  ],
   street: [
     [-11, -4.2, 0, '#C8DFA8', '#9CC07F'],
     [-4.2, -2.6, 0, '#E6DCC8', '#C9BBA2'],
@@ -40,7 +48,12 @@ const BANDS: Record<Scenery, Band[]> = {
 const ROOFS = ['#E4553A', '#3F62CF', '#E9B23E', '#6B655C', '#4E9E7E', '#F08E78'];
 const WALLS = ['#FFFDF6', '#F3D27F', '#F7CCC5', '#FFFDF6', '#CFE6EE', '#EDE6D8'];
 const CAR_COLORS = ['#6FC3A0', '#F0A79C', '#E9B23E', '#8299E0', '#F08E78'];
-export const carColor = (k: number) => CAR_COLORS[k % CAR_COLORS.length];
+/** 路線ごとの車両の色（先頭から順に） */
+let palette = CAR_COLORS;
+export function setCarPalette(p: string[] | null) {
+  palette = p ?? CAR_COLORS;
+}
+export const carColor = (k: number) => palette[k % palette.length];
 
 const lookCache = new Map<number, Look>();
 function lookOf(seed: number): Look {
@@ -122,15 +135,16 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
   ctx.lineTo(sa[0], sa[1]);
   ctx.closePath();
   ctx.fill();
-  iso.rectX(xb, W0, W1, -DEPTH, -2.8, '#8E6640');
-  iso.rectY(W1, xa, xb, -DEPTH, -2.8, '#7A5636');
-  iso.rectX(xb, W0, W1, -2.8, 0, '#B98A5E');
-  iso.rectY(W1, xa, xb, -2.8, 0, '#A57A50');
+  const under = kindAt(xb - 0.01) === 'tunnel';
+  iso.rectX(xb, W0, W1, -DEPTH, -2.8, under ? '#5E5852' : '#8E6640');
+  iso.rectY(W1, xa, xb, -DEPTH, -2.8, under ? '#4F4A44' : '#7A5636');
+  iso.rectX(xb, W0, W1, -2.8, 0, under ? '#8C857B' : '#B98A5E');
+  iso.rectY(W1, xa, xb, -2.8, 0, under ? '#7A746C' : '#A57A50');
   for (const b of BANDS[kindAt(xb - 0.01)]) {
     iso.rectX(xb, b[0], b[1], b[2] - 0.55, b[2], b[4], 0);
     if (b[2] < 0) iso.rectX(xb, b[0], b[1], -1.4, b[2], '#6FA0B3', 0);
   }
-  iso.rectY(W1, xa, xb, -0.55, 0, '#9CC07F', iso.lw * 0.6);
+  iso.rectY(W1, xa, xb, -0.55, 0, under ? '#5E5852' : '#9CC07F', iso.lw * 0.6);
   for (let i = Math.floor(xa / 6); i < xb / 6; i++) {
     const sx = i * 6 + hash(i, 9) * 4;
     const dz = hash(i, 8) * 0.6;
@@ -155,7 +169,22 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
       sub.rectZ(a, b, -6.3, -6.0, -0.33, '#FFFDF6', 0);
     }
     if (kind !== 'street') {
-      for (let x = Math.ceil(a / 1.2) * 1.2; x < b; x += 1.2) sub.rectZ(x, x + 0.42, -1.5, 1.5, 0.05, '#9A8064', 0);
+      for (let x = Math.ceil(a / 1.2) * 1.2; x < b; x += 1.2) sub.rectZ(x, x + 0.42, -1.5, 1.5, 0.05, kind === 'tunnel' ? '#5E5852' : '#9A8064', 0);
+    }
+    if (kind === 'tunnel') {
+      // 第三軌条（地下鉄は架線ではなく横のレールから電気をとる）
+      sub.rectZ(a, b, -1.35, -1.15, 0.3, '#C9A04A', 0);
+      // 反対方向の線路（駅のホームの前は通らない）
+      const plat = (x: number) => g.pos.some((stop, i) => x > stop - g.line.stations[i].platformCars * CAR_LEN - 2 && x < stop + 6);
+      for (let x = Math.ceil(a / 1.2) * 1.2; x < b; x += 1.2) if (!plat(x)) sub.rectZ(x, x + 0.42, 2.6, 5.6, 0.05, '#5E5852', 0);
+      for (let x = Math.ceil(a / 2) * 2; x < b; x += 2) {
+        if (plat(x) || plat(x + 2)) continue;
+        sub.rectZ(x, x + 2, 3.38, 3.54, 0.18, '#3A3631', 0);
+        sub.rectZ(x, x + 2, 4.66, 4.82, 0.18, '#3A3631', 0);
+        sub.rectZ(x, x + 2, 5.75, 5.95, 0.3, '#C9A04A', 0);
+      }
+      // 床の点検通路の白線
+      sub.rectZ(a, b, 6.3, 6.45, 0.01, '#E9B23E', 0);
     }
   }
   iso.poly([[xa, W0, 0], [xb, W0, 0], [xb, W1, 0], [xa, W1, 0]], null);
@@ -182,6 +211,14 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
   for (let i = Math.floor(xa / CELL); i <= Math.floor(xb / CELL); i++) {
     const x = i * CELL;
     const kind = kindAt(x + CELL / 2);
+    if (kind === 'tunnel') {
+      // 奥のトンネル壁（タイル）と照明
+      put(x + 4, -9, () => tunnelWall(iso, x, x + CELL, i));
+      // 手前：低い縁石と、ところどころの柱
+      put(x + 4, 7.2, () => iso.box(x, x + CELL, 6.6, 7.0, 0, 0.45, '#8C857B'));
+      if (i % 2 === 0) put(x + 1, 9.5, () => iso.box(x + 0.6, x + 1.4, 8.8, 9.6, 0, 2.2, '#9A9184', { top: '#B9B0A2' }));
+      continue;
+    }
     // 奥側
     if (kind === 'coast') {
       if (hash(i, 41) < 0.55) {
@@ -223,11 +260,11 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
   }
 
   // 架線柱とフェンス
-  for (let px = Math.ceil(xa / 24) * 24 - 6; px < xb + 1; px += 24) put(px, -2.7, () => pole(iso, px));
+  for (let px = Math.ceil(xa / 24) * 24 - 6; px < xb + 1; px += 24) if (kindAt(px) !== 'tunnel') put(px, -2.7, () => pole(iso, px));
   const onPlatformX = (x: number) =>
     g.pos.some((stop, i) => x > stop - g.line.stations[i].platformCars * CAR_LEN - 1 && x < stop + 5);
   for (let fx = Math.ceil(xa / 3) * 3; fx < xb; fx += 3) {
-    if (onPlatformX(fx) || kindAt(fx) === 'street') continue;
+    if (onPlatformX(fx) || kindAt(fx) === 'street' || kindAt(fx) === 'tunnel') continue;
     put(fx, 2.5, () => iso.box(fx - 0.08, fx + 0.08, 2.42, 2.58, 0, 1.0, '#FFFDF6', { lw: iso.lw * 0.6 }));
   }
 
@@ -271,6 +308,7 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
     for (let k = Math.floor((xa - off) / gap) - 1; k <= Math.ceil((xb - off) / gap); k++) {
       if (hash(k, 70 + lane) < 0.35) continue;
       const ax = k * gap + off + hash(k, 72) * 6;
+      if (kindAt(ax) === 'tunnel') continue;
       const y0 = lane ? 7.85 : 6.55;
       put(ax + 2, y0 + 0.5, () => {
         iso.box(ax, ax + 4, y0, y0 + 1.05, 0.25, 1.05, ['#3F62CF', '#FFFDF6', '#E9B23E', '#E4553A', '#6FC3A0'][Math.floor(hash(k, 74 + lane) * 5)]);
@@ -335,7 +373,7 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
 
   // 架線
   const wz = Math.max(6.8, 0.95 + 2.9 * decks + 1.6);
-  iso.line([xa, 0, wz], [xb, 0, wz], '#6B655C', Math.max(0.8, iso.lw * 0.8));
+  for (const [a, b, kind] of segs) if (kind !== 'tunnel') iso.line([Math.max(a, xa), 0, wz], [Math.min(b, xb), 0, wz], '#6B655C', Math.max(0.8, iso.lw * 0.8));
   opts.after?.(iso);
   return { train: { x0: tx0 - 6, y0: ty0 - 6, x1: tx1 + 6, y1: ty1 + 6 }, iso };
 }
@@ -396,6 +434,27 @@ function boat(iso: Iso, x: number, y: number, color: string): void {
   if (!iso.inX(x, x + 4)) return;
   iso.box(x, x + 4, y, y + 1.5, -0.35, 0.25, '#FFFDF6');
   iso.box(x + 1, x + 2.6, y + 0.25, y + 1.25, 0.25, 1.1, color);
+}
+
+/** 地下トンネルの奥の壁：クリーム色のタイル、帯、照明 */
+function tunnelWall(iso: Iso, x0: number, x1: number, i: number): void {
+  const a = Math.max(x0, iso.clipX0);
+  const b = Math.min(x1, iso.clipX1);
+  if (b <= a) return;
+  iso.box(a, b, -4.4, -3.7, 0, 6.8, '#E6DCC8', { top: '#B9B0A2' });
+  // ラインカラーの帯（銀座線はオレンジ）
+  iso.rectY(-3.7, a, b, 2.1, 2.55, '#F39800', 0);
+  // タイルの目地
+  for (let z = 0.9; z < 6.6; z += 0.9) if (z < 2.1 || z > 2.55) iso.rectY(-3.7, a, b, z, z + 0.04, 'rgba(31,27,22,0.12)', 0);
+  for (let x = Math.ceil(a / 1.1) * 1.1; x < b; x += 1.1) iso.rectY(-3.7, x, x + 0.04, 0, 6.8, 'rgba(31,27,22,0.08)', 0);
+  // 照明（ぼんやり光る）
+  const lx = x0 + 4;
+  if (lx > a && lx < b) {
+    iso.box(lx - 0.9, lx + 0.9, -3.7, -3.4, 5.4, 5.7, '#FFFDF6');
+    iso.rectY(-3.68, lx - 1.6, lx + 1.6, 3.6, 5.3, 'rgba(255,228,138,0.28)', 0);
+  }
+  // 番号の札
+  if (i % 3 === 0 && x0 + 1 > a && x0 + 1.8 < b) iso.rectY(-3.68, x0 + 1, x0 + 1.8, 3.2, 3.8, '#3A3631', 0);
 }
 
 function pole(iso: Iso, x: number): void {

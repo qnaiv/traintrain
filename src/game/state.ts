@@ -3,25 +3,67 @@
 import { randomLook, type Look } from '../game.ts';
 import type { LineDef } from '../data.ts';
 
-// ---------- 路線（江ノ電を7駅に間引いたもの） ----------
-export const LINE: LineDef = {
-  id: 'enoden-run',
-  name: '江ノ島電鉄',
-  stations: [
-    { name: '藤沢', platformCars: 2, demand: 0 },
-    { name: '鵠沼', platformCars: 2, demand: 0 },
-    { name: '江ノ島', platformCars: 2, demand: 0 },
-    { name: '腰越', platformCars: 2, demand: 0 },
-    { name: '鎌倉高校前', platformCars: 2, demand: 0 },
-    { name: '長谷', platformCars: 2, demand: 0 },
-    { name: '鎌倉', platformCars: 2, demand: 0 },
-  ],
-  sections: [380, 440, 380, 460, 420, 480],
-  scenery: ['town', 'town', 'street', 'coast', 'coast', 'town'],
+// ---------- 路線 ----------
+export interface RunLine extends LineDef {
+  /** 路線選びの説明 */
+  blurb: string;
+  /** 遅れの上限 [秒] */
+  delayLimit: number;
+  /** 予定の平均速度 [m/s] */
+  planV: number;
+  /** 運賃の上乗せ（1人あたり） */
+  fareBonus: number;
+  /** 解放の条件（クリアが必要な路線） */
+  needs: string | null;
+  color: string;
+  /** 見出しに出す短い名前と、車両の色 */
+  short: string;
+  cars: string[] | null;
+}
+const mkSt = (name: string) => ({ name, platformCars: 2, demand: 0 });
+export const LINES: Record<string, RunLine> = {
+  enoden: {
+    id: 'enoden',
+    name: '江ノ島電鉄',
+    blurb: '海沿いの単線。倒木・鹿・急カーブ、終点前に江ノ島の大波',
+    stations: ['藤沢', '鵠沼', '江ノ島', '腰越', '鎌倉高校前', '長谷', '鎌倉'].map(mkSt),
+    sections: [380, 440, 380, 460, 420, 480],
+    scenery: ['town', 'town', 'street', 'coast', 'coast', 'town'],
+    delayLimit: 120,
+    planV: 10,
+    fareBonus: 0,
+    needs: null,
+    color: '#6FC3A0',
+    short: '江ノ島電鉄',
+    cars: null,
+  },
+  ginza: {
+    id: 'ginza',
+    name: '東京メトロ銀座線',
+    blurb: '日本最古の地下鉄。工事区間・坂・急カーブ、浅草の手前に浸水区間',
+    stations: ['渋谷', '表参道', '赤坂見附', '銀座', '日本橋', '上野', '浅草'].map(mkSt),
+    sections: [400, 420, 440, 400, 460, 480],
+    scenery: ['street', 'tunnel', 'tunnel', 'tunnel', 'tunnel', 'tunnel'],
+    delayLimit: 100,
+    planV: 10.5,
+    fareBonus: 0,
+    needs: 'enoden',
+    color: '#F39800',
+    short: '銀座線',
+    cars: ['#F3B81C', '#F39800', '#F3B81C', '#E9B23E'],
+  },
 };
-export const POS: number[] = [0];
-for (const d of LINE.sections) POS.push(POS[POS.length - 1] + d);
-export const N_ST = LINE.stations.length;
+export let LINE: RunLine = LINES.enoden;
+export let POS: number[] = [];
+export let N_ST = 0;
+/** 走る路線を切り替える（ランの最初に呼ぶ） */
+export function setLine(id: string) {
+  LINE = LINES[id] ?? LINES.enoden;
+  POS = [0];
+  for (const d of LINE.sections) POS.push(POS[POS.length - 1] + d);
+  N_ST = LINE.stations.length;
+}
+setLine('enoden');
 /** 停止できる範囲（先頭の位置。停止目標からの差） */
 export const STOP_LO = -14;
 export const STOP_HI = 4;
@@ -32,7 +74,7 @@ export const REVERSE_V = 3.5;
 export const PLAN_V = 10;
 /** 1区間ごとに見込む加減速のぶん [秒] */
 export const SECTION_EXTRA = 6;
-export const sectionTime = (k: number) => LINE.sections[k] / PLAN_V + SECTION_EXTRA;
+export const sectionTime = (k: number) => LINE.sections[k] / LINE.planV + SECTION_EXTRA;
 
 // ---------- 衝撃の式（バランス調整はここだけ） ----------
 export const SHOCK = {
@@ -358,6 +400,9 @@ export interface Meta {
   /** 解放済みの持ち込み改造と、次に持っていくもの */
   unlocked: string[];
   loadout: string;
+  /** 選んでいる路線と、クリアした路線 */
+  line: string;
+  cleared: string[];
   /** 研修運転を終えたか・見た初回ヒント */
   tutorialDone: boolean;
   tips: string[];
@@ -371,7 +416,7 @@ export interface Meta {
 const META_KEY = 'hakobi.run.meta.v2';
 const OLD_META_KEY = 'hakobi.run.meta.v1';
 export function loadMeta(): Meta {
-  const base: Meta = { bank: 0, unlocked: [], loadout: 'normal', combos: {}, tutorialDone: false, tips: [], lv: { cap: 0, bench: 0, strap: 0, cushion: 0, susp: 0, motor: 0, kit: 0, grace: 0 }, runs: 0, best: 0 };
+  const base: Meta = { bank: 0, unlocked: [], loadout: 'normal', line: 'enoden', cleared: [], combos: {}, tutorialDone: false, tips: [], lv: { cap: 0, bench: 0, strap: 0, cushion: 0, susp: 0, motor: 0, kit: 0, grace: 0 }, runs: 0, best: 0 };
   try {
     const raw = localStorage.getItem(META_KEY);
     const old = raw ? null : localStorage.getItem(OLD_META_KEY);
@@ -399,6 +444,8 @@ function withFree(m: Meta): Meta {
   m.unlocked = [...u];
   m.combos = m.combos ?? {};
   m.tips = m.tips ?? [];
+  m.cleared = m.cleared ?? [];
+  if (!LINES[m.line] || !lineOpen(m, m.line)) m.line = 'enoden';
   if (!m.unlocked.includes(m.loadout)) m.loadout = 'normal';
   return m;
 }
@@ -411,6 +458,11 @@ export function resetMeta(): Meta {
     // 無視
   }
   return loadMeta();
+}
+/** 路線が選べるか */
+export function lineOpen(m: Meta, id: string): boolean {
+  const l = LINES[id];
+  return !!l && (!l.needs || (m.cleared ?? []).includes(l.needs));
 }
 export function saveMeta(m: Meta) {
   try {
@@ -623,6 +675,7 @@ function genCandidates(r: Run, st: number): Pax[] {
 }
 
 export function newRun(meta: Meta, tutorial = false): Run {
+  setLine(tutorial ? 'enoden' : meta.line);
   const r: Run = {
     meta,
     spots: [...lowerSpots(meta, 0), ...roofSpots(0).slice(0, 2)],
@@ -637,7 +690,7 @@ export function newRun(meta: Meta, tutorial = false): Run {
     perfectHere: 0,
     missHere: 0,
     pops: [],
-    delayLimit: 120 + meta.lv.grace * 20,
+    delayLimit: LINE.delayLimit,
     time: 0,
     x: POS[0] - 4,
     v: 0,

@@ -3,6 +3,7 @@
 import { DEST_COLORS } from '../data.ts';
 import * as S from './state.ts';
 import { hideCoach, setRewinder, startCoach, updateCoach } from './coach.ts';
+import { setCarPalette } from '../exterior.ts';
 import { BAR_H, drawBar, drawInside, drawOutside, drawSection, ejectZone, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
@@ -434,6 +435,9 @@ window.addEventListener('keyup', (e) => {
 // ---------- 画面の切り替え ----------
 function startRun(tutorial = !meta.tutorialDone) {
   R = newRun(meta, tutorial);
+  setCarPalette(S.LINE.cars);
+  $('h-line').textContent = S.LINE.short;
+  $('h-line').style.background = S.LINE.color;
   startCoach(R);
   W.taps.clear();
   W.states.clear();

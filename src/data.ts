@@ -1,7 +1,7 @@
 // 路線データ。ホーム長・需要・駅間距離はゲーム用の仮の値。
 
 /** 駅間の景色の種類 */
-export type Scenery = 'town' | 'street' | 'coast';
+export type Scenery = 'town' | 'street' | 'coast' | 'tunnel';
 
 export interface StationDef {
   name: string;
