@@ -14,6 +14,7 @@ import {
   LOADOUTS,
   loadoutOf,
   unlockLoadout,
+  resetMeta,
   WAVE_PERIOD,
   autoArrange,
   brakeLaunch,
@@ -58,7 +59,7 @@ import {
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('view');
 const ctx = canvas.getContext('2d')!;
-const meta = loadMeta();
+let meta = loadMeta();
 let R: Run = newRun(meta);
 let screen: 'hub' | 'run' = 'hub';
 let mode: 'out' | 'in' = 'out';
@@ -399,6 +400,30 @@ function toHub() {
   $('hub').hidden = false;
 }
 $('btn-start').addEventListener('click', startRun);
+// データ初期化（2回押しで確定）
+let resetArmed = -Infinity;
+$('btn-reset').addEventListener('click', () => {
+  const b = $('btn-reset');
+  if (performance.now() - resetArmed > 4000) {
+    resetArmed = performance.now();
+    b.textContent = '本当に消す？ もう一度押すと消えます';
+    b.classList.add('armed');
+    sfx.bad();
+    setTimeout(() => {
+      if (performance.now() - resetArmed >= 4000) {
+        b.textContent = 'データ初期化';
+        b.classList.remove('armed');
+      }
+    }, 4100);
+    return;
+  }
+  resetArmed = -Infinity;
+  meta = resetMeta();
+  b.textContent = 'データ初期化';
+  b.classList.remove('armed');
+  sfx.clear();
+  renderHub();
+});
 $('btn-hub').addEventListener('click', toHub);
 $('btn-again').addEventListener('click', startRun);
 

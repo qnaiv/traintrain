@@ -303,6 +303,16 @@ function withFree(m: Meta): Meta {
   if (!m.unlocked.includes(m.loadout)) m.loadout = 'normal';
   return m;
 }
+/** セーブデータを消して最初からに（音とズームの設定は残す） */
+export function resetMeta(): Meta {
+  try {
+    localStorage.removeItem(META_KEY);
+    localStorage.removeItem(OLD_META_KEY);
+  } catch {
+    // 無視
+  }
+  return loadMeta();
+}
 export function saveMeta(m: Meta) {
   try {
     localStorage.setItem(META_KEY, JSON.stringify(m));
