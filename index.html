@@ -314,8 +314,21 @@
       .how-tx > b i { font-style: normal; display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--mustard); border: 1.5px solid var(--ink); font-size: 11px; }
       .how-tx span { font-size: 12.5px; font-weight: 700; line-height: 1.55; color: var(--sub); }
       .how-tx span b { color: var(--ink); }
+      #lines { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      #lines[hidden] { display: none; }
+      .line-card { position: relative; text-align: left; padding: 8px 10px 8px 16px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--card); overflow: hidden; display: flex; flex-direction: column; gap: 3px; min-height: 76px; }
+      .line-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--lc); border-right: 2px solid var(--ink); }
+      .line-card b { font-size: 14px; font-weight: 900; }
+      .line-card span { font-size: 10.5px; font-weight: 800; color: var(--sub); line-height: 1.4; }
+      .line-card .obs { display: flex; gap: 3px; margin-top: 2px; } .line-card .obs i { font-style: normal; width: 18px; height: 18px; border: 1.5px solid var(--ink); border-radius: 50%; background: #FFFDF6; display: grid; place-items: center; font-size: 10px; font-weight: 900; }
+      .line-card.sel { box-shadow: 0 4px 0 var(--ink); background: #FFFDF6; }
+      .line-card.sel::after { content: 'これで出発'; position: absolute; right: 6px; bottom: 7px; padding: 0 6px; border: 1.5px solid var(--ink); border-radius: 999px; background: #2e8f62; color: #fffdf6; font-size: 9.5px; font-weight: 900; }
+      .line-card:not(.sel):not(.locked) { background: #ECE6DB; }
+      .line-card.locked { border-style: dashed; background: #EFEAE0; color: #8A8278; }
+      .line-card.locked::before { filter: grayscale(1); opacity: .5; }
+      .line-card .lock { color: #B53E28; }
       .hub-tabs { display: flex; gap: 6px; }
-      .hub-tabs button { flex: 1; min-height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: #ece6db; font-size: 13px; font-weight: 900; }
+      .hub-tabs button { flex: 1; min-height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: #ece6db; font-size: 12px; padding: 2px 3px; line-height: 1.2; font-weight: 900; }
       .hub-tabs button.on { background: var(--card); box-shadow: 0 3px 0 var(--ink); }
       .hub-tabs small { font-size: 10px; }
       .hub-tabs button::after { content: ' ▾'; font-size: 11px; }
@@ -588,6 +601,7 @@
         </div>
         <div id="hub-sub"></div>
         <div class="hub-first" id="hub-first" hidden><div class="pitch"><b>急ブレーキの勢いで、屋根の客をホームへ放り込む。</b><span>最初の1本は研修運転。見習い車掌がとなりで教えてくれる（3分くらい）</span></div><div class="note">持ち込み改造とコンボ図鑑は、1本走ると開く</div></div>
+        <div id="lines"></div>
         <div class="hub-tabs"><button id="tab-how" type="button">遊び方</button><button id="tab-lo" type="button">持ち込み改造</button><button id="tab-tree" type="button">改造ツリー</button><button id="tab-book" type="button">コンボ図鑑</button></div>
         <div id="tree-panel" class="tree-view" hidden></div>
         <div id="how-panel" hidden><ol class="how-steps"><li><div class="how-img"><img src="how/pick.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>1</i>駅で客を乗せる</b><span>客ごとに運賃（コイン）と耐衝撃（🛡）が違う。★を長押しで特徴が見られる</span></div></li><li><div class="how-img"><img src="how/seat.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>2</i>席を決める</b><span>車内で客をドラッグ。座席・つり革は衝撃に強い。<b>屋根は射出台</b>（衝撃に弱く、よく飛ぶ）</span></div></li><li><div class="how-img"><img src="how/launch.webp" alt="" loading="lazy"><img src="how/lever.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>3</i>急ブレーキで射出</b><span>駅の手前でレバーを<b>非常</b>へ。耐えられない客が前へ飛ぶ。点線が着地の予測</span></div></li><li><div class="how-img"><img src="how/perfect.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>4</i>ホームに着地</b><span>ホームならGOOD、<b>×2マット</b>ならPERFECTで運賃2倍。駅ごとに続けると上乗せ</span></div></li><li><div class="how-img"><img src="how/obstacle.webp" alt="" loading="lazy"><img src="how/secbar.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>5</i>障害を越える</b><span>倒木は速く突き破り、急カーブは遅く。鹿はタップ、電柱は連打。下のバーに次の障害が出る</span></div></li><li><div class="how-img"><img src="how/shock.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>6</i>誰が飛ぶかを読む</b><span>赤い線が今の衝撃。線より左（耐衝撃が低い）の客が飛ぶ。速さと席で調整しよう</span></div></li><li><div class="how-img"><img src="how/shop.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>7</i>駅のお店</b><span>稼いだコインでアイテムや魔改造を買う。同じタグをそろえるとコンボが起きる</span></div></li><li><div class="how-img"><img src="how/gauge.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>8</i>遅れと信頼</b><span>遅れが上限を超えるか、信頼が0になると運転打ち切り。客を落とすと信頼が減る</span></div></li><li><div class="how-img"><img src="how/result.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>9</i>持ち帰って強化</b><span>終点に着くと稼ぎの一部を持ち帰れる。貯金で<b>持ち込み改造</b>を解放</span></div></li></ol></div>

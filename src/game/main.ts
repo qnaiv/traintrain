@@ -558,6 +558,7 @@ function renderHub() {
   // はじめて：研修運転だけを見せる
   const first = !meta.tutorialDone && meta.runs === 0;
   $('hub-first').hidden = !first;
+  renderLines(first);
   for (const sel of ['.hub-tabs', '.reset-row']) {
     const el = document.querySelector<HTMLElement>(sel);
     if (el) el.hidden = first;
@@ -603,7 +604,36 @@ function renderHub() {
     });
     box.appendChild(el);
   }
-  $('btn-start').textContent = first ? 'はじめての運転 ▶' : `「${loadoutOf(meta.loadout).name}」で出発 ▶`;
+  $('btn-start').textContent = first ? 'はじめての運転 ▶' : `「${loadoutOf(meta.loadout).name}」で${S.LINES[meta.line].short}へ ▶`;
+}
+
+// ---------- 路線えらび ----------
+const LINE_OBS: Record<string, string[]> = { enoden: ['木', '曲', '鹿', '柱', '波'], ginza: ['工', '坂', '瓦', '曲', '水'] };
+function renderLines(first: boolean) {
+  const box = $('lines');
+  box.hidden = first;
+  if (first) return;
+  box.innerHTML = '';
+  for (const l of Object.values(S.LINES)) {
+    const open = S.lineOpen(meta, l.id);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'line-card' + (meta.line === l.id ? ' sel' : '') + (open ? '' : ' locked');
+    b.style.setProperty('--lc', l.color);
+    const need = l.needs ? S.LINES[l.needs].short : '';
+    b.innerHTML = `<b>${l.name}</b><span>${open ? `${l.stations.length}駅・${l.stations[0].name}→${l.stations[l.stations.length - 1].name}` : `<span class="lock">🔒 ${need}をクリアで解放</span>`}</span><span class="obs">${LINE_OBS[l.id].map((c) => `<i>${c}</i>`).join('')}</span>`;
+    b.addEventListener('click', () => {
+      if (!open) {
+        sfx.bad();
+        return;
+      }
+      meta.line = l.id;
+      saveMeta(meta);
+      sfx.select();
+      renderHub();
+    });
+    box.appendChild(b);
+  }
 }
 
 // ---------- 改造ツリー ----------
