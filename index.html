@@ -274,6 +274,11 @@
       .hub-tabs button { flex: 1; min-height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: #ece6db; font-size: 13px; font-weight: 900; }
       .hub-tabs button.on { background: var(--card); box-shadow: 0 3px 0 var(--ink); }
       .hub-tabs small { font-size: 10px; }
+      .hub-tabs button::after { content: ' ▾'; font-size: 11px; }
+      .hub-tabs button.on::after { content: ' ▴'; }
+      #lo-panel { display: flex; flex-direction: column; gap: 10px; }
+      #lo-panel[hidden] { display: none; }
+      #hub-scene { display: block; width: 100%; height: 200px; border: 2.5px solid var(--ink); border-radius: 16px; background: #F5EFE3; box-shadow: 3px 3px 0 var(--ink); box-sizing: border-box; }
       #ups[hidden] { display: none !important; }
       #book { display: flex; flex-direction: column; gap: 8px; }
       #book[hidden] { display: none; }
@@ -528,7 +533,7 @@
       <div class="hub-in">
         <div class="hub-title">ブラウザ ローグライク × 鉄道 ・ 障害突破ラン</div>
         <h1 class="hub-logo"><span>まもなく、</span>魔改造電車が参ります</h1>
-        <div class="hub-bank"><span><b id="hub-bank">0</b></span><span style="font-weight:900">車両基地の貯金</span></div>
+        <canvas id="hub-scene"></canvas>
         <div id="hub-sub"></div>
         <div class="hub-first" id="hub-first" hidden><div class="pitch"><b>急ブレーキの勢いで、屋根の客をホームへ放り込む。</b><span>最初の1本は研修運転。見習い車掌がとなりで教えてくれる（3分くらい）</span></div><div class="note">持ち込み改造とコンボ図鑑は、1本走ると開く</div></div>
         <details class="how"><summary>遊び方（タップで開く）</summary><ul class="rules">
@@ -542,7 +547,10 @@
           <li>遅れが上限を超えるか、信頼0で運転打ち切り</li>
         </ul></details>
         <div class="hub-tabs"><button id="tab-lo" type="button" class="on">持ち込み改造</button><button id="tab-book" type="button">コンボ図鑑</button></div>
-        <div id="ups"></div>
+        <div id="lo-panel" hidden>
+          <div class="hub-bank"><span><b id="hub-bank">0</b></span><span style="font-weight:900">車両基地の貯金</span></div>
+          <div id="ups"></div>
+        </div>
         <div id="book" hidden></div>
         <div class="reset-row"><button id="btn-tutorial" type="button">研修運転をもう一度</button><span>貯金・解放した改造・記録をすべて消します（音とズームの設定は残る）</span><button id="btn-reset" type="button">データ初期化</button></div>
         <button id="btn-start" class="btn primary" type="button">江ノ電へ出発 ▶</button>

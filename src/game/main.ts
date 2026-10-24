@@ -503,13 +503,16 @@ setRewinder((snap) => {
 });
 // データ初期化（2回押しで確定）
 let resetArmed = -Infinity;
-let hubTab: 'lo' | 'book' = 'lo';
+// タブは最初は閉じておく。押すと開き、もう一度押すと閉じる
+let hubTab: 'lo' | 'book' | null = null;
 $('tab-lo').addEventListener('click', () => {
-  hubTab = 'lo';
+  hubTab = hubTab === 'lo' ? null : 'lo';
+  sfx.select();
   renderHub();
 });
 $('tab-book').addEventListener('click', () => {
-  hubTab = 'book';
+  hubTab = hubTab === 'book' ? null : 'book';
+  sfx.select();
   renderHub();
 });
 $('btn-reset').addEventListener('click', () => {
@@ -543,13 +546,13 @@ function renderHub() {
   // はじめて：研修運転だけを見せる
   const first = !meta.tutorialDone && meta.runs === 0;
   $('hub-first').hidden = !first;
-  for (const sel of ['.how', '.hub-tabs', '.reset-row', '#hub-bank']) {
+  for (const sel of ['.how', '.hub-tabs', '.reset-row']) {
     const el = document.querySelector<HTMLElement>(sel);
-    if (el) (sel === '#hub-bank' ? (el.closest('.hub-bank') as HTMLElement) : el).hidden = first;
+    if (el) el.hidden = first;
   }
   const found = COMBOS.filter((c) => meta.combos[c.id]).length;
   $('tab-book').innerHTML = `コンボ図鑑 <small>${found}/${COMBOS.length}</small>`;
-  $('ups').hidden = first || hubTab !== 'lo';
+  $('lo-panel').hidden = first || hubTab !== 'lo';
   $('book').hidden = first || hubTab !== 'book';
   $('tab-lo').classList.toggle('on', hubTab === 'lo');
   $('tab-book').classList.toggle('on', hubTab === 'book');
@@ -1200,6 +1203,48 @@ function watchSounds() {
   }
 }
 
+// ---------- トップ画面の走行映像 ----------
+let demo: Run | null = null;
+function makeDemo(): Run {
+  const r = newRun({ ...meta, loadout: 'normal', tips: [...meta.tips] }, false);
+  setCarPalette(S.LINE.cars);
+  r.obstacles = r.obstacles.map(() => []);
+  r.offer = null;
+  // 屋根に客を2人乗せて走る
+  for (const c of r.candidates.slice(0, 4)) togglePick(r, c.id);
+  r.pax.slice(0, 2).forEach((p) => moveToLevel(r, p.id, 0, 2));
+  r.candidates = [];
+  r.picked.clear();
+  r.phase = 'running';
+  r.x = POS[0] + 30;
+  r.v = 12;
+  r.target = 1;
+  return r;
+}
+function drawHubScene(dt: number) {
+  const cv = $('hub-scene') as HTMLCanvasElement;
+  const rc = cv.getBoundingClientRect();
+  if (!rc.width) return;
+  if (!demo || demo.meta.line !== meta.line) demo = makeDemo();
+  const r = demo;
+  r.time += dt;
+  r.x += r.v * dt;
+  if (r.x > POS[POS.length - 1] - 30) r.x = POS[0] + 30;
+  r.target = Math.max(1, POS.findIndex((p) => p > r.x));
+  const dpr = window.devicePixelRatio || 1;
+  const W2 = Math.round(rc.width * dpr);
+  const H2 = Math.round(rc.height * dpr);
+  if (cv.width !== W2 || cv.height !== H2) {
+    cv.width = W2;
+    cv.height = H2;
+  }
+  const c = cv.getContext('2d')!;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.fillStyle = '#F5EFE3';
+  c.fillRect(0, 0, rc.width, rc.height);
+  drawOutside(c, r, rc.width - 5, 0, rc.height - 5, [], 1.5);
+}
+
 // ---------- ループ ----------
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get('speed')) || 1);
@@ -1252,7 +1297,10 @@ function frame(now: number) {
     }
     renderHud();
     updateCoach(R, meta, shopOpen && !!R.offer, now);
-  } else hideCoach();
+  } else {
+    hideCoach();
+    if (screen === 'hub' && !$('hub').hidden) drawHubScene(dt);
+  }
   watchSounds();
   requestAnimationFrame(frame);
 }
