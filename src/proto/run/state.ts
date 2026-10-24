@@ -30,7 +30,9 @@ export const OVERRUN_MAX = 60;
 export const REVERSE_V = 3.5;
 /** 予定の平均速度 [m/s]（これより速く走れば遅れを取り戻せる） */
 export const PLAN_V = 11;
-export const DWELL_PLAN = 20;
+/** 1区間ごとに見込む加減速のぶん [秒] */
+export const SECTION_EXTRA = 6;
+export const sectionTime = (k: number) => LINE.sections[k] / PLAN_V + SECTION_EXTRA;
 
 // ---------- 衝撃の式（バランス調整はここだけ） ----------
 export const SHOCK = {
@@ -250,8 +252,12 @@ export interface Run {
   delay: number;
   /** 予定に対する差（負なら早い） */
   ahead: number;
-  schedule: number[]; // 各駅の到着予定時刻
-  depart: number; // 発車予定時刻（停車中）
+  /** ダイヤの時計（走っている間だけ進む） */
+  clock: number;
+  schedule: number[]; // 各駅の到着予定（ダイヤの時計で）
+  arrivals: (number | null)[]; // 実際の到着
+  paused: boolean;
+  rank: { name: string; mult: number } | null;
   jolt: number; // 高速走行の揺れまでの残り
   fliers: Flier[];
   shocks: ShockEvt[];
@@ -326,8 +332,11 @@ export function newRun(meta: Meta): Run {
     trust: 100,
     delay: 0,
     ahead: 0,
+    clock: 0,
     schedule: [],
-    depart: 25,
+    arrivals: LINE.stations.map((_, i) => (i === 0 ? 0 : null)),
+    paused: false,
+    rank: null,
     jolt: SHOCK.joltEvery,
     fliers: [],
     shocks: [],
@@ -339,13 +348,12 @@ export function newRun(meta: Meta): Run {
     stats: { carried: 0, flew: 0, shocks: 0, maxShock: 0, early: 0 },
     nextId: 1,
   };
-  let t = 25;
+  let t = 0;
   r.schedule.push(0);
-  for (const d of LINE.sections) {
-    t += d / PLAN_V;
+  LINE.sections.forEach((_, k) => {
+    t += sectionTime(k);
     r.schedule.push(t);
-    t += DWELL_PLAN;
-  }
+  });
   r.candidates = genCandidates(r, 0);
   return r;
 }
@@ -551,10 +559,10 @@ function arrive(r: Run) {
   r.v = 0;
   r.doorAnim = 0;
   r.stuck = 0;
-  const diff = r.time - r.schedule[st];
+  const diff = r.clock - r.schedule[st];
   r.delay = Math.max(0, diff);
   r.ahead = diff;
-  r.depart = Math.max(r.time + 12, r.schedule[st] + DWELL_PLAN);
+  r.arrivals[st] = r.clock;
   // 早着ボーナス
   if (diff < 0) {
     const bonus = Math.round(-diff * 12);
@@ -580,6 +588,7 @@ function arrive(r: Run) {
   if (earned) toast(r, `運賃 +¥${earned.toLocaleString()}`, 'good');
   if (st >= N_ST - 1) {
     r.phase = 'clear';
+    r.rank = diff <= 0 ? { name: '定時運行', mult: 1.5 } : diff <= 20 ? { name: 'ほぼ定時', mult: 1.2 } : diff <= 60 ? { name: '遅れあり', mult: 1.0 } : { name: '大遅延', mult: 0.8 };
     return;
   }
   r.candidates = genCandidates(r, st);
@@ -589,24 +598,45 @@ function arrive(r: Run) {
   r.offer = opts;
 }
 
-/** 予定どおりなら今いるはずの時刻との差（正なら遅れ） */
+/** ダイヤどおりなら、この位置にいる時刻 */
+export function planTimeAt(x: number): number {
+  for (let k = 0; k < LINE.sections.length; k++) {
+    if (x <= POS[k + 1] || k === LINE.sections.length - 1) {
+      const u = Math.max(0, Math.min(1, (x - POS[k]) / LINE.sections[k]));
+      return r0(k) + u * sectionTime(k);
+    }
+  }
+  return 0;
+}
+const r0 = (k: number) => {
+  let t = 0;
+  for (let i = 0; i < k; i++) t += sectionTime(i);
+  return t;
+};
+/** ゴースト列車（ダイヤどおりに走る列車）の位置 */
+export function ghostX(clock: number): number {
+  let t = clock;
+  for (let k = 0; k < LINE.sections.length; k++) {
+    const st = sectionTime(k);
+    if (t <= st) return POS[k] + (t / st) * LINE.sections[k];
+    t -= st;
+  }
+  return POS[POS.length - 1];
+}
 function scheduleDiff(r: Run): number {
-  const st = r.target;
-  const expected = r.schedule[st - 1] + DWELL_PLAN + Math.max(0, r.x - POS[st - 1]) / PLAN_V;
-  return r.time - expected;
+  return r.clock - planTimeAt(r.x);
 }
 
 export function update(r: Run, dt: number) {
-  if (r.phase === 'clear' || r.phase === 'over') return;
+  if (r.phase === 'clear' || r.phase === 'over' || r.paused) return;
   r.time += dt;
+  if (r.phase === 'running') r.clock += dt;
   r.toasts = r.toasts.filter((t) => r.time - t.t < 2.6);
   r.fliers = r.fliers.filter((f) => r.time - f.t < 2.2);
   r.shocks = r.shocks.filter((s) => r.time - s.t < 2.4);
 
   if (r.phase === 'dwell') {
     r.doorAnim = Math.min(1, r.doorAnim + dt * 3);
-    r.ahead = r.time - r.depart;
-    r.delay = Math.max(0, r.ahead);
   } else {
     r.doorAnim = Math.max(0, r.doorAnim - dt * 3);
     driving(r, dt);
@@ -788,4 +818,18 @@ export function eject(r: Run, id: number) {
     r.fliers.push({ pax: p, t: r.time, x: r.x - 12 + (r.spots[p.spot]?.x ?? 6) });
     toast(r, `${KINDS[p.kind].name}を窓から降ろした（信頼−${loss}）`, 'bad');
   } else toast(r, `${KINDS[p.kind].name}に途中で降りてもらった（信頼−${loss}）`, 'bad');
+}
+
+/** 今の速さでの揺れの衝撃（60km/h以下なら0） */
+export function joltShock(r: Run): number {
+  const k = kmh(r.v);
+  if (r.phase !== 'running' || k <= SHOCK.joltFrom) return 0;
+  return soften(r, (k - SHOCK.joltBase) * SHOCK.joltK);
+}
+/** 次に来る脅威の衝撃（次の障害の予測と揺れの大きいほう） */
+export function threat(r: Run): number {
+  const o = nextObstacle(r);
+  let sh = 0;
+  if (o) sh = o.kind === 'tree' && r.phase === 'running' ? predictShock(r, o, Math.max(r.v, (treeNeed(r) + 2) / 3.6)) : predictShock(r, o);
+  return Math.max(sh, joltShock(r));
 }

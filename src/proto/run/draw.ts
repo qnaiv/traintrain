@@ -14,6 +14,8 @@ import {
   STOP_HI,
   STOP_LO,
   WAVE_PERIOD,
+  threat,
+  ghostX,
   WAVE_UP,
   waveUp,
   effTol,
@@ -99,6 +101,21 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
     ahead: 46,
     extra: (iso, put) => {
       for (const o of obs) drawObstacle(iso, put, r, o, labels, hits);
+      // ゴースト列車（ダイヤどおりの位置）
+      if (r.phase === 'running') {
+        const gx = ghostX(r.clock);
+        if (iso.inX(gx - 12, gx) && Math.abs(gx - r.x) > 1) {
+          put(gx - 6, 0.01, () => {
+            ctx.globalAlpha = 0.32;
+            iso.box(gx - 11.7, gx - 0.3, -1.3, 1.3, 0.95, 3.85, '#8299E0', { lw: iso.lw * 0.8 });
+            ctx.globalAlpha = 1;
+          });
+          labels.push(() => {
+            const [lx, ly] = iso.P(gx - 6, 0, 5.2);
+            pill(ctx, lx, ly, 'ダイヤ', '#CFD8F5', '#2C47A0', 10);
+          });
+        }
+      }
       // ホームの候補
       if (r.phase === 'dwell') {
         const stop = POS[r.target];
@@ -296,67 +313,171 @@ function deer(iso: Iso, x: number, y: number, hop: number) {
   iso.line([x + 0.7, y, 2.0 + z], [x + 0.8, y + 0.3, 2.6 + z], INK, iso.lw);
 }
 
-// ---------------- 上のバー（この先の障害と駅） ----------------
+// ---------------- 上のバー：上段に全駅、下段に今の区間 ----------------
+export const BAR_H = 104;
 export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: number) {
-  const pad = 16;
-  const st = Math.min(r.target, LINE.stations.length - 1);
+  const pad = 18;
+  const n = LINE.stations.length;
+  const st = Math.min(r.target, n - 1);
   const sec = r.phase === 'dwell' ? r.target : r.target - 1;
-  const a = POS[Math.max(0, sec)];
-  const b = POS[Math.min(LINE.stations.length - 1, sec + 1)];
   const x0 = pad;
   const x1 = w - pad;
+  const total = POS[n - 1];
+  const mapAll = (x: number) => x0 + (Math.max(0, Math.min(total, x)) / total) * (x1 - x0);
+  // 上段の背景（タップで路線図）
+  ctx.fillStyle = 'rgba(255,253,246,0.85)';
+  ctx.beginPath();
+  ctx.roundRect(6, y - 10, w - 12, 46, 12);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(31,27,22,0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // 線
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x0, y + 4);
+  ctx.lineTo(x1, y + 4);
+  ctx.stroke();
+  ctx.strokeStyle = '#6FC3A0';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x0, y + 4);
+  ctx.lineTo(mapAll(r.x), y + 4);
+  ctx.stroke();
+  // 降りる人の数
+  const counts = LINE.stations.map((_, i) => r.pax.filter((p) => p.dest === i).length);
+  LINE.stations.forEach((s, i) => {
+    const sx = mapAll(POS[i]);
+    const passed = i < st || (i === st && r.phase === 'dwell');
+    ctx.beginPath();
+    ctx.arc(sx, y + 4, i === st ? 6 : 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = i === st ? '#E9B23E' : passed ? '#6FC3A0' : '#FFFDF6';
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+    ctx.fillStyle = passed && i !== st ? '#9A9184' : INK;
+    ctx.font = `900 ${i === st ? 10.5 : 9.5}px "Zen Maru Gothic", sans-serif`;
+    ctx.textAlign = i === 0 ? 'left' : i === n - 1 ? 'right' : 'center';
+    ctx.textBaseline = 'alphabetic';
+    const label = s.name.length > 4 && i !== st ? s.name.slice(0, 3) + '…' : s.name;
+    ctx.fillText(label, sx + (i === 0 ? -6 : i === n - 1 ? 6 : 0), y - 1);
+    // 降りる客の点
+    const c = counts[i];
+    for (let k = 0; k < Math.min(c, 4); k++) {
+      ctx.beginPath();
+      ctx.arc(sx - (Math.min(c, 4) - 1) * 4 + k * 8, y + 19, 3.3, 0, Math.PI * 2);
+      ctx.fillStyle = DEST_COLORS[i];
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+    if (c > 4) {
+      ctx.fillStyle = INK;
+      ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`+${c - 4}`, sx + 14, y + 22);
+    }
+  });
+  // ゴーストと自分
+  const gx = mapAll(ghostX(r.clock));
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = '#8299E0';
+  ctx.beginPath();
+  ctx.roundRect(gx - 7, y - 1, 14, 10, 3);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([2, 2]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  const tx = mapAll(r.x);
+  ctx.fillStyle = '#6FC3A0';
+  ctx.beginPath();
+  ctx.roundRect(tx - 8, y - 2, 16, 12, 3);
+  ctx.fill();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = INK;
+  ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('タップで路線図・ダイヤ', x1 + 6, y + 31);
+
+  // ---- 下段：今の区間 ----
+  const yb = y + 52;
+  const a = POS[Math.max(0, sec)];
+  const b = POS[Math.min(n - 1, sec + 1)];
   const map = (x: number) => x0 + ((x - a) / (b - a)) * (x1 - x0);
   ctx.lineWidth = 2;
   ctx.strokeStyle = INK;
   ctx.fillStyle = '#FFFDF6';
   ctx.beginPath();
-  ctx.roundRect(x0, y, x1 - x0, 9, 5);
+  ctx.roundRect(x0, yb, x1 - x0, 9, 5);
   ctx.fill();
   ctx.stroke();
   const px = Math.max(x0, Math.min(x1, map(r.phase === 'dwell' ? a : r.x)));
   ctx.fillStyle = '#6FC3A0';
   ctx.beginPath();
-  ctx.roundRect(x0, y, Math.max(9, px - x0), 9, 5);
+  ctx.roundRect(x0, yb, Math.max(9, px - x0), 9, 5);
   ctx.fill();
   ctx.stroke();
+  // ゴースト（区間内にいるとき）
+  const g = ghostX(r.clock);
+  if (r.phase === 'running' && g >= a && g <= b) {
+    const gxx = map(g);
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = '#8299E0';
+    ctx.beginPath();
+    ctx.moveTo(gxx, yb - 2);
+    ctx.lineTo(gxx - 6, yb - 10);
+    ctx.lineTo(gxx + 6, yb - 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   for (const o of r.obstacles[sec] ?? []) {
     const ox = map(o.x);
     const done = o.state !== 'wait';
     ctx.globalAlpha = done ? 0.35 : 1;
     ctx.beginPath();
-    ctx.arc(ox, y + 4.5, 14, 0, Math.PI * 2);
-    ctx.fillStyle = o.kind === 'pole' || o.kind === 'deer' ? '#FBE3DC' : o.kind === 'tree' ? '#FFF4DA' : '#FFFDF6';
+    ctx.arc(ox, yb + 4.5, 13, 0, Math.PI * 2);
+    ctx.fillStyle = o.kind === 'pole' || o.kind === 'deer' ? '#FBE3DC' : o.kind === 'tree' ? '#FFF4DA' : o.kind === 'wave' ? '#CFE6EE' : '#FFFDF6';
     ctx.fill();
+    ctx.strokeStyle = INK;
     ctx.stroke();
     ctx.fillStyle = INK;
-    ctx.font = '900 13px "Zen Maru Gothic", sans-serif';
+    ctx.font = '900 12px "Zen Maru Gothic", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(OBS_INFO[o.kind].ch, ox, y + 5);
-    ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
+    ctx.fillText(OBS_INFO[o.kind].ch, ox, yb + 5);
+    ctx.font = '900 10px "Zen Maru Gothic", sans-serif';
     const sub = o.kind === 'tree' ? `${treeNeed(r)}↑` : o.kind === 'curve' ? `${CURVE_V}↓` : o.kind === 'pole' ? `連打${o.need}` : o.kind === 'wave' ? 'すきに' : 'タップ';
-    ctx.fillText(sub, ox, y + 30);
+    ctx.fillText(sub, ox, yb + 27);
     ctx.globalAlpha = 1;
   }
-  // 駅
   const sx = map(b);
   ctx.beginPath();
-  ctx.arc(sx - 6, y + 4.5, 11, 0, Math.PI * 2);
+  ctx.arc(sx - 6, yb + 4.5, 11, 0, Math.PI * 2);
   ctx.fillStyle = '#E9B23E';
   ctx.fill();
+  ctx.strokeStyle = INK;
   ctx.stroke();
   ctx.fillStyle = INK;
   ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
-  ctx.fillText('駅', sx - 6, y + 5);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('駅', sx - 6, yb + 5);
   ctx.textAlign = 'right';
-  ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
-  const name = LINE.stations[Math.min(LINE.stations.length - 1, sec + 1)].name;
+  const name = LINE.stations[Math.min(n - 1, sec + 1)].name;
   if (r.phase === 'running') {
     const d = POS[st] + STOP_LO - r.x;
     const msg = d > 0 ? `${name} あと${Math.round(d)}m` : r.x <= POS[st] + STOP_HI ? `${name} 停止範囲内！` : '行き過ぎ！ バックで戻れる';
     ctx.fillStyle = d <= 0 && r.x <= POS[st] + STOP_HI ? '#2E6B53' : INK;
-    ctx.fillText(msg, x1, y + 30);
-  } else ctx.fillText(`次 ${name}`, x1, y + 30);
+    ctx.fillText(msg, x1, yb + 27);
+  } else ctx.fillText(`次 ${name}`, x1, yb + 27);
 }
 
 // ---------------- 中 ----------------
@@ -409,6 +530,7 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
   iso.box(b0, b1, -1.2, -0.74, 0.4, 0.52, '#6FBF95', { lw: iso.lw * 0.8 });
   iso.box(b0, b1, -1.2, -1.05, 0.52, 1.0, '#5DAA84', { lw: iso.lw * 0.8 });
   // 人と手すり（奥から）
+  const threatNow = threat(r);
   const items: { d: number; f: () => void }[] = [];
   const badges: (() => void)[] = [];
   const o = nextObstacle(r);
@@ -421,17 +543,38 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
       d: sp.x + sp.y,
       f: () => {
         const seat = sp.kind === 'seat';
+        const tol = effTol(r, p);
+        const danger = threatNow > 0 && threatNow > tol && !r.airbag;
         const [mx, my] = iso.P(sp.x, sp.y + (seat ? 0.55 : 0), 0.006);
-        iso.ell(mx, my, 0.2 * s * 1.22, 0.2 * s * 0.7, DEST_COLORS[p.dest] ?? '#B9B0A2', iso.lw * 0.8);
+        iso.ell(mx, my, 0.3 * s * 1.22, 0.3 * s * 0.7, DEST_COLORS[p.dest] ?? '#B9B0A2', threatNow > 0 ? 3 : iso.lw * 0.8, threatNow > 0 ? (danger ? '#E4553A' : '#2E8F62') : INK);
         const h = sized(iso, sp.x, sp.y, 0, p, seat ? 'sit' : 'stand', seat ? 2 : 0, scaleOf(p));
         hits.push({ kind: 'pax', ref: p, x: h.hx, y: h.hy + h.hr * 2.5, r: Math.max(22, h.hr * 3.4) });
-        const tol = effTol(r, p);
-        const ok = !o || shock <= tol;
         const nextStop = r.phase === 'dwell' ? r.target + 1 : r.target;
-        const dest = LINE.stations[p.dest]?.name ?? '';
+        const left = p.dest - nextStop + 1;
         badges.push(() => {
-          tagAt(ctx, h.hx, h.hy - h.hr * 1.5 - 22, `${p.dest === nextStop ? '次で降りる ' : ''}→${dest}`, DEST_COLORS[p.dest] ?? '#FFFDF6', INK);
-          tagAt(ctx, h.hx, h.hy - h.hr * 1.5 - 4, `${KINDS[p.kind].name} 耐${tol}${o ? (ok ? ' ◯' : ' ✕') : ''}`, ok ? '#6FC3A0' : '#E4553A', ok ? INK : '#FFFDF6');
+          const bx = h.hx;
+          const by = h.hy - h.hr * 1.4 - 12;
+          if (left <= 1) {
+            tagAt(ctx, bx, by + 8 - Math.abs(Math.sin(r.time * 5)) * 3, '降', DEST_COLORS[p.dest] ?? '#FFFDF6', INK);
+          } else {
+            ctx.beginPath();
+            ctx.arc(bx, by, 9, 0, Math.PI * 2);
+            ctx.fillStyle = DEST_COLORS[p.dest] ?? '#FFFDF6';
+            ctx.fill();
+            ctx.strokeStyle = INK;
+            ctx.lineWidth = 1.6;
+            ctx.stroke();
+            ctx.fillStyle = INK;
+            ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(String(left), bx, by + 0.5);
+          }
+          if (danger) {
+            ctx.fillStyle = '#E4553A';
+            ctx.font = '900 13px "Zen Maru Gothic", sans-serif';
+            ctx.fillText('!', bx + 13, by - 2);
+          }
         });
       },
     });

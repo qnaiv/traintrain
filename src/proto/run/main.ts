@@ -1,7 +1,7 @@
 // 「障害突破ラン」の画面と入力。車両基地 → ラン → リザルト → 車両基地 の流れ。
 
 import { DEST_COLORS } from '../../data.ts';
-import { drawBar, drawInside, drawOutside, type Hit } from './draw.ts';
+import { BAR_H, drawBar, drawInside, drawOutside, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
   CURVE_V,
@@ -36,6 +36,7 @@ import {
   useItem,
   waveUp,
   wouldFly,
+  threat,
   type ItemId,
   type Obstacle,
   type Pax,
@@ -73,6 +74,10 @@ const pt = (e: PointerEvent) => {
 };
 canvas.addEventListener('pointerdown', (e) => {
   const [x, y] = pt(e);
+  if (y < 62) {
+    openMap();
+    return;
+  }
   if (mode === 'out') {
     let best: Hit | null = null;
     let bd = Infinity;
@@ -133,7 +138,9 @@ canvas.addEventListener('pointerup', (e) => {
     }
   }
   const ch = canvas.getBoundingClientRect().height;
-  if (drag.moved && y > ch - 2 - 64) {
+  if (!drag.moved) {
+    showPaxCard(drag.id, e.clientX, e.clientY);
+  } else if (drag.moved && y > ch - 2 - 64) {
     eject(R, drag.id);
     sfx.fly();
   } else if (drag.moved && best >= 0) {
@@ -337,8 +344,7 @@ function renderStatus() {
     trendT = 0;
   }
   if (R.phase === 'dwell') {
-    const left = R.depart - R.time;
-    txt.textContent = left > 0 ? `発車まで ${Math.ceil(left)}秒` : `発車遅れ ${mmss(-left)} / ${mmss(R.delayLimit)}`;
+    txt.textContent = R.ahead < -1 ? `停車中（時計停止）−${mmss(-R.ahead)}` : `停車中（時計停止）遅れ ${mmss(R.delay)}`;
   } else {
     txt.textContent = R.ahead < -1 ? `−${mmss(-R.ahead)} 早着ペース` : `遅れ ${mmss(R.delay)} / ${mmss(R.delayLimit)}`;
   }
@@ -478,6 +484,7 @@ function renderSpeedo() {
 
 function renderHud() {
   renderStatus();
+  if (mode === 'in') renderPaxList();
   renderForecast();
   renderSpeedo();
   document.body.classList.toggle('dwell', R.phase === 'dwell');
@@ -568,14 +575,15 @@ function renderHud() {
 function showResult() {
   const clear = R.phase === 'clear';
   const st = Math.min(R.target, LINE.stations.length - 1);
-  const bonus = clear ? Math.round(R.money * 0.3) : 0;
+  const mult = clear && R.rank ? R.rank.mult : 1;
+  const bonus = Math.round(R.money * (mult - 1));
   const total = R.money + bonus;
   meta.bank += total;
   meta.runs += 1;
   meta.best = Math.max(meta.best, total);
   saveMeta(meta);
   $('result-title').textContent = clear ? `終点 ${LINE.stations[LINE.stations.length - 1].name} 到着！` : `${LINE.stations[st].name}の手前で運転打ち切り`;
-  $('result-reason').textContent = clear ? '江ノ電を走りきった！' : `${R.overReason}。`;
+  $('result-reason').textContent = clear ? `評価「${R.rank?.name}」 終点で ${R.ahead <= 0 ? `${mmss(-R.ahead)} 早着` : `${mmss(R.ahead)} 遅れ`}` : `${R.overReason}。`;
   const rows: [string, string][] = [
     ['進んだ駅', `${clear ? LINE.stations.length : st}/${LINE.stations.length}`],
     ['運んだ客', `${R.stats.carried}人`],
@@ -588,10 +596,107 @@ function showResult() {
     ['運賃', `¥${(R.money - R.earlyBonus).toLocaleString()}`],
     ['早着ボーナス', `¥${R.earlyBonus.toLocaleString()}`],
   ];
-  if (clear) money.push(['完走ボーナス（+30%）', `¥${bonus.toLocaleString()}`]);
+  if (clear) money.push([`ダイヤ評価「${R.rank?.name}」×${mult}`, `${bonus >= 0 ? '' : '−'}¥${Math.abs(bonus).toLocaleString()}`]);
   $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">今回の稼ぎ</dt><dd class="sum">¥${total.toLocaleString()}</dd>`;
   $('result-bank').textContent = `貯金 ¥${meta.bank.toLocaleString()}`;
   $('result').hidden = false;
+}
+
+
+// ---------- 路線図・ダイヤ（開いている間はゲームが止まる） ----------
+function openMap() {
+  if (screen !== 'run' || R.phase === 'clear' || R.phase === 'over') return;
+  R.paused = true;
+  R.reverse = false;
+  const n = LINE.stations.length;
+  const curSec = R.phase === 'dwell' ? R.target : R.target - 1;
+  let html = '';
+  for (let i = 0; i < n; i++) {
+    const plan = R.schedule[i];
+    const act = R.arrivals[i];
+    const diff = act == null ? null : act - plan;
+    const here = (R.phase === 'dwell' && i === R.target) || false;
+    const next = R.phase === 'running' && i === R.target;
+    const alight = R.pax.filter((p) => p.dest === i).length;
+    html += `<div class="m-st ${here ? 'here' : ''} ${next ? 'next' : ''} ${act != null && !here ? 'done' : ''}">
+      <span class="dot" style="background:${DEST_COLORS[i]}"></span>
+      <b>${LINE.stations[i].name}</b>
+      <span class="al">${alight ? `降りる客 ${alight}人` : ''}</span>
+      <span class="t">予定 ${mmss(plan)}</span>
+      <span class="t">${act == null ? '—' : `実際 ${mmss(act)}`}</span>
+      <span class="d ${diff == null ? '' : diff <= 0 ? 'ok' : 'late'}">${diff == null ? '' : diff <= 0 ? `−${mmss(-diff)}` : `+${mmss(diff)}`}</span>
+    </div>`;
+    if (i < n - 1) {
+      const visible = i <= curSec + 1;
+      const obs = R.obstacles[i];
+      const icons = visible ? obs.map((o) => `<span class="ob ${o.state !== 'wait' ? 'gone' : ''}">${OBS_INFO[o.kind].ch}</span>`).join('') : '<span class="ob unk">？</span><span class="ob unk">？</span>';
+      const cur = i === curSec && R.phase === 'running';
+      html += `<div class="m-sec ${cur ? 'cur' : ''}"><span class="bar"></span>${icons}<span class="len">${LINE.sections[i]}m</span>${cur ? '<span class="now">いまここ</span>' : ''}</div>`;
+    }
+  }
+  $('map-list').innerHTML = html;
+  const ahead = R.ahead;
+  const remain = n - 1 - (R.phase === 'dwell' ? R.target : R.target - 1);
+  let advice = '';
+  if (ahead > 1 && remain > 0) {
+    const per = ahead / remain;
+    advice = `残り${remain}区間で ${mmss(ahead)} 取り戻すには、1区間あたり約 ${Math.ceil(per)}秒 短縮`;
+  } else advice = ahead <= 0 ? `ダイヤより ${mmss(-ahead)} 早い。このままなら評価「定時運行」` : 'ほぼダイヤどおり';
+  $('map-advice').textContent = advice;
+  $('map').hidden = false;
+}
+function closeMap() {
+  $('map').hidden = true;
+  R.paused = false;
+}
+$('btn-map-close').addEventListener('click', closeMap);
+$('btn-map').addEventListener('click', openMap);
+
+// ---------- 客の詳細カード ----------
+function showPaxCard(id: number, cx: number, cy: number) {
+  const p = R.pax.find((q) => q.id === id);
+  if (!p) return;
+  const k = KINDS[p.kind];
+  const sp = R.spots[p.spot];
+  const parts = [`基本 ${k.tol}`];
+  if (sp?.kind === 'seat') parts.push(`座席 +${(R.mods.has('belt') ? 50 : 20) + R.meta.lv.cushion * 5}`);
+  if (sp?.kind === 'strap') parts.push('つり革 +10');
+  const tol = effTol(R, p);
+  const sumo = tol - k.tol - (sp?.kind === 'seat' ? (R.mods.has('belt') ? 50 : 20) + R.meta.lv.cushion * 5 : sp?.kind === 'strap' ? 10 : 0);
+  if (sumo > 0) parts.push(`力士の隣 +${sumo}`);
+  const nextStop = R.phase === 'dwell' ? R.target + 1 : R.target;
+  const left = p.dest - nextStop + 1;
+  const card = $('pax-card');
+  card.innerHTML = `<b>${k.name}</b><span class="dest"><i style="background:${DEST_COLORS[p.dest]}"></i>${LINE.stations[p.dest].name}まで（${left <= 1 ? '次で降りる' : `あと${left}駅`}）</span><span>耐衝撃 <b class="num">${tol}</b>（${parts.join('＋')}）</span><span class="note">${k.note}</span>`;
+  const b = document.getElementById('app')!.getBoundingClientRect();
+  card.style.left = `${Math.min(b.width - 230, Math.max(8, cx - b.left - 110))}px`;
+  card.style.top = `${Math.max(110, cy - b.top - 150)}px`;
+  card.hidden = false;
+  clearTimeout(cardTimer);
+  cardTimer = window.setTimeout(() => (card.hidden = true), 2600);
+}
+let cardTimer = 0;
+
+// ---------- 車内の一覧 ----------
+let listKey = '';
+function renderPaxList() {
+  const box = $('paxlist');
+  const th = threat(R);
+  const nextStop = R.phase === 'dwell' ? R.target + 1 : R.target;
+  const sorted = [...R.pax].sort((a, b) => a.dest - b.dest || effTol(R, a) - effTol(R, b));
+  const key = sorted.map((p) => `${p.id}:${effTol(R, p)}`).join(',') + '|' + th + '|' + nextStop;
+  if (key === listKey) return;
+  listKey = key;
+  box.innerHTML = sorted.length
+    ? sorted
+        .map((p) => {
+          const t = effTol(R, p);
+          const bad = th > t && !R.airbag;
+          const left = p.dest - nextStop + 1;
+          return `<span class="pl ${bad ? 'bad' : th ? 'ok' : ''}"><i style="background:${DEST_COLORS[p.dest]}">${left <= 1 ? '降' : left}</i>${KINDS[p.kind].name}<b>${t}</b>${th ? (bad ? '✕' : '◯') : ''}</span>`;
+        })
+        .join('')
+    : '<span class="pl-empty">乗っている客はいない</span>';
 }
 
 // ---------- 音 ----------
@@ -677,12 +782,12 @@ function frame(now: number) {
     ctx.fillRect(0, 0, w, h);
     hits = [];
     if (mode === 'out') {
-      const res = drawOutside(ctx, R, w, 52, h - 2, hits);
+      const res = drawOutside(ctx, R, w, BAR_H, h - 2, hits);
       trainBox = res.train;
     } else {
-      drawInside(ctx, R, w, 52, h - 2, drag && drag.moved ? drag : null, hits);
+      drawInside(ctx, R, w, BAR_H, h - 2, drag && drag.moved ? drag : null, hits);
     }
-    drawBar(ctx, R, w, 16);
+    drawBar(ctx, R, w, 22);
     renderHud();
   }
   watchSounds();

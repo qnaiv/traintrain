@@ -52,12 +52,12 @@
       /* ジオラマ */
       main { position: relative; flex: 1; min-height: 0; }
       canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-      #btn-mode { position: absolute; right: 10px; top: 58px; min-width: 88px; height: 40px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 14px; box-shadow: 0 3px 0 var(--ink); }
-      #toasts { position: absolute; top: 60px; left: 12px; right: 110px; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; pointer-events: none; }
+      #btn-mode { position: absolute; right: 10px; top: 112px; min-width: 88px; height: 40px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 14px; box-shadow: 0 3px 0 var(--ink); }
+      #toasts { position: absolute; top: 114px; left: 12px; right: 110px; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; pointer-events: none; }
       .toast { padding: 4px 11px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 12.5px; }
       .toast.bad { background: var(--tomato); color: #fffdf6; }
       .toast.good { background: #dff2e8; }
-      #shock { position: absolute; left: 0; right: 0; top: 96px; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; opacity: 0; z-index: 5; }
+      #shock { position: absolute; left: 0; right: 0; top: 150px; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; opacity: 0; z-index: 5; }
       #shock.show { animation: shock 2.2s ease-out forwards; }
       #shock .lbl { padding: 3px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--mustard); font-weight: 900; font-size: 13px; }
       #shock .num { font-family: var(--dela); font-size: 50px; line-height: 1.1; color: var(--tomato); -webkit-text-stroke: 2px var(--ink); transform: rotate(-4deg); }
@@ -143,6 +143,43 @@
       #btn-depart { min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--tomato); color: #fffdf6; box-shadow: 3px 3px 0 var(--ink); font-size: 18px; font-weight: 900; }
       #btn-depart:disabled { opacity: 0.5; }
       body.inside #items { display: none; }
+      #paxlist { display: none; flex-wrap: wrap; gap: 5px; }
+      body.inside #paxlist { display: flex; }
+      body.inside.dwell #cands, body.inside.dwell .dhead { display: none; }
+      .pl { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 3px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-size: 11.5px; font-weight: 900; }
+      .pl i { width: 20px; height: 20px; border: 1.5px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 10.5px; }
+      .pl b { font-family: var(--dela); font-weight: 400; }
+      .pl.ok { border-color: #2e8f62; background: #ddf3e6; }
+      .pl.bad { border-color: #b53e28; background: #fbe3dc; color: #8a1f0e; }
+      .pl-empty { font-size: 12px; font-weight: 700; color: var(--sub); }
+      #pax-card { position: absolute; z-index: 12; width: 220px; padding: 10px 12px; border: 2.5px solid var(--ink); border-radius: 12px; background: var(--card); box-shadow: 0 4px 0 var(--ink); display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 700; pointer-events: none; }
+      #pax-card[hidden] { display: none; }
+      #pax-card > b { font-size: 15px; }
+      #pax-card .dest { display: flex; align-items: center; gap: 5px; font-weight: 900; }
+      #pax-card .dest i { width: 11px; height: 11px; border: 1.5px solid var(--ink); border-radius: 50%; }
+      #pax-card .num { font-family: var(--dela); font-weight: 400; font-size: 15px; }
+      #pax-card .note { color: var(--sub); font-size: 11px; }
+      #btn-map { position: absolute; left: 10px; top: 112px; height: 32px; padding: 0 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 12px; box-shadow: 0 2px 0 var(--ink); display: none; }
+      #map .box { width: min(460px, 100%); height: 100%; max-height: 100%; }
+      #map-advice { padding: 8px 10px; border: 2px solid var(--ink); border-radius: 10px; background: var(--mustard); font-weight: 900; font-size: 13px; }
+      #map-list { display: flex; flex-direction: column; overflow: auto; flex: 1; }
+      .m-st { display: grid; grid-template-columns: 14px 1fr auto auto 56px; align-items: center; gap: 2px 8px; padding: 6px 4px; border-radius: 10px; font-size: 12px; font-weight: 700; }
+      .m-st .dot { width: 14px; height: 14px; border: 2px solid var(--ink); border-radius: 50%; }
+      .m-st b { font-size: 15px; }
+      .m-st .al { grid-column: 2; grid-row: 2; font-size: 11px; color: #b53e28; font-weight: 900; }
+      .m-st .t { font-variant-numeric: tabular-nums; color: var(--sub); }
+      .m-st .d { text-align: right; font-family: var(--dela); font-size: 13px; }
+      .m-st .d.ok { color: #2e6b53; } .m-st .d.late { color: #b53e28; }
+      .m-st.here, .m-st.next { background: #fff4da; border: 2px solid var(--ink); }
+      .m-st.done b { color: var(--sub); }
+      .m-sec { display: flex; align-items: center; gap: 5px; padding: 4px 0 4px 9px; min-height: 34px; }
+      .m-sec .bar { width: 4px; align-self: stretch; background: var(--ink); border-radius: 2px; margin-right: 14px; }
+      .m-sec.cur .bar { background: var(--mint); }
+      .m-sec .ob { width: 24px; height: 24px; border: 2px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 900; background: #fff4da; }
+      .m-sec .ob.gone { opacity: 0.3; }
+      .m-sec .ob.unk { background: #e6e1d8; color: var(--sub); }
+      .m-sec .len { margin-left: auto; font-size: 10.5px; color: var(--sub); font-weight: 700; }
+      .m-sec .now { padding: 0 8px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mint); font-size: 10.5px; font-weight: 900; }
 
       /* モーダル */
       .modal { position: fixed; inset: 0; background: rgba(31,27,22,0.5); display: grid; place-items: center; padding: 14px; z-index: 20; }
@@ -207,7 +244,9 @@
       <main>
         <canvas id="view"></canvas>
         <button id="btn-mode" type="button">車内 ▶</button>
+        <button id="btn-map" type="button">路線図</button>
         <button id="btn-reverse" type="button" hidden>◀ 押している間バック</button>
+        <div id="pax-card" hidden></div>
         <div id="shock"></div>
         <div id="toasts"></div>
       </main>
@@ -217,6 +256,7 @@
           <div id="fc-scale"></div>
           <div id="fc-bottom"><span id="fc-3"></span><span id="fc-jolt" hidden></span></div>
         </div>
+        <div id="paxlist"></div>
         <div id="run">
           <div id="items"></div>
           <div id="speedo"><div class="val"><span id="sp-num">0</span><span class="unit">km/h</span></div><div id="sp-track"><span class="t" style="left:0%">0</span><span class="t" style="left:25%">20</span><span class="t" style="left:50%">40</span><span class="t" style="left:75%">60</span><span class="t" style="left:100%">80</span><div id="sp-jolt"></div><div id="sp-band" hidden></div><div id="sp-needle"></div><span id="sp-label"></span></div></div>
@@ -228,6 +268,10 @@
           <button id="btn-depart" type="button">発車 ▶</button>
         </div>
       </footer>
+    </div>
+
+    <div id="map" class="modal" hidden>
+      <div class="box"><h3>路線図・ダイヤ</h3><p>開いている間はゲームが止まっている。障害は2区間先まで見える</p><div id="map-advice"></div><div id="map-list"></div><button id="btn-map-close" class="btn primary" type="button">閉じて再開 ▶</button></div>
     </div>
 
     <div id="offer" class="modal" hidden>
