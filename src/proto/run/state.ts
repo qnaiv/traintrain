@@ -29,7 +29,7 @@ export const STOP_HI = 4;
 export const OVERRUN_MAX = 60;
 export const REVERSE_V = 3.5;
 /** 予定の平均速度 [m/s]（これより速く走れば遅れを取り戻せる） */
-export const PLAN_V = 11;
+export const PLAN_V = 10;
 /** 1区間ごとに見込む加減速のぶん [秒] */
 export const SECTION_EXTRA = 6;
 export const sectionTime = (k: number) => LINE.sections[k] / PLAN_V + SECTION_EXTRA;
