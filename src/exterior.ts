@@ -65,6 +65,10 @@ export interface ExtOpts {
   ahead?: number;
   /** 物の描画キューに足す（奥・線路・手前の順で並べ替えられる） */
   extra?: (iso: Iso, put: (x: number, y: number, f: () => void) => void) => void;
+  /** 拡大率（1 = ふだん。大きいほど寄る） */
+  zoom?: number;
+  /** 寄ったときに中心にしたい x [m] */
+  focus?: number;
   /** すべての上に描く */
   after?: (iso: Iso) => void;
 }
@@ -73,17 +77,26 @@ let smoothS = 0;
 
 export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, top: number, bottom: number, opts: ExtOpts = {}): ExtResult {
   const trainLen = g.stats.cars * CAR_LEN;
-  const xb = g.x + (opts.ahead ?? AHEAD);
-  const xa = g.x - trainLen - BEHIND;
+  const xb0 = g.x + (opts.ahead ?? AHEAD);
+  const xa0 = g.x - trainLen - BEHIND;
+  // ズーム：見える長さを 1/zoom に。寄るほど注目点（focus）へ中心を寄せる
+  const zoom = Math.max(0.5, Math.min(3, opts.zoom ?? 1));
+  const c0 = (xa0 + xb0) / 2;
+  const pull = Math.max(0, Math.min(1, 1 - 1 / zoom));
+  const cz = c0 + ((opts.focus ?? c0) - c0) * pull;
+  const half = (xb0 - xa0) / 2 / zoom;
+  const xa = cz - half;
+  const xb = cz + half;
   const Lv = xb - xa;
   // 幅は編成と前後の余白が収まるように、高さは台座全体が収まるように
   const byW = (w - 40) / ((Lv + 6) * C30);
   const byH = (bottom - top - 30) / ((Lv + (W1 - W0)) * 0.5 + DEPTH + 7);
-  const target = Math.min(w < 600 ? 6.4 : 9, byW, byH);
+  // 寄るときは台座の奥・手前がはみ出してもいい（電車を大きく見せる）
+  const target = Math.min((w < 600 ? 6.4 : 9) * zoom, byW, byH * Math.max(1, zoom));
   smoothS = smoothS === 0 ? target : smoothS + (target - smoothS) * 0.08;
   const s = smoothS;
   const cx = (xa + xb) / 2;
-  const cy = (top + bottom) / 2 + 6;
+  const cy = (top + bottom) / 2 + 6 + Math.max(0, zoom - 1) * 14;
   const iso = new Iso(ctx, s, w / 2 - cx * C30 * s, cy - cx * 0.5 * s);
   iso.clipX0 = xa;
   iso.clipX1 = xb;

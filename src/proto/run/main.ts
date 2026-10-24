@@ -80,8 +80,60 @@ const pt = (e: PointerEvent) => {
   const b = canvas.getBoundingClientRect();
   return [e.clientX - b.left, e.clientY - b.top];
 };
+// ---------- ズーム（ピンチ・ホイール） ----------
+const ZOOM_KEY = 'hakobi.run.zoom';
+let userZoom = 1;
+try {
+  userZoom = Number(localStorage.getItem(ZOOM_KEY)) || 1;
+} catch {
+  // 保存できない環境
+}
+let zoomS = userZoom;
+const clampZoom = (z: number) => Math.max(0.6, Math.min(2.4, z));
+function setUserZoom(z: number) {
+  userZoom = clampZoom(z);
+  try {
+    localStorage.setItem(ZOOM_KEY, String(userZoom));
+  } catch {
+    // 無視
+  }
+}
+/** 停車中は電車を大きく */
+const DWELL_ZOOM = 2.4;
+const touches = new Map<number, [number, number]>();
+let pinch: { d0: number; z0: number } | null = null;
+let pendingTrainTap = false;
+const touchDist = () => {
+  const [a, b] = [...touches.values()];
+  return Math.hypot(a[0] - b[0], a[1] - b[1]);
+};
+canvas.addEventListener('pointerdown', (e) => {
+  if (mode === 'out') touches.set(e.pointerId, pt(e) as [number, number]);
+  if (touches.size === 2) {
+    pinch = { d0: Math.max(20, touchDist()), z0: userZoom };
+    pendingTrainTap = false;
+  }
+}, { capture: true });
+window.addEventListener('pointermove', (e) => {
+  if (!touches.has(e.pointerId)) return;
+  touches.set(e.pointerId, pt(e) as [number, number]);
+  if (pinch && touches.size === 2) setUserZoom(pinch.z0 * (touchDist() / pinch.d0));
+});
+const touchEnd = (e: PointerEvent) => {
+  touches.delete(e.pointerId);
+  if (touches.size < 2) pinch = null;
+};
+window.addEventListener('pointerup', touchEnd);
+window.addEventListener('pointercancel', touchEnd);
+canvas.addEventListener('wheel', (e) => {
+  if (mode !== 'out') return;
+  e.preventDefault();
+  setUserZoom(userZoom * Math.exp(-e.deltaY * 0.0015));
+}, { passive: false });
+
 canvas.addEventListener('pointerdown', (e) => {
   const [x, y] = pt(e);
+  if (pinch) return;
   if (y < 62) {
     openMap();
     return;
@@ -103,7 +155,8 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     const t = trainBox;
-    if (t && x >= t.x0 && x <= t.x1 && y >= t.y0 && y <= t.y1) setMode('in');
+    // 電車タップで車内へ（ピンチの1本目でないことを指が離れたときに確かめる）
+    if (t && x >= t.x0 && x <= t.x1 && y >= t.y0 && y <= t.y1) pendingTrainTap = true;
     return;
   }
   let best: Hit | null = null;
@@ -133,6 +186,12 @@ canvas.addEventListener('pointermove', (e) => {
   drag.sy = y;
 });
 canvas.addEventListener('pointerup', (e) => {
+  if (pendingTrainTap && mode === 'out' && !pinch) {
+    pendingTrainTap = false;
+    setMode('in');
+    return;
+  }
+  pendingTrainTap = false;
   if (!drag || drag.pid !== e.pointerId) return;
   const [x, y] = pt(e);
   let best = -1;
@@ -894,7 +953,9 @@ function frame(now: number) {
     ctx.fillRect(0, 0, w, h);
     hits = [];
     if (mode === 'out') {
-      const res = drawOutside(ctx, R, w, BAR_H, h - 2, hits);
+      const zt = userZoom * (R.phase === 'dwell' ? DWELL_ZOOM : 1);
+      zoomS += (zt - zoomS) * Math.min(1, dt * 6);
+      const res = drawOutside(ctx, R, w, BAR_H, h - 2, hits, zoomS);
       trainBox = res.train;
     } else {
       if (focus >= R.cars) focus = 0;

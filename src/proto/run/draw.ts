@@ -99,13 +99,16 @@ export function pill(ctx: CanvasRenderingContext2D, x: number, y: number, text: 
 }
 
 // ---------------- 外 ----------------
-export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, top: number, bottom: number, hits: Hit[]): ExtResult {
+export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, top: number, bottom: number, hits: Hit[], zoom = 1): ExtResult {
   const g = fakeGame(r);
   const sec = r.phase === 'dwell' ? r.target : r.target - 1;
   const obs = r.obstacles[sec] ?? [];
   const labels: (() => void)[] = [];
   const res = drawExterior(ctx, g, w, top, bottom, {
     ahead: 46,
+    zoom,
+    // 停車中は編成の真ん中、走行中は先頭の少し先を中心に寄る
+    focus: r.phase === 'dwell' ? r.x - (r.cars * 12) / 2 : r.x + 4,
     extra: (iso, put) => {
       for (const o of obs) drawObstacle(iso, put, r, o, labels, hits);
       // 着地マット
