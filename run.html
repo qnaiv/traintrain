@@ -143,6 +143,15 @@
       #btn-depart { min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--tomato); color: #fffdf6; box-shadow: 3px 3px 0 var(--ink); font-size: 18px; font-weight: 900; }
       #btn-depart:disabled { opacity: 0.5; }
       body.inside #items { display: none; }
+      #cartabs { display: none; gap: 5px; overflow-x: auto; }
+      body.inside #cartabs { display: flex; }
+      #cartabs:empty { display: none !important; }
+      .cartab { flex: 1 0 64px; height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+      .cartab b { font-size: 12px; } .cartab small { font-size: 10px; font-weight: 700; color: var(--sub); }
+      .cartab.deck { background: #dfe7fb; }
+      #cartabs { flex-wrap: wrap; }
+      .cartab.cur { background: #fff3cf; transform: translateY(-3px); box-shadow: 0 3px 0 var(--ink); }
+      .item.armed .nm { color: #8a1f0e; }
       #paxlist { display: none; flex-wrap: wrap; gap: 5px; }
       body.inside #paxlist { display: flex; }
       body.inside.dwell #cands, body.inside.dwell .dhead { display: none; }
@@ -254,12 +263,13 @@
         <div id="forecast">
           <div id="fc-1"></div>
           <div id="fc-scale"></div>
-          <div id="fc-bottom"><span id="fc-3"></span><span id="fc-jolt" hidden></span></div>
+          <div id="fc-bottom"><span id="fc-3"></span></div>
         </div>
+        <div id="cartabs"></div>
         <div id="paxlist"></div>
+        <div id="items"></div>
         <div id="run">
-          <div id="items"></div>
-          <div id="speedo"><div class="val"><span id="sp-num">0</span><span class="unit">km/h</span></div><div id="sp-track"><span class="t" style="left:0%">0</span><span class="t" style="left:25%">20</span><span class="t" style="left:50%">40</span><span class="t" style="left:75%">60</span><span class="t" style="left:100%">80</span><div id="sp-jolt"></div><div id="sp-band" hidden></div><div id="sp-needle"></div><span id="sp-label"></span></div></div>
+          <div id="speedo"><div class="val"><span id="sp-num">0</span><span class="unit">km/h</span></div><div id="sp-track"><span class="t" style="left:0%">0</span><span class="t" style="left:25%">20</span><span class="t" style="left:50%">40</span><span class="t" style="left:75%">60</span><span class="t" style="left:100%">80</span><div id="sp-band" hidden></div><div id="sp-needle"></div><span id="sp-label"></span></div></div>
           <div id="lever" aria-label="マスコン"></div>
         </div>
         <div id="dwell">

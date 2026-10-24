@@ -10,13 +10,16 @@ import {
   NOTCH_NAME,
   OBS_INFO,
   POS,
-  SHOCK,
   UPGRADES,
   WAVE_PERIOD,
   buyUpgrade,
   chooseOffer,
   depart,
   canReverse,
+  isArmed,
+  moveToCar,
+  moveToLevel,
+  DECK_NAME,
   eject,
   effTol,
   kmh,
@@ -50,6 +53,8 @@ const meta = loadMeta();
 let R: Run = newRun(meta);
 let screen: 'hub' | 'run' = 'hub';
 let mode: 'out' | 'in' = 'out';
+let focus = 0;
+let deckFocus = 0;
 let hits: Hit[] = [];
 let trainBox: { x0: number; y0: number; x1: number; y1: number } | null = null;
 let drag: { id: number; sx: number; sy: number; pid: number; moved: boolean } | null = null;
@@ -138,8 +143,15 @@ canvas.addEventListener('pointerup', (e) => {
     }
   }
   const ch = canvas.getBoundingClientRect().height;
+  const tab = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('.cartab');
   if (!drag.moved) {
     showPaxCard(drag.id, e.clientX, e.clientY);
+  } else if (tab) {
+    const c = tab.dataset.c != null ? Number(tab.dataset.c) : focus;
+    const d = tab.dataset.d != null ? Number(tab.dataset.d) : 0;
+    const ok = tab.dataset.d != null ? moveToLevel(R, drag.id, c, d) : c !== focus ? moveToCar(R, drag.id, c) : false;
+    if (ok) sfx.drop();
+    else sfx.bad();
   } else if (drag.moved && y > ch - 2 - 64) {
     eject(R, drag.id);
     sfx.fly();
@@ -370,7 +382,8 @@ function renderStatus() {
   }
   lastTrust = R.trust;
   document.body.classList.toggle('danger', R.delay > R.delayLimit * 0.8 || R.trust <= 20);
-  const mods = [...R.mods].map((m) => ({ belt: 'シートベルト', ram: '衝角', susp: 'エアサス' })[m]).join('・');
+  const names: Record<string, string> = { belt: 'シートベルト', ram: '衝角', susp: 'エアサス', car: `${R.cars}両編成`, deck: '二階建て', roof: '屋根席', rocket: 'ロケット' };
+  const mods = [...R.mods].map((m) => names[m]).join('・');
   $('h-mods').textContent = mods ? `魔改造：${mods}` : '';
 }
 
@@ -424,20 +437,7 @@ function renderForecast() {
     line1.textContent = '';
     line3.textContent = '';
   }
-  // 揺れ（60km/h超）
-  const jolt = $('fc-jolt');
-  let joltShock = 0;
-  if (k > SHOCK.joltFrom && R.phase === 'running') {
-    joltShock = Math.max(0, Math.round((k - SHOCK.joltBase) * SHOCK.joltK - (R.mods.has('susp') ? 10 : 0) - R.meta.lv.susp * 3));
-    const jf = wouldFly(R, joltShock);
-    jolt.textContent = `揺れまで ${Math.max(0, R.jolt).toFixed(1)}秒 衝撃${joltShock}${jf.length ? `・${jf.length}人飛ぶ` : ''}`;
-    jolt.hidden = false;
-    if (jf.length) {
-      line3.textContent = `揺れで ${jf.map((p) => KINDS[p.kind].name).join('・')} が飛ぶ！ 60km/h以下に落とせ`;
-      line3.className = 'warn';
-    }
-    if (!o) line1.innerHTML = `<span class="obs">高速走行</span><span>${Math.round(k)}km/h</span><span class="shock on">揺れ ≈${joltShock}</span>`;
-  } else jolt.hidden = true;
+  const joltShock = 0;
   // 耐衝撃の目盛り
   const key = R.pax.map((p) => `${p.id}:${effTol(R, p)}`).join(',') + '|' + shock + '|' + joltShock;
   if (scale.dataset.k !== key) {
@@ -445,7 +445,6 @@ function renderForecast() {
     const max = 100;
     let html = `<div class="axis"></div>`;
     if (shock > 0) html += `<div class="line" style="left:${Math.min(100, (shock / max) * 100)}%"><span>${shock}</span></div>`;
-    if (joltShock > 0) html += `<div class="line jolt" style="left:${Math.min(100, (joltShock / max) * 100)}%"><span>揺${joltShock}</span></div>`;
     const sorted = [...R.pax].sort((a, b) => effTol(R, a) - effTol(R, b));
     sorted.forEach((p, i) => {
       const t = effTol(R, p);
@@ -462,7 +461,11 @@ function renderSpeedo() {
   $('sp-num').textContent = String(Math.round(k));
   const o = nextObstacle(R);
   const band = $('sp-band');
-  const max = 80;
+  const max = Math.max(80, Math.ceil((k + 5) / 40) * 40);
+  if (spMax !== max) {
+    spMax = max;
+    $('sp-track').querySelectorAll('.t').forEach((t, i) => (t.textContent = String(Math.round((max * i) / 4))));
+  }
   if (o && R.phase === 'running' && (o.kind === 'tree' || o.kind === 'curve')) {
     const lo = o.kind === 'tree' ? treeNeed(R) : 0;
     const hi = o.kind === 'tree' ? max : CURVE_V;
@@ -478,13 +481,16 @@ function renderSpeedo() {
     $('sp-label').textContent = '';
   }
   $('sp-needle').style.left = `${Math.min(100, (k / max) * 100)}%`;
-  $('sp-jolt').style.left = `${(SHOCK.joltFrom / max) * 100}%`;
-  $('speedo').classList.toggle('jolting', k > SHOCK.joltFrom);
+  $('speedo').classList.toggle('jolting', k > 100);
 }
+let spMax = 0;
 
 function renderHud() {
   renderStatus();
-  if (mode === 'in') renderPaxList();
+  if (mode === 'in') {
+    renderPaxList();
+    renderCarTabs();
+  }
   renderForecast();
   renderSpeedo();
   document.body.classList.toggle('dwell', R.phase === 'dwell');
@@ -496,8 +502,10 @@ function renderHud() {
     const n = R.items[id];
     b.querySelector('.ct')!.textContent = `×${n}`;
     b.classList.toggle('zero', n <= 0);
-    b.disabled = n <= 0 || R.phase !== 'running';
-    b.classList.toggle('armed', (id === 'jump' && R.armed === 'jump') || (id === 'airbag' && R.airbag));
+    const armed = isArmed(R, id);
+    b.disabled = (n <= 0 && !armed) || (R.phase !== 'running' && R.phase !== 'dwell');
+    b.classList.toggle('armed', armed);
+    b.querySelector('.nm')!.textContent = armed ? '構え中（押すと取消）' : ITEM_DEF.find((d) => d.id === id)!.name;
   });
 
   // ホームの候補
@@ -679,6 +687,49 @@ let cardTimer = 0;
 
 // ---------- 車内の一覧 ----------
 let listKey = '';
+let tabKey = '';
+function renderCarTabs() {
+  const box = $('cartabs');
+  const key = `${R.cars}|${R.decks}|${R.roof}|${focus}|${deckFocus}|` + R.pax.map((p) => `${R.spots[p.spot]?.car}.${R.spots[p.spot]?.deck}`).join(',');
+  if (key === tabKey) return;
+  tabKey = key;
+  box.innerHTML = '';
+  // 段のタブ
+  const decks = [0, ...(R.decks > 1 ? [1] : []), ...(R.roof && focus === 0 ? [2] : [])];
+  if (decks.length > 1) {
+    for (const d of decks) {
+      const n = R.pax.filter((p) => R.spots[p.spot]?.car === focus && R.spots[p.spot]?.deck === d).length;
+      const cap = R.spots.filter((sp) => sp.car === focus && sp.deck === d).length;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cartab deck' + (d === deckFocus ? ' cur' : '');
+      b.dataset.c = String(focus);
+      b.dataset.d = String(d);
+      b.innerHTML = `<b>${DECK_NAME[d]}</b><small>${n}/${cap}</small>`;
+      b.addEventListener('click', () => {
+        deckFocus = d;
+        tabKey = '';
+      });
+      box.appendChild(b);
+    }
+  }
+  if (R.cars < 2) return;
+  for (let c = 0; c < R.cars; c++) {
+    const n = R.pax.filter((p) => R.spots[p.spot]?.car === c).length;
+    const cap = R.spots.filter((sp) => sp.car === c).length;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cartab' + (c === focus ? ' cur' : '');
+    b.dataset.c = String(c);
+    b.innerHTML = `<b>${c + 1}号車</b><small>${n}/${cap}</small>`;
+    b.addEventListener('click', () => {
+      focus = c;
+      deckFocus = 0;
+      tabKey = '';
+    });
+    box.appendChild(b);
+  }
+}
 function renderPaxList() {
   const box = $('paxlist');
   const th = threat(R);
@@ -785,7 +836,10 @@ function frame(now: number) {
       const res = drawOutside(ctx, R, w, BAR_H, h - 2, hits);
       trainBox = res.train;
     } else {
-      drawInside(ctx, R, w, BAR_H, h - 2, drag && drag.moved ? drag : null, hits);
+      if (focus >= R.cars) focus = 0;
+      if (deckFocus === 2 && !(R.roof && focus === 0)) deckFocus = 0;
+      if (deckFocus === 1 && R.decks < 2) deckFocus = 0;
+      drawInside(ctx, R, w, BAR_H, h - 2, drag && drag.moved ? drag : null, hits, focus, deckFocus);
     }
     drawBar(ctx, R, w, 22);
     renderHud();

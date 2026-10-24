@@ -1,7 +1,7 @@
 // 試作 v0.7 の描画：外（台座＋障害）、中（1両）、上のバー。
 
 import { CAR_LEN, DEST_COLORS } from '../../data.ts';
-import { drawExterior, type ExtResult } from '../../exterior.ts';
+import { carColor, drawExterior, type ExtResult } from '../../exterior.ts';
 import type { Game } from '../../game.ts';
 import { C30, INK, Iso, hash, shade } from '../../iso.ts';
 import { drawPerson, type Facing } from '../../people.ts';
@@ -44,11 +44,11 @@ function fakeGame(r: Run): Game {
     time: r.time,
     v: r.v,
     x: r.x,
-    stats: { cars: 1, doorsPerCar: 2, levels: {} },
+    stats: { cars: r.cars, doorsPerCar: 2, levels: { capacity: r.decks - 1, cooler: 1 } },
     waiting: 0,
     doorAnim: r.doorAnim,
     layout: new Array(5),
-    passengers: r.pax.map(() => ({ car: 0 })),
+    passengers: r.pax.map((p) => ({ car: r.spots[p.spot]?.car ?? 0 })),
   } as unknown as Game;
 }
 
@@ -135,6 +135,32 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
       }
     },
     after: (iso) => {
+      // 屋根の上の客
+      const top = 0.95 + 2.9 * r.decks + 0.24;
+      if (r.roof) {
+        const riders = r.pax.filter((p) => r.spots[p.spot]?.deck === 2);
+        const x1 = r.x - 0.3;
+        iso.box(x1 - 10.5, x1 - 1.5, -1.1, -1.0, top, top + 0.5, '#9A9184', { lw: iso.lw * 0.6 });
+        for (const p of riders) {
+          const sp = r.spots[p.spot];
+          const wx = r.x - 12 + sp.x;
+          sized(iso, wx, sp.y, top, p, 'stand', 0, scaleOf(p) * 1.0);
+        }
+        iso.box(x1 - 10.5, x1 - 1.5, 1.0, 1.1, top, top + 0.5, '#9A9184', { lw: iso.lw * 0.6 });
+      }
+      // ロケット
+      if (r.mods.has('rocket')) {
+        const rx = r.x - r.cars * CAR_LEN + 0.6;
+        const z0 = top;
+        iso.cylinder(rx + 2.2, 0, z0, z0 + 0.1, 0.1, '#6B655C');
+        iso.box(rx, rx + 4.4, -0.55, 0.55, z0, z0 + 1.1, '#E4553A', { top: '#F08E78' });
+        iso.box(rx + 4.4, rx + 5.0, -0.35, 0.35, z0 + 0.2, z0 + 0.9, '#FFFDF6');
+        if (r.phase === 'running' && r.notch > 4) {
+          const f = 1.6 + Math.sin(r.time * 40) * 0.5 + (r.notch - 4) * 1.0;
+          iso.poly([[rx, -0.45, z0 + 0.1], [rx - f, 0, z0 + 0.55], [rx, 0.45, z0 + 1.0]], '#E9B23E', iso.lw);
+          iso.poly([[rx, -0.25, z0 + 0.3], [rx - f * 0.6, 0, z0 + 0.55], [rx, 0.25, z0 + 0.8]], '#E4553A', 0);
+        }
+      }
       // 吹っ飛ぶ客
       for (const f of r.fliers) {
         const u = Math.min(1, (r.time - f.t) / 1.6);
@@ -480,15 +506,20 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   } else ctx.fillText(`次 ${name}`, x1, yb + 27);
 }
 
-// ---------------- 中 ----------------
-export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top: number, bottom: number, drag: { id: number; sx: number; sy: number } | null, hits: Hit[]) {
+// ---------------- 中（1両ずつ。二階建て・屋根の上は上に浮かせて見せる） ----------------
+const UZ = 4.6;
+export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top: number, bottom: number, drag: { id: number; sx: number; sy: number } | null, hits: Hit[], focus = 0, deck = 0) {
   const L = CAR_LEN;
-  const s = Math.max(12, Math.min((w - 20) / ((L + 2.6) * C30), (bottom - top - 40) / ((L + 2.6) * 0.5 + 4.2), 40));
+  // 1度に見せるのは1つの段だけ（段はタブで切り替え）
+  const levels = [deck];
+  const lift = (d: number) => levels.indexOf(d) * UZ;
+  const extraH = (levels.length - 1) * UZ;
+  const s = Math.max(10, Math.min((w - 20) / ((L + 2.6) * C30), (bottom - top - 40) / ((L + 2.6) * 0.5 + 4.2 + extraH), 40));
   const iso = new Iso(ctx, s, 0, 0);
-  const [cx, cy] = iso.P(L / 2, 0, 0.7);
+  const [cx, cy] = iso.P(L / 2, 0, 0.7 + extraH / 2);
   iso.ox = w / 2 - cx;
   iso.oy = (top + bottom) / 2 - cy + 0.6 * s;
-  const color = '#6FC3A0';
+  const color = carColor(focus);
   // 線路
   const off = ((r.x % 1.2) + 1.2) % 1.2;
   iso.rectZ(-6, L + 6, -1.9, 1.9, -1.32, '#E6DCC8', 0);
@@ -503,112 +534,137 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
     iso.ell(px, py, 0.36 * s, 0.36 * s, '#3A3631', iso.lw);
     iso.ell(px + Math.cos(r.x / 0.45) * 0.18 * s, py + Math.sin(r.x / 0.45) * 0.18 * s, 0.07 * s, 0.07 * s, '#9A9184', 0);
   }
-  // 床
-  iso.box(0, L, -1.3, 1.3, -0.28, 0, color, { top: '#EADFC8', sx: shade(color, 0.72), sy: shade(color, 0.88) });
-  for (let x = 2; x < L; x += 2) iso.line([x, -1.25, 0.002], [x, 1.25, 0.002], 'rgba(31,27,22,0.12)', 1);
-  const doors = [3, 9];
-  for (const d of doors) {
-    iso.rectZ(d - 0.62, d + 0.62, 1.04, 1.3, 0.004, '#E9B23E', 0);
-    iso.rectZ(d - 0.62, d + 0.62, -1.3, -1.04, 0.004, '#E9B23E', 0);
-  }
-  // 立ち位置の目印
-  r.spots.forEach((sp, i) => {
-    const [mx, my] = iso.P(sp.x, sp.y, sp.kind === 'seat' ? 0.53 : 0.006);
-    const occ = r.pax.some((p) => p.spot === i);
-    hits.push({ kind: 'spot', ref: i, x: mx, y: my, r: 0.9 * s });
-    if (sp.kind === 'seat') return;
-    ctx.setLineDash(occ ? [] : [4, 3]);
-    iso.ell(mx, my, 0.42 * s * 1.22, 0.42 * s * 0.7, sp.kind === 'strap' ? 'rgba(91,184,201,0.25)' : 'rgba(31,27,22,0.04)', 1.4, sp.kind === 'strap' ? '#3F8FA3' : '#9A9184');
-    ctx.setLineDash([]);
-  });
-  // 奥の壁と座席（2つだけ）
-  iso.box(0, L, -1.3, -1.2, 0, 0.32, color, { lw: iso.lw * 0.8 });
-  const seatXs = r.spots.filter((q) => q.kind === 'seat').map((q) => q.x);
-  const b0 = Math.min(...seatXs) - 0.6;
-  const b1 = Math.max(...seatXs) + 0.6;
-  iso.box(b0, b1, -1.2, -0.78, 0, 0.4, '#B3A68E', { lw: iso.lw * 0.8 });
-  iso.box(b0, b1, -1.2, -0.74, 0.4, 0.52, '#6FBF95', { lw: iso.lw * 0.8 });
-  iso.box(b0, b1, -1.2, -1.05, 0.52, 1.0, '#5DAA84', { lw: iso.lw * 0.8 });
-  // 人と手すり（奥から）
   const threatNow = threat(r);
-  const items: { d: number; f: () => void }[] = [];
+  const nextStop = r.phase === 'dwell' ? r.target + 1 : r.target;
   const badges: (() => void)[] = [];
   const o = nextObstacle(r);
   const shock = o ? predictShock(r, o, o.kind === 'tree' ? Math.max(r.v, (treeNeed(r) + 2) / 3.6) : r.v) : 0;
-  for (const p of r.pax) {
-    if (drag && drag.id === p.id) continue;
-    const sp = r.spots[p.spot];
-    if (!sp) continue;
-    items.push({
-      d: sp.x + sp.y,
-      f: () => {
-        const seat = sp.kind === 'seat';
-        const tol = effTol(r, p);
-        const danger = threatNow > 0 && threatNow > tol && !r.airbag;
-        const [mx, my] = iso.P(sp.x, sp.y + (seat ? 0.55 : 0), 0.006);
-        iso.ell(mx, my, 0.3 * s * 1.22, 0.3 * s * 0.7, DEST_COLORS[p.dest] ?? '#B9B0A2', threatNow > 0 ? 3 : iso.lw * 0.8, threatNow > 0 ? (danger ? '#E4553A' : '#2E8F62') : INK);
-        const h = sized(iso, sp.x, sp.y, 0, p, seat ? 'sit' : 'stand', seat ? 2 : 0, scaleOf(p));
-        hits.push({ kind: 'pax', ref: p, x: h.hx, y: h.hy + h.hr * 2.5, r: Math.max(22, h.hr * 3.4) });
-        const nextStop = r.phase === 'dwell' ? r.target + 1 : r.target;
-        const left = p.dest - nextStop + 1;
-        badges.push(() => {
-          const bx = h.hx;
-          const by = h.hy - h.hr * 1.4 - 12;
-          if (left <= 1) {
-            tagAt(ctx, bx, by + 8 - Math.abs(Math.sin(r.time * 5)) * 3, '降', DEST_COLORS[p.dest] ?? '#FFFDF6', INK);
-          } else {
-            ctx.beginPath();
-            ctx.arc(bx, by, 9, 0, Math.PI * 2);
-            ctx.fillStyle = DEST_COLORS[p.dest] ?? '#FFFDF6';
-            ctx.fill();
-            ctx.strokeStyle = INK;
-            ctx.lineWidth = 1.6;
-            ctx.stroke();
-            ctx.fillStyle = INK;
-            ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(String(left), bx, by + 0.5);
-          }
-          if (danger) {
-            ctx.fillStyle = '#E4553A';
-            ctx.font = '900 13px "Zen Maru Gothic", sans-serif';
-            ctx.fillText('!', bx + 13, by - 2);
-          }
-        });
-      },
-    });
-  }
-  for (const d of doors) {
-    for (const [px, py] of [[d - 0.72, -0.72], [d + 0.72, -0.72], [d - 0.72, 0.72], [d + 0.72, 0.72]] as [number, number][]) {
+
+  for (const d of levels) {
+    const Z = lift(d);
+    const mine = r.spots.map((sp, i) => ({ sp, i })).filter(({ sp }) => sp.car === focus && sp.deck === d);
+    // 上の段は点線で下の段とつなぐ
+    if (levels.length > 1 && d > 0) {
+      ctx.setLineDash([4, 5]);
+      for (const [px, py] of [[0, -1.3], [L, -1.3], [L, 1.3], [0, 1.3]] as [number, number][]) iso.line([px, py, Z - UZ + 0.4], [px, py, Z - 0.3], '#9A8064', 1.2);
+      ctx.setLineDash([]);
+    }
+    // 床
+    if (d === 2) iso.box(0.2, L - 0.2, -1.15, 1.15, Z - 0.24, Z, '#EDE6D8', { top: '#F2ECDF' });
+    else iso.box(0, L, -1.3, 1.3, Z - 0.28, Z, color, { top: '#EADFC8', sx: shade(color, 0.72), sy: shade(color, 0.88) });
+    for (let x = 2; x < L; x += 2) iso.line([x, -1.15, Z + 0.002], [x, 1.15, Z + 0.002], 'rgba(31,27,22,0.12)', 1);
+    const doors = d === 0 ? [3, 9] : [];
+    for (const dx of doors) {
+      iso.rectZ(dx - 0.62, dx + 0.62, 1.04, 1.3, Z + 0.004, '#E9B23E', 0);
+      iso.rectZ(dx - 0.62, dx + 0.62, -1.3, -1.04, Z + 0.004, '#E9B23E', 0);
+    }
+    // 立ち位置
+    for (const { sp, i } of mine) {
+      const [mx, my] = iso.P(sp.x, sp.y, Z + (sp.kind === 'seat' ? 0.53 : 0.006));
+      hits.push({ kind: 'spot', ref: i, x: mx, y: my, r: 0.9 * s });
+      if (sp.kind === 'seat') continue;
+      const occ = r.pax.some((p) => p.spot === i);
+      ctx.setLineDash(occ ? [] : [4, 3]);
+      iso.ell(mx, my, 0.42 * s * 1.22, 0.42 * s * 0.7, sp.kind === 'strap' ? 'rgba(91,184,201,0.25)' : 'rgba(31,27,22,0.04)', 1.4, sp.kind === 'strap' ? '#3F8FA3' : '#9A9184');
+      ctx.setLineDash([]);
+    }
+    // 奥の壁と座席
+    if (d === 2) {
+      iso.box(0.2, L - 0.2, -1.15, -1.05, Z, Z + 0.5, '#9A9184', { lw: iso.lw * 0.6 });
+    } else {
+      iso.box(0, L, -1.3, -1.2, Z, Z + 0.32, color, { lw: iso.lw * 0.8 });
+      const seatXs = mine.filter(({ sp }) => sp.kind === 'seat').map(({ sp }) => sp.x);
+      if (seatXs.length) {
+        const b0 = Math.min(...seatXs) - 0.6;
+        const b1 = Math.max(...seatXs) + 0.6;
+        iso.box(b0, b1, -1.2, -0.78, Z, Z + 0.4, '#B3A68E', { lw: iso.lw * 0.8 });
+        iso.box(b0, b1, -1.2, -0.74, Z + 0.4, Z + 0.52, '#6FBF95', { lw: iso.lw * 0.8 });
+        iso.box(b0, b1, -1.2, -1.05, Z + 0.52, Z + 1.0, '#5DAA84', { lw: iso.lw * 0.8 });
+      }
+    }
+    // 人と手すり（奥から）
+    const items: { d: number; f: () => void }[] = [];
+    for (const p of r.pax) {
+      if (drag && drag.id === p.id) continue;
+      const sp = r.spots[p.spot];
+      if (!sp || sp.car !== focus || sp.deck !== d) continue;
       items.push({
-        d: px + py + (py > 0 ? 0.3 : 0),
+        d: sp.x + sp.y,
         f: () => {
-          iso.line([px, py, 0], [px, py, 2.05], INK, 0.12 * s + 1.4);
-          iso.line([px, py, 0], [px, py, 2.05], '#D8D2C6', Math.max(0.5, 0.12 * s - 0.4));
+          const seat = sp.kind === 'seat';
+          const tol = effTol(r, p);
+          const danger = threatNow > 0 && threatNow > tol && !r.airbag;
+          const [mx, my] = iso.P(sp.x, sp.y + (seat ? 0.55 : 0), Z + 0.006);
+          iso.ell(mx, my, 0.3 * s * 1.22, 0.3 * s * 0.7, DEST_COLORS[p.dest] ?? '#B9B0A2', threatNow > 0 ? 3 : iso.lw * 0.8, threatNow > 0 ? (danger ? '#E4553A' : '#2E8F62') : INK);
+          const h = sized(iso, sp.x, sp.y, Z, p, seat ? 'sit' : 'stand', seat ? 2 : 0, scaleOf(p));
+          hits.push({ kind: 'pax', ref: p, x: h.hx, y: h.hy + h.hr * 2.5, r: Math.max(22, h.hr * 3.4) });
+          const left = p.dest - nextStop + 1;
+          badges.push(() => {
+            const bx = h.hx;
+            const by = h.hy - h.hr * 1.4 - 12;
+            if (left <= 1) {
+              tagAt(ctx, bx, by + 8 - Math.abs(Math.sin(r.time * 5)) * 3, '降', DEST_COLORS[p.dest] ?? '#FFFDF6', INK);
+            } else {
+              ctx.beginPath();
+              ctx.arc(bx, by, 9, 0, Math.PI * 2);
+              ctx.fillStyle = DEST_COLORS[p.dest] ?? '#FFFDF6';
+              ctx.fill();
+              ctx.strokeStyle = INK;
+              ctx.lineWidth = 1.6;
+              ctx.stroke();
+              ctx.fillStyle = INK;
+              ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(String(left), bx, by + 0.5);
+            }
+            if (danger) {
+              ctx.fillStyle = '#E4553A';
+              ctx.font = '900 13px "Zen Maru Gothic", sans-serif';
+              ctx.fillText('!', bx + 13, by - 2);
+            }
+          });
         },
       });
     }
+    for (const dx of doors) {
+      for (const [px, py] of [[dx - 0.72, -0.72], [dx + 0.72, -0.72], [dx - 0.72, 0.72], [dx + 0.72, 0.72]] as [number, number][]) {
+        items.push({
+          d: px + py + (py > 0 ? 0.3 : 0),
+          f: () => {
+            iso.line([px, py, Z], [px, py, Z + 2.05], INK, 0.12 * s + 1.4);
+            iso.line([px, py, Z], [px, py, Z + 2.05], '#D8D2C6', Math.max(0.5, 0.12 * s - 0.4));
+          },
+        });
+      }
+    }
+    items.sort((a, b) => a.d - b.d).forEach((i) => i.f());
+    // 手前の腰壁・手すり
+    if (d === 2) {
+      iso.box(0.2, L - 0.2, 1.05, 1.15, Z, Z + 0.5, '#9A9184', { lw: iso.lw * 0.6 });
+      iso.label(L / 2, 1.6, Z + 0.2, '屋根の上：耐衝撃−20・運賃×2', 11, '#B53E28');
+    } else {
+      let px0 = 0;
+      for (const dx of [...doors, L + 0.62]) {
+        if (dx - 0.62 - px0 > 0.05) iso.box(px0, dx - 0.62, 1.2, 1.3, Z, Z + 0.32, color, { lw: iso.lw * 0.8 });
+        px0 = dx + 0.62;
+      }
+      if (d === 1) iso.label(L / 2, 1.7, Z + 0.1, '2階：耐衝撃−10', 11, '#8A5D00');
+    }
+    // つり革（1階）
+    if (d === 0) {
+      iso.line([0.4, 0.4, 2.05], [L - 0.4, 0.4, 2.05], '#9A9184', Math.max(1, s * 0.07));
+      for (const { sp } of mine) {
+        if (sp.kind !== 'strap') continue;
+        iso.line([sp.x, sp.y, 2.05], [sp.x, sp.y, 1.8], '#3F8FA3', 1.6);
+        const [rx, ry] = iso.P(sp.x, sp.y, 1.72);
+        iso.ell(rx, ry, 0.09 * s, 0.09 * s, null, 2.2, '#3F8FA3');
+      }
+      iso.label(9.9, 1.05, 0.02, 'つり革 −10', 11, '#3F8FA3');
+      iso.label(2.2, -0.6, 0.02, '通路 ±0', 11, '#5A5045');
+    }
   }
-  items.sort((a, b) => a.d - b.d).forEach((i) => i.f());
-  // 手前の腰壁
-  let px0 = 0;
-  for (const d of [...doors, L + 0.62]) {
-    if (d - 0.62 - px0 > 0.05) iso.box(px0, d - 0.62, 1.2, 1.3, 0, 0.32, color, { lw: iso.lw * 0.8 });
-    px0 = d + 0.62;
-  }
-  // つり革
-  iso.line([0.4, 0.4, 2.05], [L - 0.4, 0.4, 2.05], '#9A9184', Math.max(1, s * 0.07));
-  for (const sp of r.spots) {
-    if (sp.kind !== 'strap') continue;
-    iso.line([sp.x, sp.y, 2.05], [sp.x, sp.y, 1.8], '#3F8FA3', 1.6);
-    const [rx, ry] = iso.P(sp.x, sp.y, 1.72);
-    iso.ell(rx, ry, 0.09 * s, 0.09 * s, null, 2.2, '#3F8FA3');
-  }
-  // 床の文字
-  iso.label((b0 + b1) / 2, -1.15, 1.3, `座席 −${(r.mods.has('belt') ? 50 : 20) + r.meta.lv.cushion * 5}`, 11, '#2E8F62');
-  iso.label(9.9, 1.05, 0.02, 'つり革 −10', 11, '#3F8FA3');
-  iso.label(2.2, -0.6, 0.02, '通路 ±0', 11, '#5A5045');
+  if (r.cars > 1) iso.label(L - 1.0, 1.9, -0.5, `${focus + 1}号車`, 14, INK);
   badges.forEach((f) => f());
   // 持ち上げている客
   if (drag) {
@@ -618,9 +674,7 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
       sub.lw = iso.lw;
       drawPerson(sub, 0, 0, 0, look(p), { pose: 'stand', facing: 0, lift: 0.2 });
     }
-  }
-  // 降ろすゾーン（ドラッグ中だけ）
-  if (drag) {
+    // 降ろすゾーン
     const zy = bottom - 64;
     const over = drag.sy > zy;
     ctx.setLineDash([8, 6]);

@@ -95,17 +95,36 @@ export interface Spot {
   x: number;
   y: number;
   kind: SpotKind;
+  /** 何両目か（0 が先頭） */
+  car: number;
+  /** 0：1階、1：2階、2：屋根の上 */
+  deck: number;
 }
-function buildSpots(m: Meta): Spot[] {
+/** 1両ぶんの位置（1階）。車両基地の強化は全車両に効く */
+function lowerSpots(m: Meta, car: number): Spot[] {
   const seats = [5.5, 6.7, 4.3, 7.9].slice(0, 2 + m.lv.bench);
   const straps = [9.3, 10.5, 2.2, 3.6].slice(0, 2 + m.lv.strap);
   const floors: [number, number][] = [[1.1, -0.25], [2.5, -0.5], [4.9, 0.45], [6.3, 0.45], [7.9, 0.45], [11.1, -0.3]];
   return [
-    ...seats.map((x) => ({ x, y: -0.98, kind: 'seat' as const })),
-    ...straps.map((x) => ({ x, y: 0.42, kind: 'strap' as const })),
-    ...floors.map(([x, y]) => ({ x, y, kind: 'floor' as const })),
+    ...seats.map((x) => ({ x, y: -0.98, kind: 'seat' as const, car, deck: 0 })),
+    ...straps.map((x) => ({ x, y: 0.42, kind: 'strap' as const, car, deck: 0 })),
+    ...floors.map(([x, y]) => ({ x, y, kind: 'floor' as const, car, deck: 0 })),
   ];
 }
+/** 2階：座席が多い */
+function upperSpots(car: number): Spot[] {
+  return [
+    ...[2.6, 3.8, 5.0, 6.2, 7.4, 8.6].map((x) => ({ x, y: -0.98, kind: 'seat' as const, car, deck: 1 })),
+    ...[3.2, 6.0, 8.8].map((x) => ({ x, y: 0.4, kind: 'floor' as const, car, deck: 1 })),
+  ];
+}
+/** 屋根の上 */
+function roofSpots(car: number): Spot[] {
+  return [3.0, 5.0, 7.0, 9.0].map((x) => ({ x, y: 0, kind: 'floor' as const, car, deck: 2 }));
+}
+/** 段ごとの耐衝撃の補正 */
+export const DECK_TOL = [0, -10, -20];
+export const DECK_NAME = ['1階', '2階', '屋根の上'];
 
 // ---------- 障害 ----------
 export type ObsKind = 'tree' | 'curve' | 'deer' | 'pole' | 'wave';
@@ -136,7 +155,7 @@ export function waveUp(t: number): boolean {
 
 // ---------- 3択（ランの中だけ） ----------
 export type ItemId = 'jump' | 'saw' | 'airbag';
-export type ModId = 'belt' | 'ram' | 'susp';
+export type ModId = 'belt' | 'ram' | 'susp' | 'car' | 'deck' | 'roof' | 'rocket';
 export interface Offer {
   id: ItemId | ModId;
   name: string;
@@ -150,7 +169,13 @@ export const OFFERS: Offer[] = [
   { id: 'belt', name: '全席シートベルト', desc: '座席の軽減 −20 → −50', kind: 'mod' },
   { id: 'ram', name: '衝角', desc: '倒木を突き破る速さ 40 → 20km/h', kind: 'mod' },
   { id: 'susp', name: 'エアサス', desc: 'すべての衝撃 −10', kind: 'mod' },
+  { id: 'car', name: '増結', desc: '車両を1両つなぐ。定員+5（何両でも）。そのぶん加速が少し鈍る', kind: 'mod' },
+  { id: 'deck', name: '二階建て', desc: '全車両を二階建てに。定員+両数×6。2階は耐衝撃−10', kind: 'mod' },
+  { id: 'roof', name: '屋根の上の特等席', desc: '先頭車両の屋根に4人乗れる。耐衝撃−20、運賃×2', kind: 'mod' },
+  { id: 'rocket', name: 'ロケットブースター', desc: '加速×1.8、最高速度がさらに伸びる', kind: 'mod' },
 ];
+/** 何度でも取れる魔改造 */
+const REPEAT_MODS: ModId[] = ['car'];
 
 // ---------- 車両基地（ランをまたいで残る強化） ----------
 export type UpId = 'cap' | 'bench' | 'strap' | 'cushion' | 'susp' | 'motor' | 'kit' | 'grace';
@@ -211,7 +236,10 @@ export function buyUpgrade(m: Meta, id: UpId): boolean {
 // ---------- 状態 ----------
 export const NOTCH_A = [-3.6, -2.3, -1.5, -0.8, 0, 0.6, 1.0, 1.4];
 export const NOTCH_NAME = ['非常', 'B3', 'B2', 'B1', 'N', 'P1', 'P2', 'P3'];
-export const VMAX = 20; // m/s (72km/h)
+/** 加速が鈍っていく目安の速さ [m/s]（上限ではない） */
+export function vmaxOf(r: Run): number {
+  return 30 + (r.mods.has('rocket') ? 18 : 0) + r.meta.lv.motor * 3;
+}
 
 export interface Flier {
   pax: Pax;
@@ -230,6 +258,10 @@ export interface Run {
   meta: Meta;
   spots: Spot[];
   cap: number;
+  cars: number;
+  decks: number;
+  roof: boolean;
+  sawArmed: boolean;
   delayLimit: number;
   time: number;
   x: number; // 先頭の位置
@@ -309,8 +341,12 @@ function genCandidates(r: Run, st: number): Pax[] {
 export function newRun(meta: Meta): Run {
   const r: Run = {
     meta,
-    spots: buildSpots(meta),
+    spots: lowerSpots(meta, 0),
     cap: 5 + meta.lv.cap,
+    cars: 1,
+    decks: 1,
+    roof: false,
+    sawArmed: false,
     delayLimit: 120 + meta.lv.grace * 20,
     time: 0,
     x: POS[0] - 4,
@@ -376,11 +412,12 @@ export function effTol(r: Run, p: Pax): number {
   if (!s) return t;
   if (s.kind === 'seat') t += (r.mods.has('belt') ? 50 : 20) + r.meta.lv.cushion * 5;
   else if (s.kind === 'strap') t += 10;
+  t += DECK_TOL[s.deck] ?? 0;
   if (p.kind !== 'sumo') {
     for (const q of r.pax) {
       if (q.kind !== 'sumo' || q === p) continue;
       const o = r.spots[q.spot];
-      if (o && Math.hypot(o.x - s.x, o.y - s.y) < 1.8) t += 20;
+      if (o && o.car === s.car && o.deck === s.deck && Math.hypot(o.x - s.x, o.y - s.y) < 1.8) t += 20;
     }
   }
   return t;
@@ -435,7 +472,7 @@ function applyShock(r: Run, value: number, label: string) {
     if (value > effTol(r, p)) {
       flew.push(KINDS[p.kind].name);
       r.pax = r.pax.filter((q) => q !== p);
-      r.fliers.push({ pax: p, t: r.time, x: r.x - 12 + (r.spots[p.spot]?.x ?? 6) });
+      r.fliers.push({ pax: p, t: r.time, x: spotWorldX(r, p.spot) });
       const big = p.kind === 'old' || p.kind === 'kid' || p.kind === 'vip';
       r.trust -= big ? 15 : 8;
       r.stats.flew++;
@@ -467,36 +504,34 @@ export function tapObstacle(r: Run, o: Obstacle) {
   }
 }
 
+/** アイテムは「構える」→ 次の該当する場面で自動で使われる。もう一度押すと取り消し */
+export function isArmed(r: Run, id: ItemId): boolean {
+  return id === 'jump' ? r.armed === 'jump' : id === 'saw' ? r.sawArmed : r.airbag;
+}
 export function useItem(r: Run, id: ItemId) {
-  if (r.items[id] <= 0 || r.phase !== 'running') return;
-  if (id === 'airbag') {
-    if (r.airbag) return;
-    r.items.airbag--;
-    r.airbag = true;
-    toast(r, 'エアバッグ準備OK', 'good');
+  if (r.phase !== 'running' && r.phase !== 'dwell') return;
+  if (isArmed(r, id)) {
+    r.items[id]++;
+    if (id === 'jump') r.armed = null;
+    else if (id === 'saw') r.sawArmed = false;
+    else r.airbag = false;
+    toast(r, `${ITEM_NAME[id]}を取り消した`, '');
     return;
   }
-  if (id === 'saw') {
-    const o = nextObstacle(r);
-    if (!o || (o.kind !== 'pole' && o.kind !== 'tree')) {
-      toast(r, '次の障害には使えない', 'bad');
-      return;
-    }
-    r.items.saw--;
-    o.state = 'cleared';
-    o.taps = 0;
-    o.t = r.time;
-    r.stuck = 0;
-    toast(r, `${OBS_INFO[o.kind].name}をチェーンソーで一刀両断！`, 'good');
-    return;
-  }
+  if (r.items[id] <= 0) return;
+  r.items[id]--;
   if (id === 'jump') {
-    if (r.armed === 'jump') return;
-    r.items.jump--;
     r.armed = 'jump';
-    toast(r, '次の障害でジャンプ！', 'good');
+    toast(r, '次の障害でジャンプ！（もう一度押すと取り消し）', 'good');
+  } else if (id === 'saw') {
+    r.sawArmed = true;
+    toast(r, '次の電柱か倒木をチェーンソーで切る（もう一度押すと取り消し）', 'good');
+  } else {
+    r.airbag = true;
+    toast(r, '次の衝撃でエアバッグ（もう一度押すと取り消し）', 'good');
   }
 }
+export const ITEM_NAME: Record<ItemId, string> = { jump: 'ジャンプ台', saw: 'チェーンソー', airbag: 'エアバッグ' };
 
 export function togglePick(r: Run, id: number) {
   if (r.picked.has(id)) r.picked.delete(id);
@@ -540,14 +575,13 @@ export function depart(r: Run) {
   r.phase = 'running';
   r.target++;
   r.notch = 5;
-  r.jolt = SHOCK.joltEvery;
 }
 
 export function chooseOffer(r: Run, i: number) {
   const o = r.offer?.[i];
   if (!o) return;
   if (o.kind === 'item') r.items[o.id as ItemId]++;
-  else r.mods.add(o.id as ModId);
+  else applyMod(r, o.id as ModId);
   r.offer = null;
   toast(r, `${o.name} を手に入れた`, 'good');
 }
@@ -576,7 +610,7 @@ function arrive(r: Run) {
   for (const p of [...r.pax]) {
     if (p.dest !== st) continue;
     const k = KINDS[p.kind];
-    let fare = k.fare * (st - p.from);
+    let fare = k.fare * (st - p.from) * (r.spots[p.spot]?.deck === 2 ? 2 : 1);
     if (p.kind === 'vip') fare = 2000;
     if (p.kind === 'sal' && r.delay > 30) fare = Math.round(fare / 2);
     if (p.kind === 'old') r.trust = Math.min(100, r.trust + 5);
@@ -592,7 +626,7 @@ function arrive(r: Run) {
     return;
   }
   r.candidates = genCandidates(r, st);
-  const pool = OFFERS.filter((o) => o.kind === 'item' || !r.mods.has(o.id as ModId));
+  const pool = OFFERS.filter((o) => o.kind === 'item' || REPEAT_MODS.includes(o.id as ModId) || !r.mods.has(o.id as ModId));
   const opts: Offer[] = [];
   while (opts.length < 3 && pool.length) opts.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
   r.offer = opts;
@@ -672,7 +706,7 @@ function driving(r: Run, dt: number) {
   const st = r.target;
   const sec = st - 1;
   let a = NOTCH_A[r.notch];
-  if (a > 0) a *= (1 + r.meta.lv.motor * 0.15) * Math.max(0.15, 1 - r.v / VMAX);
+  if (a > 0) a *= (1 + r.meta.lv.motor * 0.15) * (r.mods.has('rocket') ? 1.8 : 1) * Math.pow(0.92, r.cars - 1) * Math.max(0.08, 1 - r.v / vmaxOf(r));
   a -= 0.05;
   const obs = r.obstacles[sec] ?? [];
   // 電柱に止められる
@@ -693,21 +727,25 @@ function driving(r: Run, dt: number) {
     a = 0;
     r.v = 0;
   }
-  r.v = Math.max(0, Math.min(VMAX, r.v + a * dt));
+  r.v = Math.max(0, r.v + a * dt);
   const x0 = r.x;
   r.x += r.v * dt;
   // バック（止まっているときだけ。停止位置より手前までは戻らない）
   if (r.reverse && r.v < 0.05 && r.notch <= 4) {
     r.x = Math.max(POS[st] + STOP_LO - 2, r.x - REVERSE_V * dt);
   }
-  // 高速走行の揺れ
-  if (kmh(r.v) > SHOCK.joltFrom) {
-    r.jolt -= dt;
-    if (r.jolt <= 0) {
-      r.jolt = SHOCK.joltEvery;
-      applyShock(r, soften(r, (kmh(r.v) - SHOCK.joltBase) * SHOCK.joltK), `高速走行の揺れ（${Math.round(kmh(r.v))}km/h）`);
+  // 構えたチェーンソー
+  if (r.sawArmed) {
+    const o = obs.find((q) => q.state === 'wait' && (q.kind === 'pole' || q.kind === 'tree') && q.x - r.x < 30 && q.x - r.x > -2);
+    if (o) {
+      r.sawArmed = false;
+      o.state = 'cleared';
+      o.taps = 0;
+      o.t = r.time;
+      r.stuck = 0;
+      toast(r, `${OBS_INFO[o.kind].name}をチェーンソーで一刀両断！`, 'good');
     }
-  } else r.jolt = Math.min(SHOCK.joltEvery, r.jolt + dt);
+  }
   // 障害の判定
   for (const o of obs) {
     if (o.state !== 'wait') continue;
@@ -815,16 +853,14 @@ export function eject(r: Run, id: number) {
   r.trust -= loss;
   r.pax = r.pax.filter((q) => q !== p);
   if (r.phase === 'running') {
-    r.fliers.push({ pax: p, t: r.time, x: r.x - 12 + (r.spots[p.spot]?.x ?? 6) });
+    r.fliers.push({ pax: p, t: r.time, x: spotWorldX(r, p.spot) });
     toast(r, `${KINDS[p.kind].name}を窓から降ろした（信頼−${loss}）`, 'bad');
   } else toast(r, `${KINDS[p.kind].name}に途中で降りてもらった（信頼−${loss}）`, 'bad');
 }
 
 /** 今の速さでの揺れの衝撃（60km/h以下なら0） */
-export function joltShock(r: Run): number {
-  const k = kmh(r.v);
-  if (r.phase !== 'running' || k <= SHOCK.joltFrom) return 0;
-  return soften(r, (k - SHOCK.joltBase) * SHOCK.joltK);
+export function joltShock(_r: Run): number {
+  return 0;
 }
 /** 次に来る脅威の衝撃（次の障害の予測と揺れの大きいほう） */
 export function threat(r: Run): number {
@@ -832,4 +868,51 @@ export function threat(r: Run): number {
   let sh = 0;
   if (o) sh = o.kind === 'tree' && r.phase === 'running' ? predictShock(r, o, Math.max(r.v, (treeNeed(r) + 2) / 3.6)) : predictShock(r, o);
   return Math.max(sh, joltShock(r));
+}
+
+/** 位置の、線路の上での x（先頭車両の前端が r.x） */
+export function spotWorldX(r: Run, spot: number): number {
+  const sp = r.spots[spot];
+  if (!sp) return r.x - 6;
+  return r.x - (sp.car + 1) * 12 + sp.x;
+}
+
+function applyMod(r: Run, id: ModId) {
+  r.mods.add(id);
+  if (id === 'car') {
+    const c = r.cars;
+    r.cars++;
+    r.spots.push(...lowerSpots(r.meta, c));
+    if (r.decks > 1) r.spots.push(...upperSpots(c));
+    r.cap += 5;
+  } else if (id === 'deck') {
+    r.decks = 2;
+    for (let c = 0; c < r.cars; c++) r.spots.push(...upperSpots(c));
+    r.cap += r.cars * 6;
+  } else if (id === 'roof') {
+    r.roof = true;
+    r.spots.push(...roofSpots(0));
+    r.cap += 4;
+  }
+}
+
+/** 客をほかの車両へ（空いている位置へ） */
+export function moveToCar(r: Run, id: number, car: number): boolean {
+  const p = r.pax.find((q) => q.id === id);
+  if (!p) return false;
+  const free = r.spots.findIndex((sp, j) => sp.car === car && !r.pax.some((q) => q.spot === j) && sp.deck === 0);
+  const any = free >= 0 ? free : r.spots.findIndex((sp, j) => sp.car === car && !r.pax.some((q) => q.spot === j));
+  if (any < 0) return false;
+  p.spot = any;
+  return true;
+}
+
+/** 客を別の段（1階・2階・屋根）へ */
+export function moveToLevel(r: Run, id: number, car: number, deck: number): boolean {
+  const p = r.pax.find((q) => q.id === id);
+  if (!p) return false;
+  const free = r.spots.findIndex((sp, j) => sp.car === car && sp.deck === deck && !r.pax.some((q) => q.spot === j));
+  if (free < 0) return false;
+  p.spot = free;
+  return true;
 }
