@@ -32,6 +32,34 @@
       .btn.quit { background: var(--card); color: #b53e28; border-color: #b53e28; }
       .btn.quit.armed { background: #b53e28; color: #fffdf6; }
       #menu-note { margin: 0; font-size: 12px; font-weight: 700; color: var(--sub); line-height: 1.5; text-align: center; }
+      #btn-tree { width: 34px; height: 30px; border: 2px solid var(--ink); border-radius: 8px; background: #DDF3E6; font-size: 15px; padding: 0; flex: none; margin-right: 4px; }
+      .tree-box { width: min(480px, 100%); height: 100%; }
+      .tree-head { display: flex; align-items: center; gap: 8px; } .tree-head h3 { margin: 0; font-family: var(--dela); font-weight: 400; font-size: 20px; }
+      #tree-sub { font-size: 11px; font-weight: 800; color: var(--sub); }
+      #btn-tree-x { margin-left: auto; width: 34px; height: 34px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-size: 16px; font-weight: 900; }
+      #tree-panel[hidden] { display: none; }
+      .tree-view { display: flex; flex-direction: column; gap: 10px; }
+      .tr-tabs { display: flex; gap: 5px; } .tr-tabs button { flex: 1; min-height: 38px; border: 2px solid var(--ink); border-radius: 10px; background: #ECE6DB; font-size: 12.5px; font-weight: 900; padding: 2px; line-height: 1.15; }
+      .tr-tabs button small { display: block; font-size: 9.5px; }
+      .tr-tabs button.on { box-shadow: 0 3px 0 var(--ink); }
+      .tr-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 10.5px; font-weight: 800; color: var(--sub); }
+      .tr-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 4px; border: 2px solid var(--ink); vertical-align: -2px; margin-right: 3px; }
+      .tr-legend .own { background: #DDF3E6; } .tr-legend .can { background: #FFFDF6; } .tr-legend .lock { background: #EFEAE0; border: 2px dashed #9A9184; }
+      .tr-body { display: flex; flex-direction: column; gap: 14px; padding: 12px 10px; border: 2px solid var(--ink); border-radius: 16px; background: #FBF8F1; }
+      .tr-group { display: flex; flex-direction: column; gap: 4px; } .tr-group > .gt { font-size: 11px; font-weight: 900; color: var(--sub); }
+      .tr-row { display: flex; align-items: center; gap: 4px; }
+      .tr-arrow { flex: none; width: 14px; height: 2.5px; background: var(--ink); position: relative; } .tr-arrow::after { content: ''; position: absolute; right: -3px; top: -4px; border-left: 7px solid var(--ink); border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+      .tr-br { display: flex; align-items: flex-start; } .tr-br::before { content: ''; flex: none; width: 22px; height: 28px; margin-left: 20px; border-left: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink); border-bottom-left-radius: 8px; margin-top: -2px; }
+      .tr-br .tr-node { margin-top: 8px; }
+      .tr-node { position: relative; flex: 1; min-width: 0; max-width: 200px; box-sizing: border-box; padding: 5px 8px 6px; border: 2.5px solid var(--ink); border-radius: 12px; background: #FFFDF6; box-shadow: 0 3px 0 var(--ink); display: flex; flex-direction: column; gap: 2px; }
+      .tr-node.own { background: #DDF3E6; } .tr-node.lock { border: 2px dashed #9A9184; background: #EFEAE0; box-shadow: none; color: #8A8278; }
+      .tr-node .nh { display: flex; align-items: center; gap: 5px; } .tr-node .nh b { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tr-node .tier { flex: none; font-size: 10px; font-weight: 900; padding: 0 5px; border-radius: 6px; background: var(--ink); color: #FFFDF6; } .tr-node.lock .tier { background: #B9B0A2; }
+      .tr-node .ne { font-size: 10.5px; font-weight: 800; line-height: 1.35; color: var(--sub); } .tr-node.lock .ne { color: #9A9184; }
+      .tr-node .np { font-size: 10.5px; font-weight: 900; }
+      .tr-node.own::after { content: '✓'; position: absolute; right: -6px; top: -8px; width: 20px; height: 20px; border-radius: 50%; background: #2E8F62; border: 2px solid var(--ink); color: #fff; font-size: 11px; font-weight: 900; display: grid; place-items: center; box-sizing: border-box; }
+      .tr-combo { margin: 2px 0 0 42px; padding: 4px 9px; border: 2px solid #B53E28; border-radius: 999px; background: #FFF1EC; font-size: 10.5px; font-weight: 900; color: #B53E28; align-self: flex-start; }
+      .tr-note { font-size: 10.5px; font-weight: 800; color: var(--sub); line-height: 1.5; margin: 0; }
       #btn-sound { width: 34px; height: 30px; border: 2px solid var(--ink); border-radius: 8px; background: var(--card); font-size: 14px; padding: 0; flex: none; }
       .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       .gauge.big { position: relative; height: 26px; border: 2px solid var(--ink); border-radius: 13px; background: var(--card); overflow: visible; }
@@ -316,7 +344,9 @@
       .shop-head { display: flex; align-items: center; justify-content: space-between; }
       #shop-money { font-family: var(--dela); font-size: 17px; }
       .shop-row { display: flex; gap: 8px; margin-top: 10px; }
-      .shop-row .btn { flex: 1; }
+      .shop-row .btn { flex: 1; white-space: nowrap; padding-left: 6px; padding-right: 6px; }
+      .shop-row #btn-shop-tree { flex: none; width: 58px; }
+      .shop-row #btn-shop-close { flex: 1.4; }
       #btn-reroll:disabled { opacity: .45; }
       #btn-shop { flex: .55; min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: #F3D27F; box-shadow: 3px 3px 0 var(--ink); font-size: 13px; font-weight: 900; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
       #btn-shop small { font-size: 10px; }
@@ -458,7 +488,7 @@
     <div id="coach" hidden></div>
     <div id="app">
       <header>
-        <div class="row"><span class="chip" id="h-line">江ノ島電鉄</span><span id="h-station"></span><span id="h-money"></span><button id="btn-sound" type="button" aria-label="音">♪</button><button id="btn-menu" type="button" aria-label="メニュー"><i></i><i></i><i></i></button></div>
+        <div class="row"><span class="chip" id="h-line">江ノ島電鉄</span><span id="h-station"></span><span id="h-money"></span><button id="btn-tree" type="button" aria-label="改造ツリー">🌳</button><button id="btn-sound" type="button" aria-label="音">♪</button><button id="btn-menu" type="button" aria-label="メニュー"><i></i><i></i><i></i></button></div>
         <div class="gauges">
           <div id="g-delay" class="gauge big"><div id="g-delay-fill" class="fill"></div><i class="tick" id="tk1" style="left:50%"><b></b></i><i class="tick" id="tk2" style="left:75%"><b></b></i><span id="g-delay-text" class="text"></span><span id="g-delay-trend" class="trend"></span></div>
           <div id="g-trust" class="gauge big trust"><div id="g-trust-fill" class="fill"></div><span id="g-trust-text" class="text"></span></div>
@@ -526,7 +556,11 @@
     </div>
 
     <div id="offer" class="modal" hidden>
-      <div class="box"><div class="shop-head"><h3>駅のお店</h3><span id="shop-money"></span></div><div id="shop-build"></div><p>停車中は時計が止まっている。お金が続くかぎり何枚でも買える</p><div id="offer-cards"></div><div class="shop-row"><button id="btn-reroll" class="btn" type="button">リロール</button><button id="btn-shop-close" class="btn primary" type="button">買い物を終える</button></div></div>
+      <div class="box"><div class="shop-head"><h3>駅のお店</h3><span id="shop-money"></span></div><div id="shop-build"></div><p>停車中は時計が止まっている。お金が続くかぎり何枚でも買える</p><div id="offer-cards"></div><div class="shop-row"><button id="btn-reroll" class="btn" type="button">リロール</button><button id="btn-shop-tree" class="btn" type="button" aria-label="改造ツリー">🌳</button><button id="btn-shop-close" class="btn primary" type="button">買い物を終える</button></div></div>
+    </div>
+
+    <div id="tree" class="modal" hidden>
+      <div class="box tree-box"><div class="tree-head"><h3>改造ツリー</h3><span id="tree-sub"></span><button id="btn-tree-x" type="button" aria-label="閉じる">×</button></div><div class="tree-view" id="tree-view"></div></div>
     </div>
 
     <div id="result" class="modal" hidden>
@@ -549,7 +583,8 @@
         </div>
         <div id="hub-sub"></div>
         <div class="hub-first" id="hub-first" hidden><div class="pitch"><b>急ブレーキの勢いで、屋根の客をホームへ放り込む。</b><span>最初の1本は研修運転。見習い車掌がとなりで教えてくれる（3分くらい）</span></div><div class="note">持ち込み改造とコンボ図鑑は、1本走ると開く</div></div>
-        <div class="hub-tabs"><button id="tab-how" type="button">遊び方</button><button id="tab-lo" type="button">持ち込み改造</button><button id="tab-book" type="button">コンボ図鑑</button></div>
+        <div class="hub-tabs"><button id="tab-how" type="button">遊び方</button><button id="tab-lo" type="button">持ち込み改造</button><button id="tab-tree" type="button">改造ツリー</button><button id="tab-book" type="button">コンボ図鑑</button></div>
+        <div id="tree-panel" class="tree-view" hidden></div>
         <div id="how-panel" hidden><ol class="how-steps"><li><div class="how-img"><img src="how/pick.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>1</i>駅で客を乗せる</b><span>客ごとに運賃（コイン）と耐衝撃（🛡）が違う。★を長押しで特徴が見られる</span></div></li><li><div class="how-img"><img src="how/seat.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>2</i>席を決める</b><span>車内で客をドラッグ。座席・つり革は衝撃に強い。<b>屋根は射出台</b>（衝撃に弱く、よく飛ぶ）</span></div></li><li><div class="how-img"><img src="how/launch.webp" alt="" loading="lazy"><img src="how/lever.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>3</i>急ブレーキで射出</b><span>駅の手前でレバーを<b>非常</b>へ。耐えられない客が前へ飛ぶ。点線が着地の予測</span></div></li><li><div class="how-img"><img src="how/perfect.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>4</i>ホームに着地</b><span>ホームならGOOD、<b>×2マット</b>ならPERFECTで運賃2倍。駅ごとに続けると上乗せ</span></div></li><li><div class="how-img"><img src="how/obstacle.webp" alt="" loading="lazy"><img src="how/secbar.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>5</i>障害を越える</b><span>倒木は速く突き破り、急カーブは遅く。鹿はタップ、電柱は連打。下のバーに次の障害が出る</span></div></li><li><div class="how-img"><img src="how/shock.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>6</i>誰が飛ぶかを読む</b><span>赤い線が今の衝撃。線より左（耐衝撃が低い）の客が飛ぶ。速さと席で調整しよう</span></div></li><li><div class="how-img"><img src="how/shop.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>7</i>駅のお店</b><span>稼いだコインでアイテムや魔改造を買う。同じタグをそろえるとコンボが起きる</span></div></li><li><div class="how-img"><img src="how/gauge.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>8</i>遅れと信頼</b><span>遅れが上限を超えるか、信頼が0になると運転打ち切り。客を落とすと信頼が減る</span></div></li><li><div class="how-img"><img src="how/result.webp" alt="" loading="lazy"></div><div class="how-tx"><b><i>9</i>持ち帰って強化</b><span>終点に着くと稼ぎの一部を持ち帰れる。貯金で<b>持ち込み改造</b>を解放</span></div></li></ol></div>
         <div id="lo-panel" hidden>
           <div class="hub-bank"><span><b id="hub-bank">0</b></span><span style="font-weight:900">車両基地の貯金</span></div>

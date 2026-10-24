@@ -7,6 +7,7 @@ import { C30, INK, Iso, hash, shade } from '../iso.ts';
 import { drawPerson, type Facing } from '../people.ts';
 import {
   curveV,
+  chuteSlack,
   workV,
   obsTag,
   FLOOD_V,
@@ -296,7 +297,7 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
         const landed = r.time - f.t >= f.tLand;
         const x = f.x + f.vx * t;
         const zAir = Math.max(0, f.z + f.vz * t - (9.8 * t * t) / 2);
-        const slack = r.mods.has('chute') ? 3 : 0;
+        const slack = chuteSlack(r);
         const onPlat = POS.some((pos, i) => i > 0 && f.landX >= pos + PLAT_LO - slack && f.landX <= pos + PLAT_HI + slack);
         if (landed && !onPlat) {
           const k = (r.time - f.t - f.tLand) / 1.2;

@@ -42,6 +42,7 @@ import {
   workV,
   FLOOD_V,
   WORK_REACH,
+  seatBonus,
   obsTag,
   moveToCar,
   moveToLevel,
@@ -394,7 +395,7 @@ function renderInv() {
     }),
   );
   const names: Record<string, string> = Object.fromEntries(OFFERS.map((o) => [o.id, o.name]));
-  $('inv-mods').innerHTML = [...R.mods].map((m) => `<span class="mchip">${tagHtml((OFFER_TAGS[m] ?? []) as Tag[])}${names[m] ?? m}${m === 'car' && R.cars - R.startCars > 1 ? ` ×${R.cars - R.startCars}` : ''}</span>`).join('');
+  $('inv-mods').innerHTML = [...R.mods].filter((m) => ![...R.mods].some((m2) => { const t = S.treeNode(m2); return t?.req === m && t.tier !== '分岐'; })).map((m) => `<span class="mchip">${tagHtml((OFFER_TAGS[m] ?? []) as Tag[])}${names[m] ?? m}${m === 'car' && R.cars - R.startCars > 1 ? ` ×${R.cars - R.startCars}` : ''}</span>`).join('');
   const lo = loadoutOf(R.lo);
   $('inv-lo').innerHTML = `<div class="lo-card"><b>${lo.name}</b><span class="lo-up">＋ ${lo.up}</span><span class="lo-down">− ${lo.down}</span></div>`;
 }
@@ -505,7 +506,12 @@ setRewinder((snap) => {
 // データ初期化（2回押しで確定）
 let resetArmed = -Infinity;
 // タブは最初は閉じておく。押すと開き、もう一度押すと閉じる
-let hubTab: 'how' | 'lo' | 'book' | null = null;
+let hubTab: 'how' | 'lo' | 'tree' | 'book' | null = null;
+$('tab-tree').addEventListener('click', () => {
+  hubTab = hubTab === 'tree' ? null : 'tree';
+  sfx.select();
+  renderHub();
+});
 $('tab-how').addEventListener('click', () => {
   hubTab = hubTab === 'how' ? null : 'how';
   sfx.select();
@@ -560,6 +566,9 @@ function renderHub() {
   $('tab-book').innerHTML = `コンボ図鑑 <small>${found}/${COMBOS.length}</small>`;
   $('lo-panel').hidden = first || hubTab !== 'lo';
   $('how-panel').hidden = first || hubTab !== 'how';
+  $('tree-panel').hidden = first || hubTab !== 'tree';
+  $('tab-tree').classList.toggle('on', hubTab === 'tree');
+  if (hubTab === 'tree') renderTree($('tree-panel'), null);
   $('tab-how').classList.toggle('on', hubTab === 'how');
   $('book').hidden = first || hubTab !== 'book';
   $('tab-lo').classList.toggle('on', hubTab === 'lo');
@@ -596,6 +605,76 @@ function renderHub() {
   }
   $('btn-start').textContent = first ? 'はじめての運転 ▶' : `「${loadoutOf(meta.loadout).name}」で出発 ▶`;
 }
+
+// ---------- 改造ツリー ----------
+const BR: Tag[] = ['射出', '守り', '突破', '満員'];
+let treeBr: Tag = '射出';
+let treeOpen = false;
+/** どのコンボがどの系統に出るか */
+const COMBO_BR: Record<string, Tag[]> = { cannon: ['満員'], upper: ['満員'], tour: ['満員'], retro: ['突破', '射出'], bumper: ['突破'], wall: ['守り'], sling: ['守り', '射出'], salvo: ['射出'] };
+function treeState(r: Run | null, o: S.Offer): 'own' | 'can' | 'lock' {
+  if (!r) return o.tier === 'Ⅰ' ? 'can' : 'lock';
+  if (r.mods.has(o.id as S.ModId) && o.id !== 'car') return 'own';
+  if (o.id === 'car' && r.cars > r.startCars) return 'own';
+  return S.modEligible(r, o) ? 'can' : 'lock';
+}
+function renderTree(box: HTMLElement, r: Run | null) {
+  const mods = OFFERS.filter((o) => o.kind === 'mod');
+  const node = (o: S.Offer) => {
+    const st = treeState(r, o);
+    const extra = o.id === 'car' && r && r.cars > r.startCars ? ` ×${r.cars - r.startCars}` : '';
+    const price = o.id === 'car' && r ? o.price + 3 * (r.cars - r.startCars) : o.price;
+    return `<div class="tr-node ${st}"><div class="nh"><span class="tier">${o.tier}</span><b>${o.name}${extra}</b></div><span class="ne">${o.desc}</span>${st === 'own' && o.id !== 'car' ? '' : `<span class="np">${coinHtml(price)}</span>`}</div>`;
+  };
+  const count = (b: Tag) => `${mods.filter((o) => o.branch === b && r && treeState(r, o) === 'own').length}/${mods.filter((o) => o.branch === b).length}`;
+  let html = `<div class="tr-tabs">${BR.map((b) => `<button type="button" data-b="${b}" class="${b === treeBr ? 'on' : ''}" style="${b === treeBr ? `background:${TAG_BG[b]}` : ''}">【${b}】<small>${r ? count(b) : ''}</small></button>`).join('')}</div>`;
+  html += '<div class="tr-legend"><span><i class="own"></i>持っている</span><span><i class="can"></i>お店に出る</span><span><i class="lock"></i>前の改造が必要</span></div><div class="tr-body">';
+  for (const root of mods.filter((o) => o.branch === treeBr && o.tier === 'Ⅰ')) {
+    const chain = [root];
+    for (;;) {
+      const nx = mods.find((o) => o.req === chain[chain.length - 1].id && o.tier !== '分岐');
+      if (!nx) break;
+      chain.push(nx);
+    }
+    const ids = chain.map((o) => o.id);
+    const kids = mods.filter((o) => o.tier === '分岐' && o.req && ids.includes(o.req));
+    html += `<div class="tr-group"><span class="gt">${root.name}</span><div class="tr-row">${chain.map(node).join('<span class="tr-arrow"></span>')}</div>${kids.map((k) => `<div class="tr-br">${node(k)}</div>`).join('')}</div>`;
+  }
+  for (const c of COMBOS.filter((c) => COMBO_BR[c.id]?.includes(treeBr))) {
+    const known = !!meta.combos[c.id];
+    const hint = c.parts.filter((p) => p !== 'many').map((p) => PART_NAME[p] ?? p).join('＋') || PART_NAME.many;
+    html += `<div class="tr-combo">★ ${known ? c.name : '？？？'}：${known ? coinText(c.eff) : hint}</div>`;
+  }
+  html += '</div><p class="tr-note">お店の3枚は毎回ランダム（アイテムだけの時もある）。改造は白いものだけが出る。Ⅱ・Ⅲは買うと前の段と入れ替わる</p>';
+  box.innerHTML = html;
+  box.querySelectorAll<HTMLButtonElement>('.tr-tabs button').forEach((b) =>
+    b.addEventListener('click', () => {
+      treeBr = b.dataset.b as Tag;
+      sfx.select();
+      renderTree(box, r);
+    }),
+  );
+}
+function openTree() {
+  if (screen !== 'run') return;
+  treeOpen = true;
+  R.paused = true;
+  $('tree-sub').textContent = '開いている間は時間が止まる';
+  renderTree($('tree-view'), R);
+  $('tree').hidden = false;
+  sfx.select();
+}
+function closeTree() {
+  treeOpen = false;
+  if (!invOpen) R.paused = false;
+  $('tree').hidden = true;
+}
+$('btn-tree').addEventListener('click', openTree);
+$('btn-shop-tree').addEventListener('click', openTree);
+$('btn-tree-x').addEventListener('click', closeTree);
+$('tree').addEventListener('click', (e) => {
+  if (e.target === $('tree')) closeTree();
+});
 
 // ---------- HUD ----------
 let candKey = '';
@@ -778,6 +857,7 @@ function renderHud() {
   renderLever();
   renderInvBtns();
   if (invOpen && R.phase !== 'running' && R.phase !== 'dwell') closeInv();
+  if (treeOpen && R.phase !== 'running' && R.phase !== 'dwell') closeTree();
 
   // ホームの候補
   if (R.phase === 'dwell') {
@@ -865,7 +945,7 @@ function renderHud() {
         const hint = o.sold ? null : comboHint(R, o.id);
         const known = hint && meta.combos[hint.combo.id];
         if (hint) b.classList.add('hint');
-        b.innerHTML = `<span class="tagrow"><span class="tag">${o.kind === 'item' ? 'アイテム' : '魔改造'}</span>${tagHtml(OFFER_TAGS[o.id] ?? [])}</span><span class="price">${o.sold ? '購入済み' : (o.price < o.full ? `<s>${o.full}</s> ` : '') + coinHtml(o.price)}</span>${!o.sold && o.price < o.full ? '<span class="sale">セール</span>' : ''}<b>${o.name}</b><span class="d">${o.desc}</span>${hint ? `<span class="combo-hint">◎ ${known ? `${hint.combo.name}：` : ''}${hint.partner}と相性${known ? '' : '（何かが起きる…）'}</span>` : ''}`;
+        b.innerHTML = `<span class="tagrow"><span class="tag">${o.kind === 'item' ? 'アイテム' : '魔改造' + (o.tier && o.tier !== 'Ⅰ' ? ' ' + o.tier : '')}</span>${tagHtml(OFFER_TAGS[o.id] ?? [])}</span><span class="price">${o.sold ? '購入済み' : (o.price < o.full ? `<s>${o.full}</s> ` : '') + coinHtml(o.price)}</span>${!o.sold && o.price < o.full ? '<span class="sale">セール</span>' : ''}<b>${o.name}</b><span class="d">${o.desc}</span>${hint ? `<span class="combo-hint">◎ ${known ? `${hint.combo.name}：` : ''}${hint.partner}と相性${known ? '' : '（何かが起きる…）'}</span>` : ''}`;
         b.addEventListener('click', () => {
           if (buyCard(R, i)) sfx.select();
           else sfx.bad();
@@ -1013,10 +1093,10 @@ function showPaxCard(id: number, cx: number, cy: number) {
   const k = KINDS[p.kind];
   const sp = R.spots[p.spot];
   const parts = [`基本 ${k.tol}`];
-  if (sp?.kind === 'seat') parts.push(`座席 +${(R.mods.has('belt') ? 50 : 20) + R.meta.lv.cushion * 5}`);
+  if (sp?.kind === 'seat') parts.push(`座席 +${seatBonus(R)}`);
   if (sp?.kind === 'strap') parts.push('つり革 +10');
   const tol = effTol(R, p);
-  const sumo = tol - k.tol - (sp?.kind === 'seat' ? (R.mods.has('belt') ? 50 : 20) + R.meta.lv.cushion * 5 : sp?.kind === 'strap' ? 10 : 0);
+  const sumo = tol - k.tol - (sp?.kind === 'seat' ? seatBonus(R) : sp?.kind === 'strap' ? 10 : 0);
   if (sumo > 0) parts.push(`力士の隣 +${sumo}`);
   const nextStop = R.phase === 'dwell' ? R.target + 1 : R.target;
   const left = p.dest - nextStop + 1;
@@ -1041,12 +1121,12 @@ let listKey = '';
 let tabKey = '';
 function renderCarTabs() {
   const box = $('cartabs');
-  const key = `${R.cars}|${R.decks}|${R.roof}|${focus}|${deckFocus}|` + R.pax.map((p) => `${R.spots[p.spot]?.car}.${R.spots[p.spot]?.deck}`).join(',');
+  const key = `${R.cars}|${R.decks}|${R.spots.length}|${focus}|${deckFocus}|` + R.pax.map((p) => `${R.spots[p.spot]?.car}.${R.spots[p.spot]?.deck}`).join(',');
   if (key === tabKey) return;
   tabKey = key;
   box.innerHTML = '';
   // 段のタブ
-  const decks = [0, ...(R.decks > 1 ? [1] : []), ...(R.roof && focus === 0 ? [2] : [])];
+  const decks = [0, ...(R.spots.some((sp) => sp.car === focus && sp.deck === 1) ? [1] : []), ...(R.spots.some((sp) => sp.car === focus && sp.deck === 2) ? [2] : [])];
   if (decks.length > 1) {
     for (const d of decks) {
       const n = R.pax.filter((p) => R.spots[p.spot]?.car === focus && R.spots[p.spot]?.deck === d).length;
@@ -1272,8 +1352,8 @@ function frame(now: number) {
       trainBox = res.train;
     } else {
       if (focus >= R.cars) focus = 0;
-      if (deckFocus === 2 && !(R.roof && focus === 0)) deckFocus = 0;
-      if (deckFocus === 1 && R.decks < 2) deckFocus = 0;
+      if (deckFocus === 2 && !R.spots.some((sp) => sp.car === focus && sp.deck === 2)) deckFocus = 0;
+      if (deckFocus === 1 && !R.spots.some((sp) => sp.car === focus && sp.deck === 1)) deckFocus = 0;
       drawInside(ctx, R, w, BAR_H, h - 2, drag && drag.moved ? drag : null, hits, focus, deckFocus);
     }
     drawBar(ctx, R, w, 22);
