@@ -335,8 +335,8 @@
       .hub-tabs button.on::after { content: ' ▴'; }
       #lo-panel { display: flex; flex-direction: column; gap: 10px; }
       #lo-panel[hidden] { display: none; }
-      .hub-top { position: sticky; top: -8px; z-index: 3; margin: -16px -14px 0; padding: 16px 14px 0; background: var(--paper); display: flex; flex-direction: column; gap: 12px; }
-      #hub-scene { display: block; width: calc(100% + 28px); height: min(40vh, 320px); margin: -4px -14px 0; background: #F5EFE3; border-top: 2.5px solid var(--ink); border-bottom: 2.5px solid var(--ink); box-sizing: border-box; }
+      .hub-top { position: sticky; top: -8px; z-index: 3; margin: -16px -14px 0; padding: 16px 14px 10px; border-bottom: 2.5px solid var(--ink); background: var(--paper); display: flex; flex-direction: column; gap: 12px; }
+      #hub-scene { display: block; width: calc(100% + 28px); height: min(40vh, 320px); margin: -12px -14px 0; background: #F5EFE3; border-bottom: 2.5px solid var(--ink); box-sizing: border-box; }
       #ups[hidden] { display: none !important; }
       #book { display: flex; flex-direction: column; gap: 8px; }
       #book[hidden] { display: none; }
@@ -597,8 +597,8 @@
       <div class="hub-in">
         <div class="hub-top">
           <h1 class="hub-logo"><span>まもなく、</span>魔改造電車が参ります</h1>
-          <canvas id="hub-scene"></canvas>
         </div>
+        <canvas id="hub-scene"></canvas>
         <div id="hub-sub"></div>
         <div class="hub-first" id="hub-first" hidden><div class="pitch"><b>急ブレーキの勢いで、屋根の客をホームへ放り込む。</b><span>最初の1本は研修運転。見習い車掌がとなりで教えてくれる（3分くらい）</span></div><div class="note">持ち込み改造とコンボ図鑑は、1本走ると開く</div></div>
         <div id="lines"></div>
