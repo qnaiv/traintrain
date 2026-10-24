@@ -345,16 +345,88 @@
       .lo .pill { flex: none; padding: 1px 7px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mint); font-size: 10px; font-weight: 900; }
       .lo .pill.cost { background: var(--card); }
       .lo-up { color: #2e6b53; } .lo-down { color: #b53e28; }
-      .up { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
       .up-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
       .up-main b { font-size: 15px; }
-      .up .desc { font-size: 12px; font-weight: 700; color: #2e6b53; }
       .dots { display: flex; gap: 4px; } .dots i { width: 10px; height: 10px; border: 1.5px solid var(--ink); border-radius: 50%; background: var(--card); } .dots i.on { background: var(--mint); }
       .buy { width: 92px; min-height: 48px; border: 2px solid var(--ink); border-radius: 10px; background: var(--mint); font-family: var(--dela); font-size: 14px; box-shadow: 0 3px 0 var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
       .buy small { font-family: 'Zen Maru Gothic', sans-serif; font-size: 10px; font-weight: 900; color: #b53e28; }
       .buy.no, .buy:disabled { background: #e6e1d8; box-shadow: none; }
       #btn-start { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; width: min(492px, calc(100% - 28px)); }
       .dots i { border-style: dashed; } .dots i.on { border-style: solid; }
+
+      /* ---- UI整理案4 ---- */
+      .gauge.big { height: 18px !important; border-radius: 10px !important; }
+      .gauge.big .text { font-size: 10.5px !important; }
+      .gauge.big .tick b { display: none; }
+      .gauges { margin-bottom: 2px !important; }
+      #h-mods { display: none !important; }
+      #secbar { display: block; width: 100%; height: 50px; }
+      body.dwell #secbar, body.inside #secbar { display: none; }
+      #sp-track { display: none !important; }
+      .sp-gap { flex: 1; }
+      #speedo { margin-bottom: 2px !important; }
+      .inv-btn { position: relative; flex: none; height: 42px; padding: 0 14px 0 10px; border: 2.5px solid var(--ink); border-radius: 13px; background: #fff4da; box-shadow: 3px 3px 0 var(--ink); display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 900; }
+      .inv-btn .bag { position: relative; width: 22px; height: 19px; border: 2px solid var(--ink); border-radius: 5px 5px 7px 7px; background: #c9a04a; box-sizing: border-box; margin-top: 4px; }
+      .inv-btn .bag::before { content: ''; position: absolute; left: 4px; right: 4px; top: -7px; height: 6px; border: 2px solid var(--ink); border-bottom: 0; border-radius: 6px 6px 0 0; }
+      .inv-btn .inv-n { min-width: 18px; padding: 0 5px; box-sizing: border-box; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--tomato); color: #fffdf6; font-size: 11px; line-height: 16px; text-align: center; }
+      .inv-btn .inv-n:empty { display: none; }
+      .inv-btn .inv-armed { position: absolute; left: -8px; top: -12px; padding: 0 7px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 10px; line-height: 16px; white-space: nowrap; }
+      .inv-btn .inv-armed:empty { display: none; }
+      .dhead { align-items: center !important; }
+      .dhead b { font-family: var(--dela); font-weight: 400; font-size: 17px; }
+      #seats-sub { display: none; }
+      /* レバー：マスコン型 */
+      #lever { position: relative; display: block !important; height: 66px; touch-action: none; user-select: none; }
+      .lv-track { position: absolute; left: 0; right: 0; top: 10px; height: 24px; border: 2.5px solid var(--ink); border-radius: 999px; box-sizing: border-box; background: linear-gradient(90deg, var(--tomato) 0 10%, #f5c6b8 10% 47%, #ede6d8 47% 53%, #cdebdd 53% 100%); }
+      .lv-slot { position: absolute; left: 12px; right: 12px; top: 7px; height: 6px; border-radius: 999px; background: var(--ink); opacity: .8; }
+      .lv-ticks { position: absolute; left: 0; right: 0; top: 34px; height: 30px; }
+      .lv-ticks span { position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; font-size: 11.5px; font-weight: 900; line-height: 1.05; }
+      .lv-ticks span::before { content: ''; width: 2px; height: 7px; background: var(--ink); margin-bottom: 2px; }
+      .lv-ticks span.eb { color: #b53e28; } .lv-ticks span.pw { color: #2e6b53; }
+      .lv-ticks span small { font-size: 8.5px; }
+      .lv-ticks span.on { font-size: 13px; }
+      .lv-handle { position: absolute; top: -6px; width: 48px; height: 40px; margin-left: -24px; border: 3px solid var(--ink); border-radius: 12px 12px 16px 16px; box-sizing: border-box; background: linear-gradient(180deg, #ffe48a, #e9b23e); box-shadow: 0 4px 0 var(--ink); transition: left .08s ease-out; pointer-events: none; }
+      .lv-handle i { position: absolute; left: 8px; right: 8px; top: 6px; height: 4px; border-radius: 3px; background: rgba(255,255,255,.75); }
+      .lv-handle.eb { background: linear-gradient(180deg, #ff8a6e, #e4553a); }
+      /* 持ち物（全画面） */
+      .modal.full { padding: 0; place-items: stretch; background: var(--paper); }
+      .inv-box { max-width: 520px; width: 100%; margin: 0 auto; box-sizing: border-box; padding: 18px 16px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+      .inv-head { display: flex; align-items: center; gap: 10px; }
+      .inv-head h3 { margin: 0; font-family: var(--dela); font-weight: 400; font-size: 26px; }
+      .inv-pause { padding: 3px 10px; border: 2px solid var(--ink); border-radius: 999px; background: #2c47a0; color: #fffdf6; font-size: 12px; font-weight: 900; }
+      .inv-x { width: 42px; height: 42px; border: 2.5px solid var(--ink); border-radius: 12px; background: var(--card); font-size: 20px; font-weight: 900; }
+      .inv-sec { font-size: 12px; font-weight: 900; color: var(--sub); margin-top: 6px; }
+      #inv-items { display: flex; flex-direction: column; gap: 8px; }
+      .ivr { display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid var(--ink); border-radius: 14px; background: var(--card); }
+      .ivr.zero { border-color: #c9c1b4; background: #efeae1; color: #9a9184; }
+      .ivr .ic { position: relative; flex: none; width: 50px; height: 50px; border: 2.5px solid var(--ink); border-radius: 14px; display: grid; place-items: center; font-size: 21px; font-weight: 900; color: #fffdf6; }
+      .ivr.zero .ic { border-color: #c9c1b4; background: #e3ddd2 !important; color: #b9b0a2; }
+      .ivr .ic b { position: absolute; right: -7px; top: -8px; min-width: 20px; padding: 0 5px; box-sizing: border-box; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); color: var(--ink); font-size: 12px; line-height: 16px; text-align: center; }
+      .ivr.zero .ic b { border-color: #c9c1b4; color: #b9b0a2; }
+      .ivr .tx { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+      .ivr .tx b { font-size: 16px; } .ivr .tx span { font-size: 12px; font-weight: 700; color: var(--sub); }
+      .ivr.zero .tx span { color: #b9b0a2; }
+      .ivr .use { flex: none; padding: 9px 16px; border: 2.5px solid var(--ink); border-radius: 12px; background: var(--tomato); color: #fffdf6; box-shadow: 0 3px 0 var(--ink); font-size: 14px; font-weight: 900; }
+      .ivr .use.on { background: var(--mustard); color: var(--ink); }
+      .ivr .none { font-size: 11px; font-weight: 900; color: #b9b0a2; }
+      #inv-mods { display: flex; flex-wrap: wrap; gap: 6px; }
+      #inv-mods .mchip { display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-size: 12.5px; font-weight: 900; }
+      #inv-mods:empty::after { content: 'まだなし（駅のお店で買える）'; font-size: 12px; font-weight: 700; color: var(--sub); }
+      #inv-lo .lo-card { padding: 10px 12px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; font-weight: 800; }
+      #inv-lo b { font-size: 14px; }
+      #btn-inv-close { margin-top: 10px; }
+      /* 客カード：3行＋★長押し */
+      .cand { padding: 7px 3px 6px !important; gap: 4px !important; }
+      .cand .ic { width: 34px !important; height: 34px !important; font-size: 16px !important; }
+      .cand .star { position: absolute; right: 4px; top: 2px; font-size: 11px; color: var(--mustard); text-shadow: 0 0 1px var(--ink); }
+      .cand .dest { font-size: 11px !important; font-weight: 900 !important; }
+      #cand-tip { position: fixed; z-index: 30; max-width: 220px; padding: 8px 10px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); box-shadow: 3px 3px 0 var(--ink); font-size: 12px; font-weight: 800; line-height: 1.45; pointer-events: none; }
+      #cand-tip[hidden] { display: none; }
+      #cand-tip b { font-size: 13.5px; }
+      #btn-shop { flex: .55 !important; }
+      .chips { display: inline-flex; gap: 10px; align-items: center; }
+      .chips span { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; font-weight: 900; }
+      .chips i { width: 22px; height: 22px; border: 2px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 11px; background: var(--card); }
     </style>
   </head>
   <body>
@@ -374,13 +446,14 @@
         <button id="btn-mode" type="button">車内 ▶</button>
         <button id="btn-map" type="button">路線図</button>
         <button id="btn-reverse" type="button" hidden>◀ 押している間バック</button>
-        <button id="btn-eb" type="button" hidden><b>急ブレーキ射出！</b><small>Space</small></button>
+        
         <div id="pax-card" hidden></div>
         <div id="shock"></div>
         <div id="cutin"></div>
         <div id="toasts"></div>
       </main>
       <footer>
+        <canvas id="secbar"></canvas>
         <div id="forecast">
           <div id="fc-1"></div>
           <div id="fc-scale"></div>
@@ -388,16 +461,16 @@
         </div>
         <div id="cartabs"></div>
         <div id="paxlist"></div>
-        <div id="items"></div>
         <div id="run">
-          <div id="speedo"><div class="val"><span id="sp-num">0</span><span class="unit">km/h</span></div><div id="sp-track"><span class="t" style="left:0%">0</span><span class="t" style="left:25%">20</span><span class="t" style="left:50%">40</span><span class="t" style="left:75%">60</span><span class="t" style="left:100%">80</span><div id="sp-band" hidden></div><div id="sp-needle"></div><span id="sp-label"></span></div></div>
-          <div id="lever" aria-label="マスコン"></div>
+          <div id="speedo"><div class="val"><span id="sp-num">0</span><span class="unit">km/h</span></div><span class="sp-gap"></span><button id="btn-inv" class="inv-btn" type="button"><i class="bag"></i>持ち物<span class="inv-n"></span><span class="inv-armed"></span></button></div>
+          <div id="lever" aria-label="マスコン"><div class="lv-track"><i class="lv-slot"></i></div><div class="lv-ticks"></div><div class="lv-handle"><i></i></div></div>
         </div>
         <div id="dwell">
-          <div class="dhead"><b>乗せる客を選ぶ</b><span id="seats"></span><span id="seats-sub"></span></div>
+          <div class="dhead"><button id="btn-inv2" class="inv-btn" type="button"><i class="bag"></i>持ち物<span class="inv-n"></span><span class="inv-armed"></span></button><span class="sp-gap"></span><b>乗せる <span id="seats"></span></b></div>
           <div id="cands"></div>
+          <div id="cand-tip" hidden></div>
           <div id="dwell-hint"></div>
-          <div class="drow"><button id="btn-shop" type="button">お店</button><button id="btn-auto" type="button">おまかせ配置</button><button id="btn-seat" type="button">車内で席を決める</button><button id="btn-depart" type="button">発車 ▶</button></div>
+          <div class="drow"><button id="btn-shop" type="button">お店</button><button id="btn-seat" type="button">車内で席を決める</button><button id="btn-depart" type="button">発車 ▶</button></div>
         </div>
       </footer>
     </div>
@@ -406,8 +479,21 @@
       <div class="box"><h3>路線図・ダイヤ</h3><p>開いている間はゲームが止まっている。障害は2区間先まで見える</p><div id="map-advice"></div><div id="map-list"></div><button id="btn-map-close" class="btn primary" type="button">閉じて再開 ▶</button></div>
     </div>
 
+    <div id="inv" class="modal full" hidden>
+      <div class="inv-box">
+        <div class="inv-head"><h3>持ち物</h3><span class="inv-pause">⏸ 時間停止中</span><span class="sp-gap"></span><button id="btn-inv-x" type="button" class="inv-x">✕</button></div>
+        <div class="inv-sec">アイテム（使い切り）</div>
+        <div id="inv-items"></div>
+        <div class="inv-sec">魔改造（このラン中ずっと）</div>
+        <div id="inv-mods"></div>
+        <div class="inv-sec">持ち込み改造</div>
+        <div id="inv-lo"></div>
+        <button id="btn-inv-close" class="btn primary" type="button">閉じて再開 ▶</button>
+      </div>
+    </div>
+
     <div id="offer" class="modal" hidden>
-      <div class="box"><div class="shop-head"><h3>駅のお店</h3><span id="shop-money"></span></div><div id="shop-build"></div><p>停車中は時計が止まっている。お金が続くかぎり何枚でも買える</p><div id="offer-cards"></div><div class="shop-row"><button id="btn-reroll" class="btn" type="button">並べ替え</button><button id="btn-shop-close" class="btn primary" type="button">買い物を終える</button></div></div>
+      <div class="box"><div class="shop-head"><h3>駅のお店</h3><span id="shop-money"></span></div><div id="shop-build"></div><p>停車中は時計が止まっている。お金が続くかぎり何枚でも買える</p><div id="offer-cards"></div><div class="shop-row"><button id="btn-reroll" class="btn" type="button">リロール</button><button id="btn-shop-close" class="btn primary" type="button">買い物を終える</button></div></div>
     </div>
 
     <div id="result" class="modal" hidden>

@@ -996,8 +996,8 @@ export function togglePick(r: Run, id: number) {
     toast(r, '定員オーバー', 'bad');
     return;
   }
-  const roofFree = r.spots.findIndex((q, j) => q.deck === 2 && !r.pax.some((x) => x.spot === j));
-  const sp = c.dest === r.target + 1 && c.kind !== 'sumo' && roofFree >= 0 ? roofFree : freeSpot(r, c.kind === 'old' || c.kind === 'vip' || c.kind === 'kid' ? ['seat', 'strap', 'floor'] : ['floor', 'strap', 'seat']);
+  // 乗った順に端から詰めて座る（屋根は最後）。席を決めるのはプレイヤー
+  const sp = fillSpot(r);
   if (sp < 0) {
     toast(r, '立つ場所がない', 'bad');
     return;
@@ -1007,7 +1007,15 @@ export function togglePick(r: Run, id: number) {
   r.picked.add(id);
 }
 
-function freeSpot(r: Run, prefer: SpotKind[]): number {
+/** 端から詰める順：1階（車両ごとに前から）→ 2階 → 屋根 */
+function fillSpot(r: Run): number {
+  const order = r.spots
+    .map((sp, j) => ({ sp, j }))
+    .filter(({ j }) => !r.pax.some((p) => p.spot === j))
+    .sort((a, b) => a.sp.deck - b.sp.deck || a.sp.car - b.sp.car || b.sp.x - a.sp.x);
+  return order.length ? order[0].j : -1;
+}
+export function freeSpot(r: Run, prefer: SpotKind[]): number {
   for (const k of prefer) {
     const i = r.spots.findIndex((s, j) => s.kind === k && !r.pax.some((p) => p.spot === j));
     if (i >= 0) return i;

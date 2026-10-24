@@ -140,14 +140,17 @@ function tutorial(r: Run, meta: Meta): Say | null {
         tutStep = 3;
         return tutorial(r, meta);
       }
-      return { text: '<b>おまかせ配置</b>を押すと、次の駅で降りる客が<b class="hl">屋根の上</b>に乗る。屋根は射出台！', target: '#btn-auto', step: '研修 2/5', tut: true };
+      // 乗った客は端から詰めて座る。屋根（射出台）へは自分で移す
+      if (!document.body.classList.contains('inside'))
+        return { text: '乗った客は<b>端から詰めて</b>座る。子どもを<b class="hl">屋根の上</b>（射出台）に移そう。<b>車内で席を決める</b>を押して', target: '#btn-seat', step: '研修 2/5', tut: true };
+      return { text: '子どもを、上の<b class="hl">「屋根の上」</b>タブまで<b>ドラッグ</b>！', target: '.cartab[data-d="2"]', step: '研修 2/5', tut: true };
     case 3:
       if (r.phase === 'running') {
         cpTree = snap(r);
         tutStep = 4;
         return tutorial(r, meta);
       }
-      return { text: '準備OK。<b>発車</b>しよう！（ほかの客を乗せてもいい）', target: '#btn-depart', step: '研修 3/5', tut: true };
+      return { text: '屋根に乗った！ 準備OK。<b>発車</b>しよう（ほかの客を乗せてもいい）', target: '#btn-depart', step: '研修 3/5', tut: true };
     case 4: {
       const need = treeNeed(r);
       // 失敗：速すぎて屋根の子どもが飛んだ
@@ -216,7 +219,7 @@ function tutorial(r: Run, meta: Meta): Say | null {
         );
       }
       if (kidAboard && r.target > 1) {
-        return fail(r, `射出しないまま<b class="hl">鵠沼を通り過ぎた</b>。乗り過ごした客は次の駅まで連れて行かれて、<b>信頼が減る</b>。駅の手前で急ブレーキ射出！`, cpLaunch ?? cpTree, 5);
+        return fail(r, `射出しないまま<b class="hl">鵠沼を通り過ぎた</b>。乗り過ごした客は次の駅まで連れて行かれて、<b>信頼が減る</b>。駅の手前でレバーを<b>非常</b>へ！`, cpLaunch ?? cpTree, 5);
       }
       if (!kidAboard && r.phase === 'dwell') {
         return fail(r, `止まって降ろすのもアリ。でも研修では<b class="hl">射出</b>を覚えよう。射出なら止まらずに届けられて、×2マットなら運賃2倍`, cpLaunch ?? cpTree, 5);
@@ -225,9 +228,9 @@ function tutorial(r: Run, meta: Meta): Say | null {
         r.slow = 0.4;
         return {
           id: 'launch',
-          text: `鵠沼が近い。屋根の子どもから<b>点線</b>が伸びているのが、今急ブレーキしたときの飛び先。点線の先が<b class="ok">緑の丸（×2マット）</b>に重なった瞬間に、<b class="hl">急ブレーキ射出</b>を押そう。時間はゆっくりになっている`,
-          short: `点線の先が<b class="ok">緑の丸</b>に重なったら<b class="hl">急ブレーキ射出！</b>${tries ? '（速さで届く先が変わる）' : ''}`,
-          target: '#btn-eb',
+          text: `鵠沼が近い。屋根の子どもから<b>点線</b>が伸びているのが、今急ブレーキしたときの飛び先。点線の先が<b class="ok">緑の丸（×2マット）</b>に重なった瞬間に、レバーを左端の<b class="hl">「非常」</b>へ入れると射出！ 時間はゆっくりになっている`,
+          short: `点線の先が<b class="ok">緑の丸</b>に重なったらレバーを<b class="hl">非常</b>へ！${tries ? '（速さで届く先が変わる）' : ''}`,
+          target: '#lever',
           step: '研修 5/5 ・ スロー',
           tut: true,
         };
@@ -258,7 +261,7 @@ function tutorial(r: Run, meta: Meta): Say | null {
     }
     case 7:
       return {
-        text: '駅に<b>止まれば</b>客を乗せられて<b>お店</b>にも寄れる。<b>射出で通過</b>すれば時間を稼げる。どっちで行くかは自由！ 研修はここまで',
+        text: '駅に<b>止まれば</b>客を乗せられて<b>お店</b>にも寄れる。射出したあとレバーを<b>P</b>に戻して<b>通過</b>すれば時間を稼げる。どっちで行くかは自由！ 研修はここまで',
         step: '研修おわり',
         tut: true,
         buttons: [{ label: 'はじめる ▶', main: true, fn: () => endTutorial(r, meta) }],

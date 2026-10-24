@@ -3,7 +3,7 @@
 import { DEST_COLORS } from '../data.ts';
 import * as S from './state.ts';
 import { hideCoach, setRewinder, startCoach, updateCoach } from './coach.ts';
-import { BAR_H, drawBar, drawInside, drawOutside, type Hit } from './draw.ts';
+import { BAR_H, drawBar, drawInside, drawOutside, drawSection, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
   CURVE_V,
@@ -23,13 +23,12 @@ import {
   type Tag,
   resetMeta,
   WAVE_PERIOD,
-  autoArrange,
-  brakeLaunch,
   brakeShock,
   buyCard,
   carryHome,
   rerollShop,
   rerollCost,
+  OFFERS,
   jumpPlan,
   earnedOf,
   fareOf,
@@ -259,18 +258,28 @@ $('btn-mode').addEventListener('click', () => setMode(mode === 'in' ? 'out' : 'i
 
 // ---------- レバー ----------
 const lever = $('lever');
+/** 各段の位置（%） */
+const NOTCH_POS = NOTCH_NAME.map((_, i) => 6 + (i * 88) / 7);
+const ticks = lever.querySelector<HTMLElement>('.lv-ticks')!;
 NOTCH_NAME.forEach((name, i) => {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'notch' + (i < 4 ? ' brake' : i > 4 ? ' power' : '') + (i === 0 ? ' eb' : '');
-  b.dataset.n = String(i);
-  b.textContent = name;
-  lever.appendChild(b);
+  const t = document.createElement('span');
+  t.className = i === 0 ? 'eb' : i > 4 ? 'pw' : '';
+  t.style.left = `${NOTCH_POS[i]}%`;
+  t.dataset.n = String(i);
+  t.innerHTML = i === 0 ? `${name}<small>射出</small>` : name;
+  ticks.appendChild(t);
 });
+const handle = lever.querySelector<HTMLElement>('.lv-handle')!;
 let leverDrag = false;
 const fromPoint = (e: PointerEvent) => {
-  const el = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('.notch');
-  if (el && R.phase === 'running') setNotch(R, Number(el.dataset.n));
+  if (R.phase !== 'running') return;
+  const b = lever.getBoundingClientRect();
+  const pct = ((e.clientX - b.left) / b.width) * 100;
+  let best = 0;
+  NOTCH_POS.forEach((p, i) => {
+    if (Math.abs(p - pct) < Math.abs(NOTCH_POS[best] - pct)) best = i;
+  });
+  setNotch(R, best);
 };
 lever.addEventListener('pointerdown', (e) => {
   leverDrag = true;
@@ -284,6 +293,11 @@ lever.addEventListener('pointerdown', (e) => {
 lever.addEventListener('pointermove', (e) => leverDrag && fromPoint(e));
 lever.addEventListener('pointerup', () => (leverDrag = false));
 lever.addEventListener('pointercancel', () => (leverDrag = false));
+function renderLever() {
+  handle.style.left = `${NOTCH_POS[R.notch]}%`;
+  handle.classList.toggle('eb', R.notch === 0);
+  ticks.querySelectorAll<HTMLElement>('span').forEach((t) => t.classList.toggle('on', Number(t.dataset.n) === R.notch));
+}
 window.addEventListener('keydown', (e) => {
   if (screen !== 'run') return;
   if (R.phase !== 'running') {
@@ -293,7 +307,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'ArrowUp' || e.code === 'KeyW') setNotch(R, R.notch + 1);
   else if (e.code === 'ArrowDown' || e.code === 'KeyS') setNotch(R, R.notch - 1);
   else if (e.code === 'Space') {
+    // 非常（急ブレーキ射出）
     e.preventDefault();
+    setNotch(R, 0);
+  } else if (e.code === 'KeyX') {
     const o = nextObstacle(R);
     if (o) tapObstacle(R, o);
   } else if (e.code === 'Tab') {
@@ -308,16 +325,56 @@ const ITEM_DEF: { id: ItemId; name: string; ch: string; col: string; tip: string
   { id: 'saw', name: 'チェーンソー', ch: '鋸', col: '#E9B23E', tip: '電柱か倒木を即撤去' },
   { id: 'airbag', name: 'エアバッグ', ch: '袋', col: '#F0A79C', tip: '次の衝撃で誰も飛ばない' },
 ];
-const itemsBox = $('items');
-for (const it of ITEM_DEF) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'item';
-  b.dataset.id = it.id;
-  b.title = it.tip;
-  b.innerHTML = `<span class="ic" style="background:${it.col}">${it.ch}</span><span class="nm">${it.name}</span><span class="ct"></span>`;
-  b.addEventListener('click', () => useItem(R, it.id));
-  itemsBox.appendChild(b);
+// 持ち物：全画面のダイアログ。開いている間は時間が止まる
+let invOpen = false;
+function openInv() {
+  if (screen !== 'run') return;
+  invOpen = true;
+  R.paused = true;
+  renderInv();
+  $('inv').hidden = false;
+  sfx.select();
+}
+function closeInv() {
+  invOpen = false;
+  R.paused = false;
+  $('inv').hidden = true;
+}
+$('btn-inv').addEventListener('click', openInv);
+$('btn-inv2').addEventListener('click', openInv);
+$('btn-inv-x').addEventListener('click', closeInv);
+$('btn-inv-close').addEventListener('click', closeInv);
+const ITEM_DESC: Record<ItemId, string> = {
+  jump: '次の障害の手前で電車ごと跳ぶ。速いほど遠く',
+  saw: '倒木か電柱を一瞬で片付ける',
+  airbag: '次の衝撃で誰も飛ばない（射出では開かない）',
+};
+function renderInv() {
+  $('inv-items').innerHTML = ITEM_DEF.map((it) => {
+    const n = R.items[it.id];
+    const armed = isArmed(R, it.id);
+    const zero = n <= 0 && !armed;
+    return `<div class="ivr${zero ? ' zero' : ''}"><span class="ic" style="background:${it.col}">${it.ch}<b>${n}</b></span><span class="tx"><b>${it.name}</b><span>${ITEM_DESC[it.id]}</span></span>${zero ? '<span class="none">なし</span>' : `<button type="button" class="use${armed ? ' on' : ''}" data-id="${it.id}">${armed ? '準備中・やめる' : '使う'}</button>`}</div>`;
+  }).join('');
+  $('inv-items').querySelectorAll<HTMLButtonElement>('.use').forEach((b) =>
+    b.addEventListener('click', () => {
+      useItem(R, b.dataset.id as ItemId);
+      sfx.select();
+      renderInv();
+    }),
+  );
+  const names: Record<string, string> = Object.fromEntries(OFFERS.map((o) => [o.id, o.name]));
+  $('inv-mods').innerHTML = [...R.mods].map((m) => `<span class="mchip">${tagHtml((OFFER_TAGS[m] ?? []) as Tag[])}${names[m] ?? m}${m === 'car' && R.cars - R.startCars > 1 ? ` ×${R.cars - R.startCars}` : ''}</span>`).join('');
+  const lo = loadoutOf(R.lo);
+  $('inv-lo').innerHTML = `<div class="lo-card"><b>${lo.name}</b><span class="lo-up">＋ ${lo.up}</span><span class="lo-down">− ${lo.down}</span></div>`;
+}
+function renderInvBtns() {
+  const n = ITEM_DEF.reduce((a, it) => a + R.items[it.id], 0);
+  const armed = ITEM_DEF.filter((it) => isArmed(R, it.id)).map((it) => it.ch + ' 準備中');
+  document.querySelectorAll<HTMLElement>('.inv-btn').forEach((b) => {
+    b.querySelector('.inv-n')!.textContent = n ? String(n) : '';
+    b.querySelector('.inv-armed')!.textContent = armed.join('・');
+  });
 }
 
 $('btn-depart').addEventListener('click', () => {
@@ -335,12 +392,6 @@ $('btn-reroll').addEventListener('click', () => {
   else sfx.bad();
 });
 $('btn-seat').addEventListener('click', () => setMode(mode === 'in' ? 'out' : 'in'));
-$('btn-auto').addEventListener('click', () => {
-  autoArrange(R);
-  sfx.drop();
-});
-// 急ブレーキ射出
-const ebBtn = $('btn-eb');
 /** キーワードのタグ */
 const TAG_BG: Record<Tag, string> = { 射出: '#F08E78', 守り: '#A6DCC3', 突破: '#F3D27F', 満員: '#CFE6EE' };
 function tagHtml(ts: Tag[]): string {
@@ -353,16 +404,6 @@ function coinHtml(n: number): string {
 function coinText(s: string): string {
   return s.replace(/¢(\d+)/g, (_, n) => coinHtml(Number(n)));
 }
-ebBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  brakeLaunch(R);
-});
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' && screen === 'run' && R.phase === 'running') {
-    e.preventDefault();
-    brakeLaunch(R);
-  }
-});
 
 // バック（押している間だけ）
 const revBtn = $('btn-reverse');
@@ -635,7 +676,10 @@ function renderForecast() {
     const nxt = R.obstacles[R.target] ?? [];
     const worst = Math.max(0, ...nxt.map((q) => (q.kind === 'tree' ? predictShock(R, q, (treeNeed(R) + 2) / 3.6) : 0)));
     shock = worst;
-    line1.innerHTML = `<span class="obs">次の区間</span><span>${nxt.map((q) => OBS_INFO[q.kind].name).join('・')}</span><span class="shock ${worst ? 'on' : ''}">${worst ? `倒木の突破 ≈${worst}` : ''}</span>`;
+    // 走行中の障害バーと同じ書き方：アイコン＋条件
+    const cond = (q: Obstacle) => (q.kind === 'tree' ? `${treeNeed(R)}↑` : q.kind === 'curve' ? `${CURVE_V}↓` : q.kind === 'pole' ? `連打${q.need}` : q.kind === 'wave' ? 'すきに' : 'タップ');
+    line1.innerHTML = `<span class="obs">次の区間</span><span class="chips">${nxt.map((q) => `<span><i>${OBS_INFO[q.kind].ch}</i>${cond(q)}</span>`).join('')}</span>`;
+    void worst;
     line3.textContent = '乗せる客と席を考えよう';
     line3.className = '';
   } else if (R.phase === 'running') {
@@ -668,31 +712,9 @@ function renderForecast() {
 function renderSpeedo() {
   const k = kmh(R.v);
   $('sp-num').textContent = String(Math.round(k));
-  const o = nextObstacle(R);
-  const band = $('sp-band');
-  const max = Math.max(80, Math.ceil((k + 5) / 40) * 40);
-  if (spMax !== max) {
-    spMax = max;
-    $('sp-track').querySelectorAll('.t').forEach((t, i) => (t.textContent = String(Math.round((max * i) / 4))));
-  }
-  if (o && R.phase === 'running' && (o.kind === 'tree' || o.kind === 'curve')) {
-    const lo = o.kind === 'tree' ? treeNeed(R) : 0;
-    const hi = o.kind === 'tree' ? max : CURVE_V;
-    band.style.left = `${(lo / max) * 100}%`;
-    band.style.width = `${((hi - lo) / max) * 100}%`;
-    band.hidden = false;
-    const inBand = k >= lo && k <= hi;
-    $('sp-needle').classList.toggle('bad', !inBand);
-    $('sp-label').textContent = o.kind === 'tree' ? `${treeNeed(R)}↑` : `${CURVE_V}↓`;
-  } else {
-    band.hidden = true;
-    $('sp-needle').classList.remove('bad');
-    $('sp-label').textContent = '';
-  }
-  $('sp-needle').style.left = `${Math.min(100, (k / max) * 100)}%`;
   $('speedo').classList.toggle('jolting', k > 100);
 }
-let spMax = 0;
+
 
 function renderHud() {
   renderStatus();
@@ -704,22 +726,10 @@ function renderHud() {
   renderSpeedo();
   document.body.classList.toggle('dwell', R.phase === 'dwell');
   revBtn.hidden = !(canReverse(R) || R.reverse);
-  const nearStop = POS[Math.min(R.target, LINE.stations.length - 1)] - R.x;
-  ebBtn.hidden = !(R.phase === 'running' && R.v > 2 && R.pax.length > 0);
-  ebBtn.classList.toggle('hot', nearStop < 130 && nearStop > -10);
-  ebBtn.classList.toggle('cool', R.launchCool > 0);
   if (revBtn.hidden) R.reverse = false;
-  document.querySelectorAll<HTMLElement>('.notch').forEach((n) => n.classList.toggle('on', Number(n.dataset.n) === R.notch));
-  itemsBox.querySelectorAll<HTMLButtonElement>('.item').forEach((b) => {
-    const id = b.dataset.id as ItemId;
-    const n = R.items[id];
-    b.querySelector('.ct')!.textContent = `×${n}`;
-    b.classList.toggle('zero', n <= 0);
-    const armed = isArmed(R, id);
-    b.disabled = (n <= 0 && !armed) || (R.phase !== 'running' && R.phase !== 'dwell');
-    b.classList.toggle('armed', armed);
-    b.querySelector('.nm')!.textContent = armed ? '構え中（押すと取消）' : ITEM_DEF.find((d) => d.id === id)!.name;
-  });
+  renderLever();
+  renderInvBtns();
+  if (invOpen && R.phase !== 'running' && R.phase !== 'dwell') closeInv();
 
   // ホームの候補
   if (R.phase === 'dwell') {
@@ -733,18 +743,43 @@ function renderHud() {
       for (const c of R.candidates) {
         const k = KINDS[c.kind];
         const sel = R.picked.has(c.id);
-        const risky = worst > k.tol + 20 ? '座席でも危ない' : worst > k.tol ? '座らせないと飛ぶ' : '';
+        const risky = '';
         const b = document.createElement('button');
         b.type = 'button';
         b.dataset.id = String(c.id);
         b.className = 'cand' + (sel ? ' sel' : '') + (c.kind === 'vip' ? ' req' : '') + (risky ? ' risky' : '');
         const fare = fareOf(R, c);
-        b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="ic" style="background:${k.color}">${k.ch}</span><b>${k.name}${k.size > 1 ? `<small>席${k.size}</small>` : ''}</b><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">耐${k.tol}</span></span><span class="note ${risky ? 'warn' : ''}">${risky ? '⚠' + risky : coinText(k.note)}</span>`;
-        b.addEventListener('click', () => togglePick(R, c.id));
+        // 3行：アイコン／行き先／運賃と耐衝撃。特性は★を長押しで
+        b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="star">★</span><span class="ic" style="background:${k.color}">${k.ch}</span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
+        let pressT = 0;
+        let long = false;
+        b.addEventListener('pointerdown', () => {
+          long = false;
+          pressT = window.setTimeout(() => {
+            long = true;
+            const tip = $('cand-tip');
+            const bb = b.getBoundingClientRect();
+            tip.innerHTML = `<b>${k.name}${k.size > 1 ? `（席${k.size}つ）` : ''}</b><br>${coinText(k.note)}`;
+            tip.hidden = false;
+            tip.style.left = `${Math.max(8, Math.min(window.innerWidth - 230, bb.left))}px`;
+            tip.style.top = `${bb.top - tip.offsetHeight - 8}px`;
+          }, 380);
+        });
+        const endPress = () => {
+          window.clearTimeout(pressT);
+          $('cand-tip').hidden = true;
+        };
+        b.addEventListener('pointerup', endPress);
+        b.addEventListener('pointerleave', endPress);
+        b.addEventListener('pointercancel', endPress);
+        b.addEventListener('contextmenu', (e) => e.preventDefault());
+        b.addEventListener('click', () => {
+          if (long) return;
+          togglePick(R, c.id);
+        });
         box.appendChild(b);
       }
-      $('seats').textContent = `席 ${seatsUsed(R)}/${R.cap}（${R.pax.length}人）`;
-      $('seats-sub').textContent = R.pax.length ? `うち乗車中 ${R.pax.length}人` : '力士は席を3つ使う';
+      $('seats').textContent = `${seatsUsed(R)}/${R.cap}`;
       const n = R.picked.size;
       $('btn-depart').textContent = n ? `${n}人を乗せて発車 ▶` : '誰も乗せずに発車 ▶';
     }
@@ -752,7 +787,7 @@ function renderHud() {
     $('btn-shop').innerHTML = `お店<small>${left}品</small>`;
     ($('btn-shop') as HTMLButtonElement).disabled = !R.offer;
     $('btn-seat').textContent = mode === 'in' ? '◀ 客選びに戻る' : `車内で席を決める（${R.pax.length}人）`;
-    $('dwell-hint').textContent = mode === 'in' ? '時計は止まっている。客をドラッグして席を決めよう（上のタブで段・車両を切り替え）' : '';
+    $('dwell-hint').textContent = mode === 'in' ? '客をドラッグして席を決めよう（上のタブで段・車両を切り替え）' : R.picked.size ? '乗せた客は端から詰めて座る。屋根などへは「車内で席を決める」で移そう' : '';
   } else candKey = '';
 
   // お店（停車中に何枚でも買える）
@@ -790,7 +825,7 @@ function renderHud() {
         cards.appendChild(b);
       });
       const rb = $('btn-reroll') as HTMLButtonElement;
-      rb.innerHTML = `並べ替え ${coinHtml(rerollCost(R))}`;
+      rb.innerHTML = `リロール ${coinHtml(rerollCost(R))}`;
       rb.disabled = R.money < rerollCost(R);
     }
   }
@@ -1112,6 +1147,20 @@ function frame(now: number) {
       drawInside(ctx, R, w, BAR_H, h - 2, drag && drag.moved ? drag : null, hits, focus, deckFocus);
     }
     drawBar(ctx, R, w, 22);
+    // 下のパネルの障害バー（走行中）
+    if (R.phase === 'running' && mode === 'out') {
+      const sb = $('secbar') as HTMLCanvasElement;
+      const sr = sb.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      if (sb.width !== Math.round(sr.width * dpr) || sb.height !== Math.round(sr.height * dpr)) {
+        sb.width = Math.round(sr.width * dpr);
+        sb.height = Math.round(sr.height * dpr);
+      }
+      const sc = sb.getContext('2d')!;
+      sc.setTransform(dpr, 0, 0, dpr, 0, 0);
+      sc.clearRect(0, 0, sr.width, sr.height);
+      drawSection(sc, R, sr.width, 12);
+    }
     renderHud();
     updateCoach(R, meta, shopOpen && !!R.offer, now);
   } else hideCoach();

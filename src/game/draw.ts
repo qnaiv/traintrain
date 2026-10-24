@@ -467,12 +467,11 @@ function deer(iso: Iso, x: number, y: number, hop: number) {
 }
 
 // ---------------- 上のバー：上段に全駅、下段に今の区間 ----------------
-export const BAR_H = 104;
+export const BAR_H = 58;
 export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: number) {
   const pad = 18;
   const n = LINE.stations.length;
   const st = Math.min(r.target, n - 1);
-  const sec = r.phase === 'dwell' ? r.target : r.target - 1;
   const x0 = pad;
   const x1 = w - pad;
   const total = POS[n - 1];
@@ -559,8 +558,16 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   ctx.textAlign = 'right';
   ctx.fillText('タップで路線図・ダイヤ', x1 + 6, y + 31);
 
-  // ---- 下段：今の区間 ----
-  const yb = y + 52;
+}
+
+/** 今の区間の障害バー（下のパネルの小さなキャンバスに描く） */
+export function drawSection(ctx: CanvasRenderingContext2D, r: Run, w: number, yb: number) {
+  const pad = 18;
+  const n = LINE.stations.length;
+  const st = Math.min(r.target, n - 1);
+  const sec = r.phase === 'dwell' ? r.target : r.target - 1;
+  const x0 = pad;
+  const x1 = w - pad;
   const a = POS[Math.max(0, sec)];
   const b = POS[Math.min(n - 1, sec + 1)];
   const map = (x: number) => x0 + ((x - a) / (b - a)) * (x1 - x0);
