@@ -23,12 +23,13 @@ interface Say {
   top?: boolean;
   /** 失敗の説明（赤い枠） */
   fail?: boolean;
+  /** 走行中の説明：初めて出たときはゲームを止めて「わかった」を待つ */
+  id?: string;
+  /** 「わかった」のあとに景色の上に残す一行 */
+  short?: string;
 }
 
 let shown = '';
-let tipUntil = 0;
-let tipText = '';
-let tipTop = false;
 let tutStep = 0;
 let kidId = -1;
 let tutResult = '';
@@ -40,8 +41,9 @@ let cpTree: Run | null = null;
 let cpLaunch: Run | null = null;
 let tries = 0;
 /** 成功のひとこと（数秒だけ出す） */
-let flash: Say | null = null;
-let flashUntil = 0;
+/** 読んだ説明 */
+const acked = new Set<string>();
+let tipNow: Say | null = null;
 let rewinder: ((r: Run) => void) | null = null;
 
 /** 研修のやり直しで Run を差し替える方法（main から渡す） */
@@ -71,9 +73,9 @@ export function startCoach(r: Run) {
   cpTree = null;
   cpLaunch = null;
   tries = 0;
-  flash = null;
+  acked.clear();
+  tipNow = null;
   kidId = r.candidates.find((c) => c.kind === 'kid')?.id ?? -1;
-  tipUntil = 0;
   hide();
 }
 
@@ -119,7 +121,6 @@ function fail(r: Run, text: string, cp: Run | null, step: number, delay = 0): Sa
 
 function tutorial(r: Run, meta: Meta): Say | null {
   if (failSay) return failSay;
-  if (flash && r.time < flashUntil && tutStep === 5 && r.fliers.every((f) => f.pax.id !== kidId) && POS[1] - r.x > 110) return flash;
   const kidAboard = r.pax.find((p) => p.id === kidId);
   const kidFlier = r.fliers.find((f) => f.pax.id === kidId);
   const tree = r.obstacles[0]?.[0];
@@ -164,14 +165,17 @@ function tutorial(r: Run, meta: Meta): Say | null {
         return fail(r, `遅すぎて<b class="hl">倒木に止められた</b>。撤去に6秒かかって<b>遅れ</b>が増える。遅れが上限を超えると運転打ち切り。<b class="ok">${need}km/h以上</b>で突き破ろう`, cpTree, 4);
       }
       if (!tree || tree.state !== 'wait') {
-        cpLaunch = null;
-        tutStep = 5;
-        flashUntil = r.time + 3.5;
-        return (flash = {
+        if (acked.has('treeOK')) {
+          cpLaunch = null;
+          tutStep = 5;
+          return tutorial(r, meta);
+        }
+        return {
+          id: 'treeOK',
           text: '突き破った！ ちなみに<b>遅すぎると止められて遅れ</b>、<b>速すぎると屋根の客が飛ぶ</b>。ちょうどいい速さを狙うのがコツ',
           step: '研修 4/5',
           tut: true,
-        });
+        };
       }
       const k = kmh(r.v);
       const msg =
@@ -180,7 +184,14 @@ function tutorial(r: Run, meta: Meta): Say | null {
           : k > need + 5
             ? `速すぎると屋根の子どもが飛ぶ！ <b>N</b>や<b>B1</b>で<b class="hl">${need}〜${need + 4}km/h</b>くらいに`
             : `いい速さ！ そのまま突き破れ（速すぎると屋根の子が飛ぶ）`;
-      return { text: msg, target: '#lever', step: '研修 4/5', tut: true };
+      return {
+        id: 'tree',
+        text: `この先に<b>倒木</b>。<b class="hl">${need}km/h以上</b>でぶつかると突き破れる。でも<b>速すぎると屋根の子どもが飛ぶ</b>。下の<b>レバー</b>で速さを合わせよう（P3で加速、N・B1で抑える）`,
+        short: msg,
+        target: '#lever',
+        step: '研修 4/5',
+        tut: true,
+      };
     }
     case 5: {
       const toSt = POS[1] - r.x;
@@ -212,9 +223,16 @@ function tutorial(r: Run, meta: Meta): Say | null {
       }
       if (toSt < 110 && toSt > -10 && r.phase === 'running') {
         r.slow = 0.4;
-        return { text: `点線の先が<b class="ok">緑の丸（×2マット）</b>に重なったら、<b class="hl">急ブレーキ射出！</b>${tries ? '（速さを変えると点線の届く先も変わる）' : ''}`, target: '#btn-eb', step: '研修 5/5 ・ スロー', tut: true };
+        return {
+          id: 'launch',
+          text: `鵠沼が近い。屋根の子どもから<b>点線</b>が伸びているのが、今急ブレーキしたときの飛び先。点線の先が<b class="ok">緑の丸（×2マット）</b>に重なった瞬間に、<b class="hl">急ブレーキ射出</b>を押そう。時間はゆっくりになっている`,
+          short: `点線の先が<b class="ok">緑の丸</b>に重なったら<b class="hl">急ブレーキ射出！</b>${tries ? '（速さで届く先が変わる）' : ''}`,
+          target: '#btn-eb',
+          step: '研修 5/5 ・ スロー',
+          tut: true,
+        };
       }
-      return { text: `${LINE.stations[1].name}が近づいたら、屋根の子どもを<b>急ブレーキで射出</b>してホームへ届ける。まずは走ろう`, step: '研修 5/5', tut: true };
+      return { text: `${LINE.stations[1].name}が近づいたら、屋根の子どもを<b>急ブレーキで射出</b>してホームへ届ける`, step: '研修 5/5', tut: true };
     }
     case 6: {
       const perfect = tutResult === 'perfect';
@@ -250,16 +268,29 @@ function tutorial(r: Run, meta: Meta): Say | null {
 }
 
 /** 初めて出会ったときだけのヒント（6秒で消える・ゲームは止めない） */
-function tip(r: Run, meta: Meta, shopOpen: boolean, now: number): Say | null {
-  if (now < tipUntil) return { text: tipText, next: true, step: '初めての…', top: tipTop };
+function tip(r: Run, meta: Meta, shopOpen: boolean, _now: number): Say | null {
+  if (tipNow) return tipNow;
   const fire = (id: string, text: string, top = false): Say => {
-    tipTop = top;
     meta.tips.push(id);
     saveMeta(meta);
-    tipText = text;
-    tipUntil = now + 6500;
-    onNext = () => (tipUntil = 0);
-    return { text, next: true, step: '初めての…', top };
+    tipNow = {
+      text,
+      step: '初めての…',
+      top,
+      buttons: [
+        {
+          label: 'わかった ▶',
+          main: true,
+          fn: () => {
+            tipNow = null;
+            r.paused = false;
+          },
+        },
+      ],
+    };
+    // 走行中なら読んでいる間は止める
+    if (r.phase === 'running') r.paused = true;
+    return tipNow;
   };
   const seen = (id: string) => meta.tips.includes(id);
   if (shopOpen && !seen('shop')) return fire('shop', '<b>駅のお店</b>：お金が続くかぎり何枚でも買える。<b class="ok">◎</b>は持ち物と組むとコンボになる印', true);
@@ -286,21 +317,48 @@ function hide() {
   shown = '';
 }
 
-function render(say: Say | null, r: Run, meta: Meta) {
+function render(say0: Say | null, r: Run, meta: Meta) {
   const box = $('coach');
   const ring = $('coach-ring');
-  if (!say) {
+  if (!say0) {
     if (shown) hide();
     return;
   }
-  const key = say.text + (say.target ?? '') + (say.buttons?.length ?? 0) + (say.fail ? 'f' : '');
+  // 走行中の説明：初めては止めて「わかった」、読んだあとは景色の上に一行だけ
+  let say: Say = say0;
+  let mini = false;
+  const running = r.phase === 'running' && !say0.fail && !say0.buttons;
+  if (running) {
+    if (say0.id && !acked.has(say0.id)) {
+      r.paused = true;
+      say = {
+        ...say0,
+        buttons: [
+          {
+            label: 'わかった ▶',
+            main: true,
+            fn: () => {
+              acked.add(say0.id!);
+              r.paused = false;
+            },
+          },
+        ],
+      };
+    } else {
+      mini = true;
+      say = { ...say0, text: say0.short ?? say0.text };
+    }
+  }
+  const key = (mini ? 'm' : '') + say.text + (say.target ?? '') + (say.buttons?.length ?? 0) + (say.fail ? 'f' : '');
   if (key !== shown) {
     shown = key;
-    box.innerHTML = `<span class="face"><i class="cap"></i><i class="badge"></i><i class="eye l"></i><i class="eye r"></i><i class="mouth"></i></span><div class="cbody"><div class="chead"><span class="who">見習い車掌</span><span class="step">${say.step ?? ''}</span>${say.tut ? '<button type="button" class="skip">とばす</button>' : ''}</div><span class="ctext">${say.text}</span>${say.next ? '<button type="button" class="cnext">次へ ▶</button>' : ''}${say.buttons ? `<div class="cbtns">${say.buttons.map((b, i) => `<button type="button" class="cbtn${b.main ? ' main' : ''}" data-i="${i}">${b.label}</button>`).join('')}</div>` : ''}</div>`;
+    box.innerHTML = `<span class="face"><i class="cap"></i><i class="badge"></i><i class="eye l"></i><i class="eye r"></i><i class="mouth"></i></span><div class="cbody">${mini ? '' : `<div class="chead"><span class="who">見習い車掌</span><span class="step">${say.step ?? ''}</span>${say.tut ? '<button type="button" class="skip">とばす</button>' : ''}</div>`}<span class="ctext">${say.text}</span>${say.next ? '<button type="button" class="cnext">次へ ▶</button>' : ''}${say.buttons ? `<div class="cbtns">${say.buttons.map((b, i) => `<button type="button" class="cbtn${b.main ? ' main' : ''}" data-i="${i}">${b.label}</button>`).join('')}</div>` : ''}</div>`;
     box.classList.toggle('fail', !!say.fail);
+    box.classList.toggle('mini', mini);
+    const btns = say.buttons;
     box.querySelectorAll<HTMLButtonElement>('.cbtn').forEach((el) =>
       el.addEventListener('click', () => {
-        say.buttons?.[Number(el.dataset.i)]?.fn();
+        btns?.[Number(el.dataset.i)]?.fn();
         shown = '';
       }),
     );
@@ -313,32 +371,22 @@ function render(say: Say | null, r: Run, meta: Meta) {
     });
     box.hidden = false;
   }
-  // 光らせる対象
-  const el = say.target ? document.querySelector<HTMLElement>(say.target) : null;
-  // 画面に固定（お店のモーダルより上）。横幅はゲーム画面に合わせる
+  // 位置：景色（キャンバス）の上に出す。下の操作パネルは隠さない
   const ar = $('app').getBoundingClientRect();
-  const ab = { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+  const vr = $('view').getBoundingClientRect();
   box.style.left = `${ar.left + 10}px`;
   box.style.width = `${Math.min(ar.width, window.innerWidth) - 20}px`;
+  const barH = 108;
+  box.style.top = say.top ? '6px' : `${Math.round(vr.top + (mini ? barH + 12 : Math.min(barH + 10, vr.height * 0.18)))}px`;
+  // 光らせる対象（一行表示のときは暗くしない）
+  const el = say.target ? document.querySelector<HTMLElement>(say.target) : null;
   if (el && el.offsetParent) {
     const b = el.getBoundingClientRect();
     ring.hidden = false;
-    ring.style.left = `${b.left - ab.left - 4}px`;
-    ring.style.top = `${b.top - ab.top - 4}px`;
+    ring.classList.toggle('soft', mini);
+    ring.style.left = `${b.left - 4}px`;
+    ring.style.top = `${b.top - 4}px`;
     ring.style.width = `${b.width + 8}px`;
     ring.style.height = `${b.height + 8}px`;
-    // 吹き出しは対象の上（上半分にあるなら下）
-    const h = box.offsetHeight;
-    const above = b.top - ab.top > ab.height / 2;
-    const top = above ? b.top - ab.top - h - 18 : b.bottom - ab.top + 18;
-    box.style.top = `${Math.max(8, Math.min(ab.height - h - 8, top))}px`;
-    box.classList.toggle('above', above);
-    box.classList.toggle('below', !above);
-    const ax = Math.max(24, Math.min(ar.width - 40, b.left - ar.left - 10 + b.width / 2));
-    box.style.setProperty('--ax', `${ax - 12}px`);
-  } else {
-    ring.hidden = true;
-    box.classList.remove('above', 'below');
-    box.style.top = say.top ? '6px' : `${Math.round(ab.height * 0.16)}px`;
-  }
+  } else ring.hidden = true;
 }
