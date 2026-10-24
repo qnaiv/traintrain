@@ -40,6 +40,7 @@ export const SHOCK = {
   brake: 0.5,
   /** 倒木：突き破っても止められても 速度 × */
   tree: 0.8,
+  treeOver: 1.2,
   /** 急カーブ：基本 ＋ 超過 km/h × */
   curveBase: 20,
   curveOver: 2,
@@ -66,18 +67,18 @@ export interface KindDef {
   name: string;
   ch: string;
   tol: number;
-  fare: number; // 1駅あたり
+  fare: number; // 1人あたり（コイン）
   size: number; // 席をいくつ使うか
   note: string;
   color: string;
 }
 export const KINDS: Record<Kind, KindDef> = {
-  old: { name: 'お年寄り', ch: '老', tol: 10, fare: 160, size: 1, note: '無事に届けると信頼+5', color: '#B9B0A2' },
-  kid: { name: '子ども', ch: '子', tol: 15, fare: 80, size: 1, note: '軽くてよく飛ぶ', color: '#E9B23E' },
-  sal: { name: '会社員', ch: '会', tol: 30, fare: 130, size: 1, note: '遅れ30秒超で運賃半分', color: '#FFFDF6' },
-  stu: { name: '学生', ch: '学', tol: 45, fare: 60, size: 1, note: '連打を手伝う（毎秒3回）', color: '#8299E0' },
-  sumo: { name: '力士', ch: '力', tol: 90, fare: 280, size: 3, note: '席3つ。隣の客は耐衝撃+20', color: '#F0C9A0' },
-  vip: { name: 'VIP', ch: 'V', tol: 5, fare: 0, size: 1, note: '無傷で届けると¥2000', color: '#B98ADB' },
+  old: { name: 'お年寄り', ch: '老', tol: 10, fare: 2, size: 1, note: '無事に届けると信頼+5', color: '#B9B0A2' },
+  kid: { name: '子ども', ch: '子', tol: 15, fare: 1, size: 1, note: '軽くてよく飛ぶ', color: '#E9B23E' },
+  sal: { name: '会社員', ch: '会', tol: 30, fare: 2, size: 1, note: '遅れ30秒超で運賃半分', color: '#FFFDF6' },
+  stu: { name: '学生', ch: '学', tol: 45, fare: 1, size: 1, note: '連打を手伝う（毎秒3回）', color: '#8299E0' },
+  sumo: { name: '力士', ch: '力', tol: 90, fare: 3, size: 3, note: '席3つ。隣の客は耐衝撃+20', color: '#F0C9A0' },
+  vip: { name: 'VIP', ch: 'V', tol: 5, fare: 5, size: 1, note: '無傷で届けると¢5', color: '#B98ADB' },
 };
 
 export interface Pax {
@@ -120,10 +121,10 @@ function upperSpots(car: number): Spot[] {
 }
 /** 屋根の上 */
 function roofSpots(car: number): Spot[] {
-  return [3.0, 5.0, 7.0, 9.0].map((x) => ({ x, y: 0, kind: 'floor' as const, car, deck: 2 }));
+  return [4.0, 7.0, 2.5, 5.5, 8.5].map((x) => ({ x, y: 0, kind: 'floor' as const, car, deck: 2 }));
 }
 /** 段ごとの耐衝撃の補正 */
-export const DECK_TOL = [0, -10, -20];
+export const DECK_TOL = [0, -10, -10];
 export const DECK_NAME = ['1階', '2階', '屋根の上'];
 
 // ---------- 障害 ----------
@@ -155,7 +156,7 @@ export function waveUp(t: number): boolean {
 
 // ---------- 3択（ランの中だけ） ----------
 export type ItemId = 'jump' | 'saw' | 'airbag';
-export type ModId = 'belt' | 'ram' | 'susp' | 'car' | 'deck' | 'roof' | 'rocket';
+export type ModId = 'belt' | 'ram' | 'susp' | 'car' | 'deck' | 'roof' | 'rocket' | 'mat' | 'kidlove' | 'chute';
 export interface Offer {
   id: ItemId | ModId;
   name: string;
@@ -171,7 +172,10 @@ export const OFFERS: Offer[] = [
   { id: 'susp', name: 'エアサス', desc: 'すべての衝撃 −10', kind: 'mod' },
   { id: 'car', name: '増結', desc: '車両を1両つなぐ。定員+5（何両でも）。そのぶん加速が少し鈍る', kind: 'mod' },
   { id: 'deck', name: '二階建て', desc: '全車両を二階建てに。定員+両数×6。2階は耐衝撃−10', kind: 'mod' },
-  { id: 'roof', name: '屋根の上の特等席', desc: '先頭車両の屋根に4人乗れる。耐衝撃−20、運賃×2', kind: 'mod' },
+  { id: 'roof', name: '屋根席の拡張', desc: '屋根に乗れる人数 +3（全車両）。屋根は射出台', kind: 'mod' },
+  { id: 'mat', name: '着地マット拡大', desc: '各駅の×2マットの幅 5m → 9m', kind: 'mod' },
+  { id: 'kidlove', name: '子ども好き', desc: '子どもがPERFECT着地すると運賃がさらに×2', kind: 'mod' },
+  { id: 'chute', name: 'パラシュート傘', desc: '着地がホームから3m以内のはみ出しならホームに届く', kind: 'mod' },
   { id: 'rocket', name: 'ロケットブースター', desc: '加速×1.8、最高速度がさらに伸びる', kind: 'mod' },
 ];
 /** 何度でも取れる魔改造 */
@@ -186,14 +190,14 @@ export interface UpDef {
   cost: number[];
 }
 export const UPGRADES: UpDef[] = [
-  { id: 'cap', name: '定員アップ', desc: (l) => `乗せられる人数 ${5 + l} → ${6 + l}`, cost: [400, 900, 1800] },
-  { id: 'bench', name: '座席の増設', desc: (l) => `座席 ${2 + l} → ${3 + l}`, cost: [500, 1200] },
-  { id: 'strap', name: 'つり革の増設', desc: (l) => `つり革 ${2 + l} → ${3 + l}`, cost: [300, 700] },
-  { id: 'cushion', name: '座席クッション', desc: (l) => `座席の軽減 −${20 + l * 5} → −${25 + l * 5}`, cost: [300, 700, 1500] },
-  { id: 'susp', name: '台車のばね', desc: (l) => `すべての衝撃 −${l * 3} → −${l * 3 + 3}`, cost: [500, 1100, 2200] },
-  { id: 'motor', name: 'モーター', desc: (l) => `加速 +${l * 15}% → +${l * 15 + 15}%`, cost: [300, 700, 1500] },
-  { id: 'kit', name: '初期装備', desc: (l) => (l === 0 ? 'チェーンソー1つを持って出発' : 'エアバッグも1つ持って出発'), cost: [400, 900] },
-  { id: 'grace', name: 'ダイヤの余裕', desc: (l) => `遅れの上限 ${120 + l * 20} → ${140 + l * 20}秒`, cost: [300, 700, 1500] },
+  { id: 'cap', name: '定員アップ', desc: (l) => `乗せられる人数 ${5 + l} → ${6 + l}`, cost: [5, 11, 22] },
+  { id: 'bench', name: '座席の増設', desc: (l) => `座席 ${2 + l} → ${3 + l}`, cost: [6, 15] },
+  { id: 'strap', name: 'つり革の増設', desc: (l) => `つり革 ${2 + l} → ${3 + l}`, cost: [4, 9] },
+  { id: 'cushion', name: '座席クッション', desc: (l) => `座席の軽減 −${20 + l * 5} → −${25 + l * 5}`, cost: [4, 9, 19] },
+  { id: 'susp', name: '台車のばね', desc: (l) => `すべての衝撃 −${l * 3} → −${l * 3 + 3}`, cost: [6, 14, 28] },
+  { id: 'motor', name: 'モーター', desc: (l) => `加速 +${l * 15}% → +${l * 15 + 15}%`, cost: [4, 9, 19] },
+  { id: 'kit', name: '初期装備', desc: (l) => (l === 0 ? 'チェーンソー1つを持って出発' : 'エアバッグも1つ持って出発'), cost: [5, 11] },
+  { id: 'grace', name: 'ダイヤの余裕', desc: (l) => `遅れの上限 ${120 + l * 20} → ${140 + l * 20}秒`, cost: [4, 9, 19] },
 ];
 export interface Meta {
   bank: number;
@@ -201,11 +205,18 @@ export interface Meta {
   runs: number;
   best: number;
 }
-const META_KEY = 'hakobi.run.meta.v1';
+const META_KEY = 'hakobi.run.meta.v2';
+const OLD_META_KEY = 'hakobi.run.meta.v1';
 export function loadMeta(): Meta {
   const base: Meta = { bank: 0, lv: { cap: 0, bench: 0, strap: 0, cushion: 0, susp: 0, motor: 0, kit: 0, grace: 0 }, runs: 0, best: 0 };
   try {
     const raw = localStorage.getItem(META_KEY);
+    const old = raw ? null : localStorage.getItem(OLD_META_KEY);
+    if (old) {
+      // 円 → コインへの切り替え：貯金を 1/80 に
+      const m = JSON.parse(old) as Partial<Meta>;
+      return { ...base, ...m, bank: Math.floor((m.bank ?? 0) / 80), best: Math.floor((m.best ?? 0) / 80), lv: { ...base.lv, ...(m.lv ?? {}) } };
+    }
     if (raw) {
       const m = JSON.parse(raw) as Partial<Meta>;
       return { ...base, ...m, lv: { ...base.lv, ...(m.lv ?? {}) } };
@@ -244,7 +255,34 @@ export function vmaxOf(r: Run): number {
 export interface Flier {
   pax: Pax;
   t: number;
-  x: number;
+  x: number; // 飛び出した位置
+  z: number;
+  vx: number;
+  vz: number;
+  tLand: number;
+  landX: number;
+  judged: boolean;
+  result: '' | 'perfect' | 'good' | 'miss' | 'lost';
+}
+/** ホームの範囲（停止目標からの差） */
+export const PLAT_LO = -24.5;
+export const PLAT_HI = 4;
+const G = 9.8;
+const KIND_W: Record<Kind, number> = { old: 1.0, kid: 1.25, sal: 1.0, stu: 1.05, sumo: 0.65, vip: 1.1 };
+/** 速度 v で飛び出したときの飛び方 */
+export function flight(v: number, z: number, kind: Kind, boost = 1) {
+  const vz = 3 + v * 0.12;
+  const t = (vz + Math.sqrt(vz * vz + 2 * G * Math.max(0.5, z))) / G;
+  const vx = v * KIND_W[kind] * boost;
+  return { vx, vz, t, dist: vx * t };
+}
+/** 段ごとの高さ（飛び出す高さ） */
+export function spotZ(r: Run, spot: number): number {
+  const sp = r.spots[spot];
+  if (!sp) return 1.5;
+  if (sp.deck === 2) return 0.95 + 2.9 * r.decks + 0.3;
+  if (sp.deck === 1) return 4.6;
+  return 1.6;
 }
 export interface ShockEvt {
   value: number;
@@ -262,6 +300,12 @@ export interface Run {
   decks: number;
   roof: boolean;
   sawArmed: boolean;
+  launchCool: number;
+  mats: { x: number }[];
+  streak: number;
+  perfectHere: number;
+  missHere: number;
+  pops: { text: string; x: number; t: number; good: boolean }[];
   delayLimit: number;
   time: number;
   x: number; // 先頭の位置
@@ -298,7 +342,7 @@ export interface Run {
   stuck: number; // 障害で止められている残り時間
   reverse: boolean; // バック中（ボタンを押している間）
   overReason: string;
-  stats: { carried: number; flew: number; shocks: number; maxShock: number; early: number };
+  stats: { carried: number; flew: number; shocks: number; maxShock: number; early: number; perfect: number; good: number; launches: number; bestStreak: number };
   nextId: number;
 }
 
@@ -341,12 +385,18 @@ function genCandidates(r: Run, st: number): Pax[] {
 export function newRun(meta: Meta): Run {
   const r: Run = {
     meta,
-    spots: lowerSpots(meta, 0),
+    spots: [...lowerSpots(meta, 0), ...roofSpots(0).slice(0, 2)],
     cap: 5 + meta.lv.cap,
     cars: 1,
     decks: 1,
-    roof: false,
+    roof: true,
     sawArmed: false,
+    launchCool: 0,
+    mats: POS.map((p, i) => ({ x: i === 0 ? 0 : p + PLAT_LO + 5 + Math.random() * (PLAT_HI - PLAT_LO - 9) })),
+    streak: 0,
+    perfectHere: 0,
+    missHere: 0,
+    pops: [],
     delayLimit: 120 + meta.lv.grace * 20,
     time: 0,
     x: POS[0] - 4,
@@ -381,7 +431,7 @@ export function newRun(meta: Meta): Run {
     stuck: 0,
     reverse: false,
     overReason: '',
-    stats: { carried: 0, flew: 0, shocks: 0, maxShock: 0, early: 0 },
+    stats: { carried: 0, flew: 0, shocks: 0, maxShock: 0, early: 0, perfect: 0, good: 0, launches: 0, bestStreak: 0 },
     nextId: 1,
   };
   let t = 0;
@@ -445,9 +495,10 @@ export function predictShock(r: Run, o: Obstacle, v = r.v): number {
   if (r.armed === 'jump' && o.kind !== 'curve') return soften(r, SHOCK.jumpBase + k * SHOCK.jumpK);
   switch (o.kind) {
     case 'tree':
-      return soften(r, k * SHOCK.tree);
+      // 突破できる速さなら「超過分」だけ響く。届かなければ正面衝突
+      return k >= treeNeed(r) ? soften(r, (k - treeNeed(r)) * SHOCK.treeOver) : soften(r, k * SHOCK.tree);
     case 'curve':
-      return k > CURVE_V ? soften(r, SHOCK.curveBase + (k - CURVE_V) * SHOCK.curveOver) : 0;
+      return k > CURVE_V ? soften(r, (k - CURVE_V) * SHOCK.curveOver + (k > CURVE_V + 15 ? SHOCK.curveBase : 0)) : 0;
     case 'deer':
       return o.taps > 0 ? soften(r, k * SHOCK.hit) : 0;
     case 'pole':
@@ -457,7 +508,7 @@ export function predictShock(r: Run, o: Obstacle, v = r.v): number {
   }
 }
 
-function applyShock(r: Run, value: number, label: string) {
+function applyShock(r: Run, value: number, label: string, boost = 1) {
   if (value <= 0) return;
   r.stats.shocks++;
   r.stats.maxShock = Math.max(r.stats.maxShock, value);
@@ -472,9 +523,7 @@ function applyShock(r: Run, value: number, label: string) {
     if (value > effTol(r, p)) {
       flew.push(KINDS[p.kind].name);
       r.pax = r.pax.filter((q) => q !== p);
-      r.fliers.push({ pax: p, t: r.time, x: spotWorldX(r, p.spot) });
-      const big = p.kind === 'old' || p.kind === 'kid' || p.kind === 'vip';
-      r.trust -= big ? 15 : 8;
+      launchPax(r, p, boost);
       r.stats.flew++;
     } else safe++;
   }
@@ -484,7 +533,76 @@ function applyShock(r: Run, value: number, label: string) {
 export function setNotch(r: Run, n: number) {
   const prev = r.notch;
   r.notch = Math.max(0, Math.min(7, n));
-  if (r.notch === 0 && prev !== 0 && r.v > 2 && r.phase === 'running') applyShock(r, soften(r, kmh(r.v) * SHOCK.brake), `非常ブレーキ（${Math.round(kmh(r.v))}km/hから）`);
+  if (r.notch === 0 && prev !== 0 && r.v > 2 && r.phase === 'running') brakeLaunch(r, false);
+}
+/** 急ブレーキの衝撃（射出の強さ） */
+export function brakeShock(r: Run, v = r.v): number {
+  const k = kmh(v);
+  const rocket = r.mods.has('rocket') ? 1.5 : 1;
+  return soften(r, k * SHOCK.brake * rocket);
+}
+/** 急ブレーキ射出：衝撃に耐えられない客が前へ飛ぶ。ボタンなら速度を落として走り続ける */
+export function brakeLaunch(r: Run, button = true) {
+  if (r.phase !== 'running' || r.v < 2 || r.launchCool > 0) return;
+  r.launchCool = 0.6;
+  const k = kmh(r.v);
+  const rocket = r.mods.has('rocket');
+  applyShock(r, brakeShock(r), `急ブレーキ射出（${Math.round(k)}km/h${rocket ? '・逆噴射' : ''}）`, rocket ? 1.5 : 1);
+  r.stats.launches++;
+  if (button) {
+    r.v *= 0.45;
+    r.notch = 4;
+  }
+}
+function launchPax(r: Run, p: Pax, boost = 1) {
+  const z = spotZ(r, p.spot);
+  const f = flight(r.v, z, p.kind, boost);
+  const x = spotWorldX(r, p.spot);
+  r.fliers.push({ pax: p, t: r.time, x, z, vx: f.vx, vz: f.vz, tLand: f.t, landX: x + f.dist, judged: false, result: '' });
+}
+/** 着地の判定 */
+function judgeLanding(r: Run, f: Flier) {
+  f.judged = true;
+  const p = f.pax;
+  const slack = r.mods.has('chute') ? 3 : 0;
+  const at = POS.findIndex((pos, i) => i > 0 && f.landX >= pos + PLAT_LO - slack && f.landX <= pos + PLAT_HI + slack);
+  const big = p.kind === 'old' || p.kind === 'kid' || p.kind === 'vip';
+  const k = KINDS[p.kind];
+  if (at >= 0 && at === p.dest) {
+    const mat = r.mats[at];
+    const perfect = Math.abs(f.landX - mat.x) <= matWidth(r) / 2;
+    let fare = p.kind === 'vip' ? (perfect ? 5 : 3) : k.fare;
+    if (perfect) {
+      f.result = 'perfect';
+      r.perfectHere++;
+      if (p.kind !== 'vip') fare *= 2;
+      fare += r.streak;
+      if (p.kind === 'kid' && r.mods.has('kidlove')) fare *= 2;
+      r.stats.perfect++;
+      r.pops.push({ text: `PERFECT ¢${fare}${r.streak ? `（連続+${r.streak}）` : ''}`, x: f.landX, t: r.time, good: true });
+    } else {
+      f.result = 'good';
+      r.stats.good++;
+      r.pops.push({ text: `GOOD ¢${fare}`, x: f.landX, t: r.time, good: true });
+    }
+    r.money += fare;
+    r.stats.carried++;
+    return;
+  }
+  if (at >= 0 && at !== p.dest) {
+    f.result = 'lost';
+    r.trust -= 10;
+    r.missHere++;
+    r.pops.push({ text: `${LINE.stations[at].name}に着地…${LINE.stations[p.dest].name}行きなのに`, x: f.landX, t: r.time, good: false });
+    return;
+  }
+  f.result = 'miss';
+  r.trust -= big ? 18 : 12;
+  r.missHere++;
+  r.pops.push({ text: `${k.name}が${LINE.scenery[Math.max(0, Math.min(LINE.sections.length - 1, POS.findIndex((pos) => pos > f.landX) - 1))] === 'coast' ? '海' : '田んぼ'}にポチャン`, x: f.landX, t: r.time, good: false });
+}
+export function matWidth(r: Run): number {
+  return 5 + (r.mods.has('mat') ? 4 : 0);
 }
 
 export function tapObstacle(r: Run, o: Obstacle) {
@@ -547,7 +665,8 @@ export function togglePick(r: Run, id: number) {
     toast(r, '定員オーバー', 'bad');
     return;
   }
-  const sp = freeSpot(r, c.kind === 'old' || c.kind === 'vip' || c.kind === 'kid' ? ['seat', 'strap', 'floor'] : ['floor', 'strap', 'seat']);
+  const roofFree = r.spots.findIndex((q, j) => q.deck === 2 && !r.pax.some((x) => x.spot === j));
+  const sp = c.dest === r.target + 1 && c.kind !== 'sumo' && roofFree >= 0 ? roofFree : freeSpot(r, c.kind === 'old' || c.kind === 'vip' || c.kind === 'kid' ? ['seat', 'strap', 'floor'] : ['floor', 'strap', 'seat']);
   if (sp < 0) {
     toast(r, '立つ場所がない', 'bad');
     return;
@@ -603,32 +722,25 @@ function arrive(r: Run) {
   r.delay = Math.max(0, diff);
   r.ahead = diff;
   r.arrivals[st] = r.clock;
-  // 早着ボーナス
-  if (diff < 0) {
-    const bonus = Math.round(-diff * 12);
-    r.money += bonus;
-    r.earlyBonus += bonus;
-    r.stats.early++;
-    toast(r, `早着 ${Math.round(-diff)}秒！ ボーナス +¥${bonus}`, 'good');
-  }
+  stationDone(r, diff);
+
   // 降車
   let earned = 0;
   for (const p of [...r.pax]) {
     if (p.dest !== st) continue;
     const k = KINDS[p.kind];
-    let fare = k.fare * (st - p.from) * (r.spots[p.spot]?.deck === 2 ? 2 : 1);
-    if (p.kind === 'vip') fare = 2000;
-    if (p.kind === 'sal' && r.delay > 30) fare = Math.round(fare / 2);
+    let fare = k.fare;
+    if (p.kind === 'sal' && r.delay > 30) fare = Math.ceil(fare / 2);
     if (p.kind === 'old') r.trust = Math.min(100, r.trust + 5);
     earned += fare;
     r.stats.carried++;
     r.pax = r.pax.filter((q) => q !== p);
   }
   r.money += earned;
-  if (earned) toast(r, `運賃 +¥${earned.toLocaleString()}`, 'good');
+  if (earned) toast(r, `運賃 +¢${earned}`, 'good');
   if (st >= N_ST - 1) {
     r.phase = 'clear';
-    r.rank = diff <= 0 ? { name: '定時運行', mult: 1.5 } : diff <= 20 ? { name: 'ほぼ定時', mult: 1.2 } : diff <= 60 ? { name: '遅れあり', mult: 1.0 } : { name: '大遅延', mult: 0.8 };
+    r.rank = rankOf(diff);
     return;
   }
   r.candidates = genCandidates(r, st);
@@ -672,7 +784,10 @@ export function update(r: Run, dt: number) {
   r.time += dt;
   if (r.phase === 'running') r.clock += dt;
   r.toasts = r.toasts.filter((t) => r.time - t.t < 2.6);
-  r.fliers = r.fliers.filter((f) => r.time - f.t < 2.2);
+  r.launchCool = Math.max(0, r.launchCool - dt);
+  for (const f of r.fliers) if (!f.judged && r.time - f.t >= f.tLand) judgeLanding(r, f);
+  r.fliers = r.fliers.filter((f) => r.time - f.t < f.tLand + 1.4);
+  r.pops = r.pops.filter((p) => r.time - p.t < 2.6);
   r.shocks = r.shocks.filter((s) => r.time - s.t < 2.4);
 
   if (r.phase === 'dwell') {
@@ -756,15 +871,19 @@ function driving(r: Run, dt: number) {
   for (const o of obs) {
     if (o.state !== 'wait') continue;
     if (o.kind === 'curve') {
-      if (r.x >= o.x && x0 < o.x + o.len && kmh(r.v) > CURVE_V + 0.5) {
-        if (r.armed === 'jump') continue;
-        o.state = 'hit';
-        o.t = r.time;
+      if (x0 < o.x && r.x >= o.x && kmh(r.v) > CURVE_V + 0.5 && r.armed !== 'jump') {
+        const k = kmh(r.v);
         o.shock = predictShock(r, o);
-        applyShock(r, o.shock, `急カーブを${Math.round(kmh(r.v))}km/hで曲がって脱輪`);
-        r.v = 0;
-        r.stuck = 5;
-        toast(r, '脱輪！ 復旧に5秒', 'bad');
+        if (k > CURVE_V + 15) {
+          o.state = 'hit';
+          o.t = r.time;
+          applyShock(r, o.shock, `急カーブを${Math.round(k)}km/hで曲がって脱輪`);
+          r.v = 0;
+          r.stuck = 5;
+          toast(r, '脱輪！ 復旧に5秒', 'bad');
+        } else {
+          applyShock(r, o.shock, `急カーブを${Math.round(k)}km/hで攻めた`);
+        }
       } else if (x0 < o.x + o.len && r.x >= o.x + o.len) {
         o.state = 'passed';
         o.t = r.time;
@@ -807,8 +926,11 @@ function driving(r: Run, dt: number) {
         o.state = 'hit';
         o.t = r.time;
         if (kmh(r.v) >= treeNeed(r)) {
-          applyShock(r, o.shock, `倒木を${Math.round(kmh(r.v))}km/hで突破！`);
-          r.v *= 0.82;
+          const k = kmh(r.v);
+          const bonus = Math.floor((k - treeNeed(r)) / 10);
+          applyShock(r, o.shock, `倒木を${Math.round(k)}km/hで粉砕！${bonus > 0 ? ` +¢${bonus}` : ''}`);
+          r.money += bonus;
+          r.v *= k >= 60 ? 0.95 : 0.82;
         } else {
           applyShock(r, o.shock, '倒木に止められた');
           r.v = 0;
@@ -833,10 +955,20 @@ function driving(r: Run, dt: number) {
     if (missed.length) {
       r.trust -= 5 * missed.length;
       toast(r, `${LINE.stations[st].name}を通過。${missed.length}人が乗り過ごし`, 'bad');
-    } else toast(r, `${LINE.stations[st].name}を通過`, '');
+    } else toast(r, `${LINE.stations[st].name}を射出で通過！`, 'good');
+    const diff = r.clock - r.schedule[st];
+    r.arrivals[st] = r.clock;
+    stationDone(r, diff);
     if (st >= N_ST - 1) {
-      r.phase = 'over';
-      r.overReason = '終点を通り過ぎた';
+      if (r.pax.length === 0) {
+        r.phase = 'clear';
+        r.ahead = diff;
+        r.delay = Math.max(0, diff);
+        r.rank = rankOf(diff);
+      } else {
+        r.phase = 'over';
+        r.overReason = '終点を通り過ぎた（客が残っている）';
+      }
     } else {
       r.target++;
     }
@@ -867,7 +999,8 @@ export function eject(r: Run, id: number) {
   }
   r.pax = r.pax.filter((q) => q !== p);
   if (r.phase === 'running') {
-    r.fliers.push({ pax: p, t: r.time, x: spotWorldX(r, p.spot) });
+    launchPax(r, p);
+    r.fliers[r.fliers.length - 1].judged = true; // 降ろしただけ（判定しない）
     toast(r, `${KINDS[p.kind].name}を窓から降ろした（信頼−${loss}）`, 'bad');
   } else toast(r, `${KINDS[p.kind].name}に途中で降りてもらった（信頼−${loss}）`, 'bad');
 }
@@ -905,8 +1038,9 @@ function applyMod(r: Run, id: ModId) {
     r.cap += r.cars * 6;
   } else if (id === 'roof') {
     r.roof = true;
-    r.spots.push(...roofSpots(0));
-    r.cap += 4;
+    r.spots.push(...roofSpots(0).slice(2));
+    for (let c = 1; c < r.cars; c++) r.spots.push(...roofSpots(c).slice(0, 3));
+    r.cap += 3;
   }
 }
 
@@ -929,4 +1063,51 @@ export function moveToLevel(r: Run, id: number, car: number, deck: number): bool
   if (free < 0) return false;
   p.spot = free;
   return true;
+}
+
+function rankOf(diff: number) {
+  return diff <= 0 ? { name: '定時運行', mult: 1.5 } : diff <= 20 ? { name: 'ほぼ定時', mult: 1.2 } : diff <= 60 ? { name: '遅れあり', mult: 1.0 } : { name: '大遅延', mult: 0.8 };
+}
+/** 駅を1つ終えたとき：連続着地と早着の精算 */
+function stationDone(r: Run, diff: number) {
+  if (r.perfectHere > 0 && r.missHere === 0) {
+    r.streak++;
+    r.stats.bestStreak = Math.max(r.stats.bestStreak, r.streak);
+    if (r.streak >= 2) toast(r, `連続着地 ${r.streak}駅！ 次の倍率 ×${(1 + r.streak * 0.25).toFixed(2)}`, 'good');
+  } else if (r.missHere > 0) {
+    if (r.streak > 0) toast(r, '連続着地が途切れた', 'bad');
+    r.streak = 0;
+  }
+  r.perfectHere = 0;
+  r.missHere = 0;
+  if (diff < 0) {
+    const bonus = Math.floor(-diff / 10);
+    r.money += bonus;
+    r.earlyBonus += bonus;
+    r.stats.early++;
+    if (bonus > 0) toast(r, `早着 ${Math.round(-diff)}秒 +¢${bonus}`, 'good');
+  }
+}
+
+/** おまかせ配置：次で降りる客は屋根へ、それ以外は耐衝撃の低い順に座席・つり革へ */
+export function autoArrange(r: Run) {
+  const next = r.phase === 'dwell' ? r.target + 1 : r.target;
+  const free = new Set(r.spots.map((_, i) => i));
+  const order = [...r.pax].sort((a, b) => (a.dest === next ? 0 : 1) - (b.dest === next ? 0 : 1) || KINDS[a.kind].tol - KINDS[b.kind].tol);
+  for (const p of r.pax) p.spot = -1;
+  const take = (pred: (sp: Spot) => boolean) => {
+    const i = [...free].find((j) => pred(r.spots[j]));
+    if (i == null) return -1;
+    free.delete(i);
+    return i;
+  };
+  for (const p of order) {
+    let i = -1;
+    if (p.dest === next && p.kind !== 'sumo') i = take((sp) => sp.deck === 2);
+    if (i < 0) i = take((sp) => sp.kind === 'seat' && sp.deck === 0);
+    if (i < 0) i = take((sp) => sp.kind === 'strap');
+    if (i < 0) i = take((sp) => sp.deck !== 2);
+    if (i < 0) i = take(() => true);
+    p.spot = i;
+  }
 }

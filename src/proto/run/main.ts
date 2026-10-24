@@ -1,6 +1,7 @@
 // 「障害突破ラン」の画面と入力。車両基地 → ラン → リザルト → 車両基地 の流れ。
 
 import { DEST_COLORS } from '../../data.ts';
+import * as S from './state.ts';
 import { BAR_H, drawBar, drawInside, drawOutside, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
@@ -12,6 +13,9 @@ import {
   POS,
   UPGRADES,
   WAVE_PERIOD,
+  autoArrange,
+  brakeLaunch,
+  brakeShock,
   buyUpgrade,
   chooseOffer,
   depart,
@@ -247,6 +251,29 @@ $('btn-depart').addEventListener('click', () => {
   if (mode === 'in') setMode('out');
 });
 $('btn-seat').addEventListener('click', () => setMode(mode === 'in' ? 'out' : 'in'));
+$('btn-auto').addEventListener('click', () => {
+  autoArrange(R);
+  sfx.drop();
+});
+// 急ブレーキ射出
+const ebBtn = $('btn-eb');
+/** お金はコインのアイコン＋数字で見せる */
+function coinHtml(n: number): string {
+  return `<span class="cn"><i class="coin"></i>${n.toLocaleString()}</span>`;
+}
+function coinText(s: string): string {
+  return s.replace(/¢(\d+)/g, (_, n) => coinHtml(Number(n)));
+}
+ebBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  brakeLaunch(R);
+});
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && screen === 'run' && R.phase === 'running') {
+    e.preventDefault();
+    brakeLaunch(R);
+  }
+});
 
 // バック（押している間だけ）
 const revBtn = $('btn-reverse');
@@ -299,8 +326,8 @@ $('btn-hub').addEventListener('click', toHub);
 $('btn-again').addEventListener('click', startRun);
 
 function renderHub() {
-  $('hub-bank').textContent = `¥${meta.bank.toLocaleString()}`;
-  $('hub-sub').textContent = meta.runs ? `これまで ${meta.runs}回 出発・最高 ¥${meta.best.toLocaleString()}` : 'はじめての出発。まずは1回走ってみよう';
+  $('hub-bank').innerHTML = coinHtml(meta.bank);
+  $('hub-sub').innerHTML = meta.runs ? `これまで ${meta.runs}回 出発・最高 ${coinHtml(meta.best)}` : 'はじめての出発。まずは1回走ってみよう';
   const box = $('ups');
   box.innerHTML = '';
   for (const u of UPGRADES) {
@@ -316,7 +343,7 @@ function renderHub() {
     btn.type = 'button';
     btn.className = 'buy' + (can ? '' : ' no');
     btn.disabled = cost == null || !can;
-    btn.innerHTML = cost == null ? '完了' : can ? `¥${cost.toLocaleString()}` : `¥${cost.toLocaleString()}<small>あと¥${(cost - meta.bank).toLocaleString()}</small>`;
+    btn.innerHTML = cost == null ? '完了' : can ? coinHtml(cost) : `${coinHtml(cost)}<small>あと${coinHtml(cost - meta.bank)}</small>`;
     btn.addEventListener('click', () => {
       if (buyUpgrade(meta, u.id)) {
         sfx.coin();
@@ -346,7 +373,7 @@ function mmss(sec: number) {
 function renderStatus() {
   const st = Math.min(R.target, LINE.stations.length - 1);
   $('h-station').textContent = R.phase === 'dwell' ? `${LINE.stations[st].name} 停車中（${st + 1}/${LINE.stations.length}）` : `次は ${LINE.stations[st].name}`;
-  $('h-money').textContent = `¥${R.money.toLocaleString()}`;
+  $('h-money').innerHTML = coinHtml(R.money);
   // 遅れ
   const dg = $('g-delay');
   const fill = $('g-delay-fill');
@@ -398,7 +425,20 @@ function renderForecast() {
   const scale = $('fc-scale');
   const k = kmh(R.v);
   let shock = 0;
-  if (R.phase === 'running' && o) {
+  const stopX = POS[Math.min(R.target, LINE.stations.length - 1)];
+  const toStop = stopX - R.x;
+  const o2 = o && o.x - R.x < toStop ? o : null;
+  if (R.phase === 'running' && !o2 && toStop < 160 && toStop > -60) {
+    const sh = brakeShock(R);
+    const fly = R.airbag ? [] : R.pax.filter((p) => sh > effTol(R, p));
+    const here = fly.filter((p) => p.dest === R.target);
+    const wrong = fly.filter((p) => p.dest !== R.target);
+    shock = sh;
+    line1.innerHTML = `<span class="obs">${LINE.stations[Math.min(R.target, LINE.stations.length - 1)].name}</span><span>あと${Math.max(0, Math.round(toStop))}m</span><span class="cond">${R.streak ? `連続着地 ${R.streak}駅（×${(1 + R.streak * 0.25).toFixed(2)}）` : '止まる？飛ばす？'}</span><span class="shock ${sh > 0 ? 'on' : ''}">急ブレーキ ${sh}</span>`;
+    if (!fly.length) line3.textContent = R.pax.some((p) => p.dest === R.target) ? 'このまま急ブレーキしても誰も飛ばない。もっと速く！' : '止まって客を乗せよう';
+    else line3.textContent = `今 急ブレーキ → ${here.map((p) => KINDS[p.kind].name).join('・') || 'なし'} が飛ぶ` + (wrong.length ? `　⚠ ${wrong.map((p) => KINDS[p.kind].name + '(' + LINE.stations[p.dest].name + ')').join('・')} も飛んでしまう` : '');
+    line3.className = wrong.length ? 'warn' : '';
+  } else if (R.phase === 'running' && o) {
     const d = o.x - R.x;
     const secs = R.v > 0.5 ? Math.max(0, d / R.v) : null;
     shock = predictShock(R, o);
@@ -498,6 +538,10 @@ function renderHud() {
   renderSpeedo();
   document.body.classList.toggle('dwell', R.phase === 'dwell');
   revBtn.hidden = !(canReverse(R) || R.reverse);
+  const nearStop = POS[Math.min(R.target, LINE.stations.length - 1)] - R.x;
+  ebBtn.hidden = !(R.phase === 'running' && R.v > 2 && R.pax.length > 0);
+  ebBtn.classList.toggle('hot', nearStop < 130 && nearStop > -10);
+  ebBtn.classList.toggle('cool', R.launchCool > 0);
   if (revBtn.hidden) R.reverse = false;
   document.querySelectorAll<HTMLElement>('.notch').forEach((n) => n.classList.toggle('on', Number(n.dataset.n) === R.notch));
   itemsBox.querySelectorAll<HTMLButtonElement>('.item').forEach((b) => {
@@ -527,8 +571,8 @@ function renderHud() {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'cand' + (sel ? ' sel' : '') + (c.kind === 'vip' ? ' req' : '') + (risky ? ' risky' : '');
-        const fare = c.kind === 'vip' ? 2000 : k.fare * (c.dest - c.from);
-        b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="ic" style="background:${k.color}">${k.ch}</span><b>${k.name}${k.size > 1 ? `<small>席${k.size}</small>` : ''}</b><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>¥${fare.toLocaleString()}</span><span class="tol">耐${k.tol}</span></span><span class="note ${risky ? 'warn' : ''}">${risky ? '⚠' + risky : k.note}</span>`;
+        const fare = k.fare;
+        b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="ic" style="background:${k.color}">${k.ch}</span><b>${k.name}${k.size > 1 ? `<small>席${k.size}</small>` : ''}</b><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">耐${k.tol}</span></span><span class="note ${risky ? 'warn' : ''}">${risky ? '⚠' + risky : coinText(k.note)}</span>`;
         b.addEventListener('click', () => togglePick(R, c.id));
         box.appendChild(b);
       }
@@ -564,7 +608,10 @@ function renderHud() {
   if (sh && sh.t !== shockShown) {
     shockShown = sh.t;
     const el = $('shock');
-    el.innerHTML = `<span class="lbl">${sh.label}</span><span class="num">衝撃 ${sh.value}！</span>${sh.flew.length ? `<span class="flew">${sh.flew.join('・')}が吹っ飛んだ！</span>` : sh.safe ? '<span class="safe">全員セーフ</span>' : ''}`;
+    const launch = sh.label.startsWith('急ブレーキ射出');
+    if (launch) el.innerHTML = `<span class="lbl">${sh.label}</span><span class="num">${sh.flew.length ? `${sh.flew.join('・')} 射出！` : '…誰も飛ばない'}</span>`;
+    else el.innerHTML = `<span class="lbl">${coinText(sh.label)}</span><span class="num">衝撃 ${sh.value}！</span>${sh.flew.length ? `<span class="flew">${sh.flew.join('・')}が吹っ飛んだ！</span>` : sh.safe ? '<span class="safe">全員セーフ</span>' : ''}`;
+    el.classList.toggle('launch', launch);
     el.classList.remove('show');
     void el.offsetWidth;
     el.classList.add('show');
@@ -576,7 +623,7 @@ function renderHud() {
   const key = R.toasts.map((t) => t.text + t.t).join('|');
   if (tb.dataset.k !== key) {
     tb.dataset.k = key;
-    tb.innerHTML = R.toasts.map((t) => `<div class="toast ${t.kind}">${t.text}</div>`).join('');
+    tb.innerHTML = R.toasts.map((t) => `<div class="toast ${t.kind}">${coinText(t.text)}</div>`).join('');
   }
 
   if ((R.phase === 'clear' || R.phase === 'over') && !resultShown) {
@@ -603,15 +650,18 @@ function showResult() {
     ['吹っ飛ばした客', `${R.stats.flew}人`],
     ['最大の衝撃', `${R.stats.maxShock}`],
     ['早着', `${R.stats.early}回`],
+    ['射出', `${R.stats.launches}回`],
+    ['PERFECT / GOOD', `${R.stats.perfect} / ${R.stats.good}`],
+    ['最高連続着地', `${R.stats.bestStreak}駅`],
   ];
   $('result-stats').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   const money: [string, string][] = [
-    ['運賃', `¥${(R.money - R.earlyBonus).toLocaleString()}`],
-    ['早着ボーナス', `¥${R.earlyBonus.toLocaleString()}`],
+    ['運賃', coinHtml(R.money - R.earlyBonus)],
+    ['早着ボーナス', coinHtml(R.earlyBonus)],
   ];
-  if (clear) money.push([`ダイヤ評価「${R.rank?.name}」×${mult}`, `${bonus >= 0 ? '' : '−'}¥${Math.abs(bonus).toLocaleString()}`]);
-  $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">今回の稼ぎ</dt><dd class="sum">¥${total.toLocaleString()}</dd>`;
-  $('result-bank').textContent = `貯金 ¥${meta.bank.toLocaleString()}`;
+  if (clear) money.push([`ダイヤ評価「${R.rank?.name}」×${mult}`, `${bonus >= 0 ? '' : '−'}${coinHtml(Math.abs(bonus))}`]);
+  $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">今回の稼ぎ</dt><dd class="sum">${coinHtml(total)}</dd>`;
+  $('result-bank').innerHTML = `貯金 ${coinHtml(meta.bank)}`;
   $('result').hidden = false;
 }
 
@@ -765,7 +815,7 @@ soundBtn.addEventListener('click', () => {
   toggleMute();
   paintSound();
 });
-const W = { notch: -1, phase: '', money: 0, shock: 0, picked: 0, offer: false, taps: new Map<Obstacle, number>(), states: new Map<Obstacle, string>(), screen: '' };
+const W = { pops: 0, notch: -1, phase: '', money: 0, shock: 0, picked: 0, offer: false, taps: new Map<Obstacle, number>(), states: new Map<Obstacle, string>(), screen: '' };
 function watchSounds() {
   if (screen !== W.screen) {
     W.screen = screen;
@@ -788,6 +838,12 @@ function watchSounds() {
   W.phase = R.phase;
   if (R.money > W.money) sfx.coin();
   W.money = R.money;
+  const lp = R.pops[R.pops.length - 1];
+  if (lp && lp.t !== W.pops) {
+    W.pops = lp.t;
+    if (lp.good) (lp.text.startsWith('PERFECT') ? sfx.cleared : sfx.coin)();
+    else sfx.bad();
+  }
   const sh = R.shocks[R.shocks.length - 1];
   if (sh && sh.t !== W.shock) {
     W.shock = sh.t;
@@ -817,7 +873,7 @@ function watchSounds() {
 // ---------- ループ ----------
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get('speed')) || 1);
-if (params.has('debug')) Object.assign(window, { __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
+if (params.has('debug')) Object.assign(window, { __S: S, __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
 if (params.has('go')) startRun();
 else renderHub();
 let last = performance.now();

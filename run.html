@@ -54,6 +54,8 @@
       canvas { display: block; width: 100%; height: 100%; touch-action: none; }
       #btn-mode { position: absolute; right: 10px; top: 112px; min-width: 88px; height: 40px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 14px; box-shadow: 0 3px 0 var(--ink); }
       #toasts { position: absolute; top: 114px; left: 12px; right: 110px; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; pointer-events: none; }
+      .cn { white-space: nowrap; display: inline-block; }
+      .coin { display: inline-block; width: .95em; height: .95em; margin: 0 .14em -.12em 0; border: 2px solid var(--ink); border-radius: 50%; background: radial-gradient(circle at 35% 32%, #fff3b8 0 18%, #f2c94c 19% 62%, #d49a1c 63%); box-shadow: inset 0 0 0 1.5px #f8dc7a; vertical-align: baseline; box-sizing: border-box; }
       .toast { padding: 4px 11px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 12.5px; }
       .toast.bad { background: var(--tomato); color: #fffdf6; }
       .toast.good { background: #dff2e8; }
@@ -62,6 +64,10 @@
       #shock .lbl { padding: 3px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--mustard); font-weight: 900; font-size: 13px; }
       #shock .num { font-family: var(--dela); font-size: 50px; line-height: 1.1; color: var(--tomato); -webkit-text-stroke: 2px var(--ink); transform: rotate(-4deg); }
       #shock .flew { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--tomato); color: #fffdf6; font-weight: 900; }
+      #shock.launch { top: 64px; }
+      #shock.launch.show { animation-duration: 1.1s; }
+      #shock.launch .num { font-size: 28px; color: var(--mustard); }
+      #shock .go { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-weight: 900; }
       #shock .safe { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--mint); font-weight: 900; }
       @keyframes shock { 0% { opacity: 0; transform: scale(1.6); } 8% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-16px); } }
       .ripple { position: fixed; width: 54px; height: 54px; margin: -27px 0 0 -27px; border: 3px solid var(--tomato); border-radius: 50%; pointer-events: none; animation: rip 0.4s ease-out forwards; z-index: 30; }
@@ -144,6 +150,7 @@
       #btn-depart:disabled { opacity: 0.5; }
       .drow { display: flex; gap: 8px; }
       .drow #btn-depart { flex: 1.4; }
+      #btn-auto { flex: .7; min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--mustard); box-shadow: 3px 3px 0 var(--ink); font-size: 12.5px; font-weight: 900; }
       #btn-seat { flex: 1; min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: #dff2e8; box-shadow: 3px 3px 0 var(--ink); font-size: 13.5px; font-weight: 900; line-height: 1.25; }
       #dwell-hint { font-size: 12px; font-weight: 900; color: #2e6b53; }
       #dwell-hint:empty { display: none; }
@@ -211,6 +218,13 @@
       #btn-reverse { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); height: 52px; padding: 0 22px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 16px; font-weight: 900; box-shadow: 0 4px 0 var(--ink); touch-action: none; z-index: 4; animation: beat 1s infinite; }
       #btn-reverse:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 1px 0 var(--ink); animation: none; }
       #btn-reverse[hidden] { display: none; }
+      #btn-eb { position: absolute; left: 12px; bottom: 14px; min-width: 132px; height: 64px; padding: 0 14px; border: 3px solid var(--ink); border-radius: 18px; background: #F08E78; color: var(--ink); box-shadow: 0 5px 0 var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; z-index: 4; touch-action: none; }
+      #btn-eb b { font-family: var(--dela); font-size: 15px; }
+      #btn-eb small { font-size: 10px; font-weight: 800; opacity: .7; }
+      #btn-eb.hot { background: var(--tomato); color: #FFFDF6; animation: beat .7s infinite; }
+      #btn-eb.cool { opacity: .55; }
+      #btn-eb:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
+      #btn-eb[hidden] { display: none; }
       dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-weight: 700; font-size: 14px; }
       dd { margin: 0; text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
       dt.sum, dd.sum { padding-top: 6px; border-top: 2px solid var(--ink); font-family: var(--dela); font-weight: 400; font-size: 20px; }
@@ -261,6 +275,7 @@
         <button id="btn-mode" type="button">車内 ▶</button>
         <button id="btn-map" type="button">路線図</button>
         <button id="btn-reverse" type="button" hidden>◀ 押している間バック</button>
+        <button id="btn-eb" type="button" hidden><b>急ブレーキ射出！</b><small>Space</small></button>
         <div id="pax-card" hidden></div>
         <div id="shock"></div>
         <div id="toasts"></div>
@@ -282,7 +297,7 @@
           <div class="dhead"><b>乗せる客を選ぶ</b><span id="seats"></span><span id="seats-sub"></span></div>
           <div id="cands"></div>
           <div id="dwell-hint"></div>
-          <div class="drow"><button id="btn-seat" type="button">車内で席を決める</button><button id="btn-depart" type="button">発車 ▶</button></div>
+          <div class="drow"><button id="btn-auto" type="button">おまかせ配置</button><button id="btn-seat" type="button">車内で席を決める</button><button id="btn-depart" type="button">発車 ▶</button></div>
         </div>
       </footer>
     </div>
@@ -311,13 +326,14 @@
       <div class="hub-in">
         <div class="hub-title">ブラウザ ローグライク × 鉄道 ・ 障害突破ラン</div>
         <h1 class="hub-logo"><span>まもなく、</span>魔改造電車が参ります</h1>
-        <div class="hub-bank"><span><b id="hub-bank">¥0</b></span><span style="font-weight:900">車両基地の貯金</span></div>
+        <div class="hub-bank"><span><b id="hub-bank">0</b></span><span style="font-weight:900">車両基地の貯金</span></div>
         <div id="hub-sub"></div>
         <details class="how"><summary>遊び方（タップで開く）</summary><ul class="rules">
-          <li>駅で<b>乗せる客を選ぶ</b>。客ごとに耐えられる衝撃が違う</li>
-          <li>倒木は<b>速く</b>、急カーブは<b>遅く</b>。鹿はタップ、電柱は連打</li>
-          <li>衝撃が耐性を超えた客は<b>窓から吹っ飛ぶ</b>。車内で座席・つり革へ移して守ろう</li>
-          <li>速く走れば遅れを取り戻せるが、60km/h超は揺れる</li>
+          <li>駅で<b>乗せる客を選ぶ</b>。運賃は<i class="coin"></i>1〜<i class="coin"></i>5、耐えられる衝撃は客ごとに違う</li>
+          <li>駅の手前で<b>急ブレーキ射出</b>（Space）。耐えられない客が前へ飛ぶ。点線が着地予測</li>
+          <li>ホームに着地でGOOD、<b>×2マット</b>ならPERFECTで運賃2倍。駅ごとに連続で決めると上乗せ</li>
+          <li>速すぎると<b>車内の客まで飛ぶ</b>。席・つり革・屋根の配置で「誰が飛ぶか」を決めよう</li>
+          <li>倒木は速く（速すぎると揺れる）、急カーブは遅く。鹿はタップ、電柱は連打</li>
           <li>遅れが上限を超えるか、信頼0で運転打ち切り</li>
         </ul></details>
         <div class="hub-title">恒久強化（稼いだ運賃で）</div>

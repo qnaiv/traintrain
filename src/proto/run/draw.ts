@@ -14,6 +14,13 @@ import {
   STOP_HI,
   STOP_LO,
   WAVE_PERIOD,
+  PLAT_HI,
+  PLAT_LO,
+  brakeShock,
+  flight,
+  matWidth,
+  spotZ,
+  spotWorldX,
   threat,
   ghostX,
   WAVE_UP,
@@ -101,6 +108,16 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
     ahead: 46,
     extra: (iso, put) => {
       for (const o of obs) drawObstacle(iso, put, r, o, labels, hits);
+      // 着地マット
+      for (let i = 1; i < LINE.stations.length; i++) {
+        const m = r.mats[i];
+        const mw = matWidth(r);
+        if (!iso.inX(m.x - mw, m.x + mw)) continue;
+        put(m.x, 3.7, () => {
+          iso.box(m.x - mw / 2, m.x + mw / 2, 2.6, 4.9, 1.05, 1.28, i === r.target ? '#E4553A' : '#F08E78', { top: i === r.target ? '#F2C94C' : '#F3D27F' });
+          iso.label(m.x, 3.75, 1.35, '×2', 13, INK);
+        });
+      }
       // ゴースト列車（ダイヤどおりの位置）
       if (r.phase === 'running') {
         const gx = ghostX(r.clock);
@@ -162,28 +179,65 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
           iso.poly([[rx, -0.25, z0 + 0.3], [rx - f * 0.6, 0, z0 + 0.55], [rx, 0.25, z0 + 0.8]], '#E4553A', 0);
         }
       }
-      // 吹っ飛ぶ客
-      for (const f of r.fliers) {
-        const u = Math.min(1, (r.time - f.t) / 1.6);
-        const x = f.x + u * 6;
-        const y = 1.0 - u * 10;
-        const z = 3.2 + Math.sin(u * Math.PI) * 9 - u * 3.6;
-        if (u < 1) {
-          for (let k = 1; k < 6; k++) {
-            const uu = u - k * 0.06;
-            if (uu <= 0) break;
-            const [dx, dy] = iso.P(f.x + uu * 6, 1.0 - uu * 10, 3.2 + Math.sin(uu * Math.PI) * 9 - uu * 3.6 + 1);
-            iso.ell(dx, dy, 2, 2, INK, 0);
+      // 予測の放物線（駅が近いとき、今急ブレーキしたら）
+      const stopX = POS[Math.min(r.target, LINE.stations.length - 1)];
+      if (r.phase === 'running' && r.v > 2 && stopX - r.x < 130 && stopX - r.x > -10) {
+        const sh = brakeShock(r);
+        const flyers = r.pax.filter((p) => sh > effTol(r, p) && !r.airbag);
+        const seen = new Set<string>();
+        const boost = r.mods.has('rocket') ? 1.5 : 1;
+        const mat = r.mats[r.target];
+        for (const p of flyers) {
+          const z = spotZ(r, p.spot);
+          const f = flight(r.v, z, p.kind, boost);
+          const x0 = spotWorldX(r, p.spot);
+          const key = `${Math.round(x0 + f.dist)}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const wrong = p.dest !== r.target;
+          ctx.fillStyle = wrong ? '#B53E28' : INK;
+          for (let k = 1; k < 14; k++) {
+            const t = (f.t * k) / 14;
+            const [px, py] = iso.P(x0 + f.vx * t, 0, z + f.vz * t - (9.8 * t * t) / 2);
+            ctx.beginPath();
+            ctx.arc(px, py, 2.1, 0, Math.PI * 2);
+            ctx.fill();
           }
-          const h = sized(iso, x, y, z, f.pax, 'stand', ((Math.floor(u * 10) % 4) as Facing), scaleOf(f.pax) * 2.2);
-          tagAt(ctx, h.hx + 30, h.hy - 18, 'わ〜っ！', '#FFFDF6');
-        } else {
-          const [sx, sy] = iso.P(f.x + 6, -9, -0.3);
-          const k = (r.time - f.t - 1.6) / 0.6;
-          ctx.globalAlpha = Math.max(0, 1 - k);
-          iso.ell(sx, sy, 10 + k * 26, 4 + k * 10, 'rgba(255,253,246,0.9)', 1.4);
-          ctx.globalAlpha = 1;
+          const lx = x0 + f.dist;
+          const onPlat = lx >= stopX + PLAT_LO && lx <= stopX + PLAT_HI;
+          const onMat = onPlat && Math.abs(lx - mat.x) <= matWidth(r) / 2;
+          const [cx, cy] = iso.P(lx, 0.4, onPlat ? 1.07 : 0);
+          ctx.setLineDash([5, 4]);
+          iso.ell(cx, cy, 1.3 * iso.s * 1.22, 1.3 * iso.s * 0.7, wrong ? 'rgba(228,85,58,0.35)' : onMat ? 'rgba(111,195,160,0.65)' : onPlat ? 'rgba(233,178,62,0.5)' : 'rgba(228,85,58,0.3)', 2.4, wrong ? '#B53E28' : onMat ? '#2E6B53' : onPlat ? '#8A5D00' : '#B53E28');
+          ctx.setLineDash([]);
+          iso.label(lx, 0.4, onPlat ? 1.9 : 0.9, wrong ? `${KINDS[p.kind].ch}✕` : KINDS[p.kind].ch, 11, wrong ? '#B53E28' : INK);
         }
+      }
+      // 飛んでいる客
+      for (const f of r.fliers) {
+        const t = Math.min(r.time - f.t, f.tLand);
+        const landed = r.time - f.t >= f.tLand;
+        const x = f.x + f.vx * t;
+        const zAir = Math.max(0, f.z + f.vz * t - (9.8 * t * t) / 2);
+        const slack = r.mods.has('chute') ? 3 : 0;
+        const onPlat = POS.some((pos, i) => i > 0 && f.landX >= pos + PLAT_LO - slack && f.landX <= pos + PLAT_HI + slack);
+        if (landed && !onPlat) {
+          const k = (r.time - f.t - f.tLand) / 1.2;
+          const [sx, sy] = iso.P(f.landX, 0.4, 0);
+          ctx.globalAlpha = Math.max(0, 1 - k);
+          iso.ell(sx, sy, 8 + k * 30, 3 + k * 12, 'rgba(255,253,246,0.9)', 1.4);
+          ctx.globalAlpha = 1;
+          continue;
+        }
+        const h = sized(iso, landed ? f.landX : x, landed ? 0.6 : 0, landed ? 1.05 : zAir, f.pax, 'stand', landed ? 3 : ((Math.floor(t * 12) % 4) as Facing), scaleOf(f.pax) * (landed ? 1 : 1.6));
+        if (!landed) tagAt(ctx, h.hx + 24, h.hy - 14, 'わ〜っ！', '#FFFDF6');
+      }
+      // 着地の結果
+      for (const p of r.pops) {
+        const k = (r.time - p.t) / 2.6;
+        ctx.globalAlpha = 1 - k * k;
+        coinLabel(ctx, iso, p.x, 6 + k * 3, p.text, 17, p.good ? '#2E6B53' : '#B53E28');
+        ctx.globalAlpha = 1;
       }
       labels.forEach((f) => f());
     },
@@ -697,3 +751,43 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
 }
 
 export { hash };
+
+/** "¢12" をコインのアイコン付きで描く */
+function coinLabel(ctx: CanvasRenderingContext2D, iso: Iso, x: number, z: number, text: string, size: number, fill: string) {
+  const [sx, sy] = iso.P(x, 0, z);
+  const parts = text.split(/(¢\d+)/).filter(Boolean);
+  ctx.font = `900 ${size}px "Zen Maru Gothic", sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.lineJoin = 'round';
+  const cw = size * 0.95;
+  const widths = parts.map((p) => (p.startsWith('¢') ? cw + 3 + ctx.measureText(p.slice(1)).width : ctx.measureText(p).width));
+  let cx = sx - widths.reduce((a, b) => a + b, 0) / 2;
+  parts.forEach((p, i) => {
+    let t = p;
+    if (p.startsWith('¢')) {
+      const r = cw / 2;
+      ctx.beginPath();
+      ctx.arc(cx + r, sy, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#F2C94C';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = INK;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + r, sy, r * 0.55, 0, Math.PI * 2);
+      ctx.strokeStyle = '#D49A1C';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      cx += cw + 3;
+      t = p.slice(1);
+    }
+    ctx.strokeStyle = '#FFFDF6';
+    ctx.lineWidth = 3.5;
+    ctx.strokeText(t, cx, sy);
+    ctx.fillStyle = fill;
+    ctx.fillText(t, cx, sy);
+    cx += ctx.measureText(t).width;
+    void i;
+  });
+}
