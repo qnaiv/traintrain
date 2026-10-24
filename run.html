@@ -142,6 +142,12 @@
       .cand .note.warn { color: #b53e28; font-weight: 900; }
       #btn-depart { min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--tomato); color: #fffdf6; box-shadow: 3px 3px 0 var(--ink); font-size: 18px; font-weight: 900; }
       #btn-depart:disabled { opacity: 0.5; }
+      .drow { display: flex; gap: 8px; }
+      .drow #btn-depart { flex: 1.4; }
+      #btn-seat { flex: 1; min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: #dff2e8; box-shadow: 3px 3px 0 var(--ink); font-size: 13.5px; font-weight: 900; line-height: 1.25; }
+      #dwell-hint { font-size: 12px; font-weight: 900; color: #2e6b53; }
+      #dwell-hint:empty { display: none; }
+      body.inside.dwell #forecast { display: none; }
       body.inside #items { display: none; }
       #cartabs { display: none; gap: 5px; overflow-x: auto; }
       body.inside #cartabs { display: flex; }
@@ -275,7 +281,8 @@
         <div id="dwell">
           <div class="dhead"><b>乗せる客を選ぶ</b><span id="seats"></span><span id="seats-sub"></span></div>
           <div id="cands"></div>
-          <button id="btn-depart" type="button">発車 ▶</button>
+          <div id="dwell-hint"></div>
+          <div class="drow"><button id="btn-seat" type="button">車内で席を決める</button><button id="btn-depart" type="button">発車 ▶</button></div>
         </div>
       </footer>
     </div>

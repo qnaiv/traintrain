@@ -123,6 +123,7 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
           const x = stop - 21 + i * 2.6;
           const y = 3.1 + (i % 2) * 0.9;
           const picked = r.picked.has(c.id);
+          if (picked) return; // もう車内にいる
           put(x, y, () => {
             if (picked) {
               const [cx, cy] = iso.P(x, y, 1.07);

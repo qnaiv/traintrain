@@ -27,7 +27,6 @@ import {
   moveToSpot,
   newRun,
   nextObstacle,
-  pickedSeats,
   predictShock,
   saveMeta,
   seatsUsed,
@@ -243,7 +242,11 @@ for (const it of ITEM_DEF) {
   itemsBox.appendChild(b);
 }
 
-$('btn-depart').addEventListener('click', () => depart(R));
+$('btn-depart').addEventListener('click', () => {
+  depart(R);
+  if (mode === 'in') setMode('out');
+});
+$('btn-seat').addEventListener('click', () => setMode(mode === 'in' ? 'out' : 'in'));
 
 // バック（押している間だけ）
 const revBtn = $('btn-reverse');
@@ -529,12 +532,14 @@ function renderHud() {
         b.addEventListener('click', () => togglePick(R, c.id));
         box.appendChild(b);
       }
-      $('seats').textContent = `席 ${seatsUsed(R) + pickedSeats(R)}/${R.cap}（${R.pax.length + R.picked.size}人）`;
+      $('seats').textContent = `席 ${seatsUsed(R)}/${R.cap}（${R.pax.length}人）`;
       $('seats-sub').textContent = R.pax.length ? `うち乗車中 ${R.pax.length}人` : '力士は席を3つ使う';
       const n = R.picked.size;
       $('btn-depart').textContent = n ? `${n}人を乗せて発車 ▶` : '誰も乗せずに発車 ▶';
     }
     ($('btn-depart') as HTMLButtonElement).disabled = !!R.offer;
+    $('btn-seat').textContent = mode === 'in' ? '◀ 客選びに戻る' : `車内で席を決める（${R.pax.length}人）`;
+    $('dwell-hint').textContent = mode === 'in' ? '時計は止まっている。客をドラッグして席を決めよう（上のタブで段・車両を切り替え）' : '';
   } else candKey = '';
 
   // 3択

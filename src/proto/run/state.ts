@@ -401,7 +401,7 @@ export function toast(r: Run, text: string, kind = '') {
 
 export const kmh = (v: number) => v * 3.6;
 export const seatsUsed = (r: Run) => r.pax.reduce((n, p) => n + KINDS[p.kind].size, 0);
-export const pickedSeats = (r: Run) => r.candidates.filter((c) => r.picked.has(c.id)).reduce((n, p) => n + KINDS[p.kind].size, 0);
+export const pickedSeats = (_r: Run) => 0;
 const minus = (r: Run) => (r.mods.has('susp') ? 10 : 0) + r.meta.lv.susp * 3;
 const soften = (r: Run, v: number) => Math.max(0, Math.round(v - minus(r)));
 
@@ -533,17 +533,28 @@ export function useItem(r: Run, id: ItemId) {
 }
 export const ITEM_NAME: Record<ItemId, string> = { jump: 'ジャンプ台', saw: 'チェーンソー', airbag: 'エアバッグ' };
 
+/** 選んだ客はその場で乗り込む（停車中に席を決められる）。もう一度押すとホームに戻る */
 export function togglePick(r: Run, id: number) {
-  if (r.picked.has(id)) r.picked.delete(id);
-  else {
-    const c = r.candidates.find((q) => q.id === id);
-    if (!c) return;
-    if (seatsUsed(r) + pickedSeats(r) + KINDS[c.kind].size > r.cap) {
-      toast(r, '定員オーバー', 'bad');
-      return;
-    }
-    r.picked.add(id);
+  const c = r.candidates.find((q) => q.id === id);
+  if (!c) return;
+  if (r.picked.has(id)) {
+    r.picked.delete(id);
+    r.pax = r.pax.filter((q) => q !== c);
+    c.spot = -1;
+    return;
   }
+  if (seatsUsed(r) + KINDS[c.kind].size > r.cap) {
+    toast(r, '定員オーバー', 'bad');
+    return;
+  }
+  const sp = freeSpot(r, c.kind === 'old' || c.kind === 'vip' || c.kind === 'kid' ? ['seat', 'strap', 'floor'] : ['floor', 'strap', 'seat']);
+  if (sp < 0) {
+    toast(r, '立つ場所がない', 'bad');
+    return;
+  }
+  c.spot = sp;
+  r.pax.push(c);
+  r.picked.add(id);
 }
 
 function freeSpot(r: Run, prefer: SpotKind[]): number {
@@ -565,11 +576,6 @@ export function moveToSpot(r: Run, id: number, spot: number) {
 export function depart(r: Run) {
   if (r.phase !== 'dwell' || r.offer) return;
   if (r.target >= N_ST - 1) return;
-  for (const c of r.candidates) {
-    if (!r.picked.has(c.id)) continue;
-    c.spot = freeSpot(r, c.kind === 'old' || c.kind === 'vip' || c.kind === 'kid' ? ['seat', 'strap', 'floor'] : ['floor', 'strap', 'seat']);
-    r.pax.push(c);
-  }
   r.candidates = [];
   r.picked.clear();
   r.phase = 'running';
@@ -851,6 +857,14 @@ export function eject(r: Run, id: number) {
   const big = p.kind === 'old' || p.kind === 'kid' || p.kind === 'vip';
   const loss = r.phase === 'running' ? (big ? 15 : 8) : big ? 8 : 4;
   r.trust -= loss;
+  if (r.picked.has(id)) {
+    // 停車中に乗せたばかりの客ならホームに戻すだけ
+    r.picked.delete(id);
+    r.trust += loss;
+    r.pax = r.pax.filter((q) => q !== p);
+    p.spot = -1;
+    return;
+  }
   r.pax = r.pax.filter((q) => q !== p);
   if (r.phase === 'running') {
     r.fliers.push({ pax: p, t: r.time, x: spotWorldX(r, p.spot) });
