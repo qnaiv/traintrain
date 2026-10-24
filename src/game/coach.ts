@@ -373,7 +373,8 @@ function render(say0: Say | null, r: Run, meta: Meta) {
     box.querySelectorAll<HTMLButtonElement>('.cbtn').forEach((el) =>
       el.addEventListener('click', () => {
         btns?.[Number(el.dataset.i)]?.fn();
-        shown = '';
+        // 次の説明があれば次のフレームで出し直す（なければ閉じたまま）
+        hide();
       }),
     );
     box.querySelector('.skip')?.addEventListener('click', () => endTutorial(r, meta));
@@ -381,7 +382,7 @@ function render(say0: Say | null, r: Run, meta: Meta) {
       const f = onNext;
       onNext = null;
       f?.();
-      shown = '';
+      hide();
     });
     box.hidden = false;
   }
