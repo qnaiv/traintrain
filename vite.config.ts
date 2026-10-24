@@ -9,6 +9,8 @@ export default defineConfig({
         main: 'index.html',
         // 試作：満員電車シェイク
         shake: 'shake.html',
+        // 試作：障害突破ラン（v0.7）
+        run: 'run.html',
       },
     },
   },

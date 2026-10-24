@@ -55,13 +55,25 @@ function lookOf(seed: number): Look {
 export interface ExtResult {
   /** 電車の画面上の範囲（タップ判定用） */
   train: { x0: number; y0: number; x1: number; y1: number };
+  /** この描画で使った投影（障害のタップ判定などに使う） */
+  iso: Iso;
+}
+
+/** 試作などで、台座の上に物を足すための口 */
+export interface ExtOpts {
+  /** 先頭より先に見せる距離 [m] */
+  ahead?: number;
+  /** 物の描画キューに足す（奥・線路・手前の順で並べ替えられる） */
+  extra?: (iso: Iso, put: (x: number, y: number, f: () => void) => void) => void;
+  /** すべての上に描く */
+  after?: (iso: Iso) => void;
 }
 
 let smoothS = 0;
 
-export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, top: number, bottom: number): ExtResult {
+export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, top: number, bottom: number, opts: ExtOpts = {}): ExtResult {
   const trainLen = g.stats.cars * CAR_LEN;
-  const xb = g.x + AHEAD;
+  const xb = g.x + (opts.ahead ?? AHEAD);
   const xa = g.x - trainLen - BEHIND;
   const Lv = xb - xa;
   // 幅は編成と前後の余白が収まるように、高さは台座全体が収まるように
@@ -295,12 +307,14 @@ export function drawExterior(ctx: CanvasRenderingContext2D, g: Game, w: number, 
       ty1 = Math.max(ty1, sy);
     }
   }
+  opts.extra?.(iso, put);
   iso.flush();
 
   // 架線
   const wz = Math.max(6.8, 0.95 + 2.9 * decks + 1.6);
   iso.line([xa, 0, wz], [xb, 0, wz], '#6B655C', Math.max(0.8, iso.lw * 0.8));
-  return { train: { x0: tx0 - 6, y0: ty0 - 6, x1: tx1 + 6, y1: ty1 + 6 } };
+  opts.after?.(iso);
+  return { train: { x0: tx0 - 6, y0: ty0 - 6, x1: tx1 + 6, y1: ty1 + 6 }, iso };
 }
 
 function segments(g: Game, xa: number, xb: number): [number, number, Scenery][] {
