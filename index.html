@@ -5,81 +5,375 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1F1B16" />
     <title>まもなく、魔改造電車が参ります</title>
+    <meta name="description" content="急ブレーキの慣性で乗客を駅のホームへ射出して届ける、鉄道ローグライク。" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700;900&display=swap"
-    />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" />
+    <style>
+      :root { --paper:#f5efe3; --card:#fffdf6; --ink:#1f1b16; --sub:#5a5045; --tomato:#e4553a; --mint:#6fc3a0; --mustard:#e9b23e; --dela:'Dela Gothic One', sans-serif; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: 'Zen Maru Gothic', sans-serif; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+      button { font-family: inherit; color: var(--ink); cursor: pointer; }
+      .num, .dela { font-family: var(--dela); font-weight: 400; font-variant-numeric: tabular-nums; }
+      #app { position: relative; display: flex; flex-direction: column; height: 100dvh; max-width: 760px; margin: 0 auto; background: var(--paper); }
+      body.danger #app::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 60px rgba(228,85,58,0.45); animation: vig 1s ease-in-out infinite alternate; z-index: 15; }
+      @keyframes vig { from { opacity: 0.3; } to { opacity: 1; } }
+
+      /* ステータス */
+      header { padding: 8px 12px 8px; background: var(--card); border-bottom: 2px solid var(--ink); display: flex; flex-direction: column; gap: 6px; }
+      .row { display: flex; align-items: center; gap: 8px; }
+      .chip { padding: 2px 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 12px; font-weight: 900; white-space: nowrap; }
+      #h-station { font-size: 14px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #h-money { margin-left: auto; font-family: var(--dela); font-size: 17px; }
+      #btn-sound { width: 34px; height: 30px; border: 2px solid var(--ink); border-radius: 8px; background: var(--card); font-size: 14px; padding: 0; flex: none; }
+      .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .gauge.big { position: relative; height: 26px; border: 2px solid var(--ink); border-radius: 13px; background: var(--card); overflow: visible; }
+      .gauge.big .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 11px; background: var(--mint); transition: width 0.2s; }
+      .gauge.big.amber .fill { background: var(--mustard); }
+      .gauge.big.red .fill { background: var(--tomato); }
+      .gauge.big .tick { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(31,27,22,0.35); }
+      .gauge.big .tick b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 900; color: var(--sub); margin-top: 1px; }
+      .gauge.big.early .text { color: #2e6b53; }
+      .gauges { margin-bottom: 6px; }
+      .gauge.big .text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--dela); font-size: 13px; white-space: nowrap; text-shadow: 0 0 3px #fffdf6, 0 0 3px #fffdf6; }
+      .trend { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 900; }
+      .trend:empty { display: none; }
+      .trend.up { color: #b53e28; } .trend.down { color: #2e6b53; }
+      .gauge.trust .fill { background: var(--mint); }
+      .gauge.trust.red .fill { background: var(--tomato); }
+      .gauge.trust.red .text::before { content: '♥ '; color: var(--tomato); animation: beat 1s infinite; }
+      @keyframes beat { 50% { opacity: 0.3; } }
+      .gauge.shake { animation: shake 0.15s 2; }
+      @keyframes shake { 25% { transform: translateX(-2px); } 75% { transform: translateX(2px); } }
+      .float-minus { position: absolute; right: 6px; top: -4px; font-family: var(--dela); font-size: 16px; color: var(--tomato); pointer-events: none; animation: floatup 1s ease-out forwards; text-shadow: 0 0 3px #fffdf6; }
+      @keyframes floatup { to { transform: translateY(-22px); opacity: 0; } }
+      #h-mods { font-size: 11px; font-weight: 900; color: #2e6b53; min-height: 0; }
+      #h-mods:empty { display: none; }
+
+      /* ジオラマ */
+      main { position: relative; flex: 1; min-height: 0; }
+      canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+      #btn-mode { position: absolute; right: 10px; top: 112px; min-width: 88px; height: 40px; padding: 0 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 14px; box-shadow: 0 3px 0 var(--ink); }
+      #toasts { position: absolute; top: 114px; left: 12px; right: 110px; display: flex; flex-direction: column; gap: 5px; align-items: flex-start; pointer-events: none; }
+      .cn { white-space: nowrap; display: inline-block; }
+      .coin { display: inline-block; width: .95em; height: .95em; margin: 0 .14em -.12em 0; border: 2px solid var(--ink); border-radius: 50%; background: radial-gradient(circle at 35% 32%, #fff3b8 0 18%, #f2c94c 19% 62%, #d49a1c 63%); box-shadow: inset 0 0 0 1.5px #f8dc7a; vertical-align: baseline; box-sizing: border-box; }
+      .toast { padding: 4px 11px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 12.5px; }
+      .toast.bad { background: var(--tomato); color: #fffdf6; }
+      .toast.good { background: #dff2e8; }
+      #shock { position: absolute; left: 0; right: 0; top: 150px; display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: none; opacity: 0; z-index: 5; }
+      #shock.show { animation: shock 2.2s ease-out forwards; }
+      #shock .lbl { padding: 3px 12px; border: 2px solid var(--ink); border-radius: 999px; background: var(--mustard); font-weight: 900; font-size: 13px; }
+      #shock .num { font-family: var(--dela); font-size: 50px; line-height: 1.1; color: var(--tomato); -webkit-text-stroke: 2px var(--ink); transform: rotate(-4deg); }
+      #shock .flew { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--tomato); color: #fffdf6; font-weight: 900; }
+      #shock.launch { top: 64px; }
+      #shock.launch.show { animation-duration: 1.1s; }
+      #shock.launch .num { font-size: 28px; color: var(--mustard); }
+      #shock .go { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-weight: 900; }
+      #shock .safe { padding: 4px 12px; border: 2px solid var(--ink); border-radius: 10px; background: var(--mint); font-weight: 900; }
+      @keyframes shock { 0% { opacity: 0; transform: scale(1.6); } 8% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-16px); } }
+      .ripple { position: fixed; width: 54px; height: 54px; margin: -27px 0 0 -27px; border: 3px solid var(--tomato); border-radius: 50%; pointer-events: none; animation: rip 0.4s ease-out forwards; z-index: 30; }
+      @keyframes rip { from { transform: scale(0.3); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+
+      /* 下 */
+      footer { padding: 8px 10px calc(10px + env(safe-area-inset-bottom)); background: var(--card); border-top: 2px solid var(--ink); display: flex; flex-direction: column; gap: 7px; }
+      #forecast { border: 2px solid var(--ink); border-radius: 12px; padding: 6px 10px 6px; background: #fffdf6; display: flex; flex-direction: column; gap: 4px; }
+      #fc-1 { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 900; min-height: 22px; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; }
+      #fc-1 .obs { padding: 1px 8px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mustard); }
+      #fc-1 .cond { color: var(--sub); overflow: hidden; text-overflow: ellipsis; }
+      #fc-1 .shock { margin-left: auto; font-family: var(--dela); font-size: 17px; }
+      #fc-1 .shock.on { color: var(--tomato); }
+      #fc-scale { position: relative; height: 46px; margin: 0 14px; }
+      #fc-scale .axis { position: absolute; left: 0; right: 0; top: 22px; height: 2px; background: rgba(31,27,22,0.2); }
+      #fc-scale .line { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; background: var(--tomato); border-radius: 2px; }
+      #fc-scale .line.jolt { background: var(--mustard); border: 1px solid var(--ink); }
+      #fc-scale .line.jolt span { color: #8a5d00; left: auto; right: 5px; }
+      #fc-scale .line span { position: absolute; top: -2px; left: 5px; font-family: var(--dela); font-size: 11px; color: var(--tomato); }
+      #fc-scale .face { position: absolute; width: 26px; margin-left: -13px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+      #fc-scale .face b { width: 22px; height: 22px; border: 2px solid var(--ink); border-radius: 50%; background: var(--mint); display: grid; place-items: center; font-size: 11px; }
+      #fc-scale .face small { font-size: 9px; font-weight: 900; margin-top: 1px; }
+      #fc-scale .face.fly b { background: var(--tomato); color: #fffdf6; animation: shiver 0.12s infinite; }
+      @keyframes shiver { 50% { transform: translateX(1px); } }
+      #fc-scale .empty { position: absolute; left: 0; top: 0; text-align: left; font-size: 11px; font-weight: 700; color: var(--sub); }
+      #fc-bottom { display: flex; align-items: center; gap: 8px; min-height: 16px; }
+      #fc-3 { font-size: 11.5px; font-weight: 900; color: #2e6b53; }
+      #fc-3.warn { color: #b53e28; }
+      #fc-jolt { margin-left: auto; padding: 0 8px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 11px; font-weight: 900; }
+      #fc-jolt[hidden] { display: none; }
+      #items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+      .item { min-width: 0; display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 8px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); text-align: left; }
+      .item .ic { width: 26px; height: 26px; border: 2px solid var(--ink); border-radius: 7px; display: grid; place-items: center; font-weight: 900; font-size: 13px; flex: none; }
+      .item .nm { font-size: 12px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+      .item .ct { margin-left: auto; font-family: var(--dela); font-size: 13px; }
+      .item.zero { opacity: 0.4; } .item.zero .ct { color: var(--tomato); }
+      .item.armed { background: var(--mustard); box-shadow: 0 0 0 3px rgba(233,178,62,0.5); }
+      #speedo { display: flex; align-items: center; gap: 10px; height: 38px; }
+      #speedo .val { width: 92px; display: flex; align-items: baseline; gap: 2px; }
+      #sp-num { font-family: var(--dela); font-size: 32px; line-height: 1; font-variant-numeric: tabular-nums; }
+      #speedo .unit { font-size: 11px; font-weight: 900; }
+      #sp-track { position: relative; flex: 1; height: 16px; border: 2px solid var(--ink); border-radius: 8px; background: var(--card); }
+      #sp-band { position: absolute; top: 0; bottom: 0; background: rgba(111,195,160,0.7); }
+      #sp-band[hidden] { display: none; }
+      #sp-jolt { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(135deg, rgba(233,178,62,0.75) 0 4px, transparent 4px 8px); border-radius: 0 6px 6px 0; }
+      #sp-needle { position: absolute; top: -8px; width: 0; height: 0; margin-left: -7px; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 10px solid var(--ink); }
+      #sp-needle.bad { border-top-color: var(--tomato); animation: beat 0.5s infinite; }
+      #sp-label { position: absolute; right: 4px; top: -16px; font-size: 10px; font-weight: 900; color: #2e6b53; }
+      #sp-track .t { position: absolute; top: 100%; font-size: 9px; font-weight: 900; color: var(--sub); transform: translateX(-50%); margin-top: 1px; }
+      #speedo { margin-bottom: 6px; }
+      #speedo.jolting #sp-num { color: #b07a10; animation: shiver 0.1s infinite; }
+      #lever { display: grid; grid-template-columns: 1.3fr repeat(7, 1fr); gap: 4px; touch-action: none; }
+      .notch { height: 58px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-weight: 900; font-size: 14px; padding: 0; position: relative; }
+      .notch.brake { background: #fbe3dc; } .notch.power { background: #dff2e8; } .notch.eb { background: #f5c6b8; }
+      .notch.on { transform: translateY(-4px); box-shadow: 0 4px 0 var(--ink); border-width: 3px; }
+      .notch.brake.on { background: var(--tomato); color: #fffdf6; } .notch.power.on { background: var(--mint); } .notch:not(.brake):not(.power).on { background: var(--mustard); }
+      #dwell { display: none; flex-direction: column; gap: 7px; }
+      body.dwell #dwell { display: flex; } body.dwell #run { display: none; }
+      #run { display: flex; flex-direction: column; gap: 7px; }
+      body.dwell #fc-scale, body.dwell #fc-bottom { display: none; }
+      body.dwell #forecast { padding: 4px 10px; }
+      .dhead { display: flex; align-items: baseline; gap: 10px; }
+      .dhead b { font-family: var(--dela); font-weight: 400; font-size: 17px; }
+      #seats { font-family: var(--dela); font-size: 14px; }
+      #seats-sub { font-size: 11px; font-weight: 700; color: var(--sub); }
+      #cands { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 5px; padding-top: 6px; }
+      .cand { position: relative; min-width: 0; padding: 5px 3px 5px; border: 2px solid var(--ink); border-radius: 11px; background: var(--card); display: flex; flex-direction: column; align-items: center; gap: 1px; }
+      .cand.sel { border: 3px solid #2e8f62; background: #ddf3e6; box-shadow: 0 0 0 3px rgba(111,195,160,0.45); }
+      .cand.req:not(.sel) { background: #fff4da; }
+      .cand .flag { position: absolute; right: -4px; top: -9px; padding: 0 6px; border: 1.5px solid var(--ink); border-radius: 999px; background: #2e8f62; color: #fffdf6; font-size: 10px; font-weight: 900; }
+      .cand .flag.req { background: var(--mustard); color: var(--ink); }
+      .cand .ic { width: 26px; height: 26px; border: 2px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 13px; }
+      .cand b { font-size: 12px; } .cand b small { font-size: 9px; margin-left: 2px; color: #b53e28; }
+      .cand .dest { display: flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; }
+      .cand .dest i { width: 9px; height: 9px; border: 1.5px solid var(--ink); border-radius: 50%; }
+      .cand .nums { display: flex; gap: 6px; font-size: 11.5px; font-weight: 900; } .cand .tol { font-family: var(--dela); font-weight: 400; }
+      .cand .note { font-size: 9px; font-weight: 700; color: var(--sub); text-align: center; line-height: 1.25; }
+      .cand .note.warn { color: #b53e28; font-weight: 900; }
+      #btn-depart { min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--tomato); color: #fffdf6; box-shadow: 3px 3px 0 var(--ink); font-size: 18px; font-weight: 900; }
+      #btn-depart:disabled { opacity: 0.5; }
+      .drow { display: flex; gap: 8px; }
+      .drow #btn-depart { flex: 1.4; }
+      #btn-auto { flex: .7; min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--mustard); box-shadow: 3px 3px 0 var(--ink); font-size: 12.5px; font-weight: 900; }
+      #btn-seat { flex: 1; min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: #dff2e8; box-shadow: 3px 3px 0 var(--ink); font-size: 13.5px; font-weight: 900; line-height: 1.25; }
+      #dwell-hint { font-size: 12px; font-weight: 900; color: #2e6b53; }
+      #dwell-hint:empty { display: none; }
+      body.inside.dwell #forecast { display: none; }
+      body.inside #items { display: none; }
+      #cartabs { display: none; gap: 5px; overflow-x: auto; }
+      body.inside #cartabs { display: flex; }
+      #cartabs:empty { display: none !important; }
+      .cartab { flex: 1 0 64px; height: 40px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+      .cartab b { font-size: 12px; } .cartab small { font-size: 10px; font-weight: 700; color: var(--sub); }
+      .cartab.deck { background: #dfe7fb; }
+      #cartabs { flex-wrap: wrap; }
+      .cartab.cur { background: #fff3cf; transform: translateY(-3px); box-shadow: 0 3px 0 var(--ink); }
+      .item.armed .nm { color: #8a1f0e; }
+      #paxlist { display: none; flex-wrap: wrap; gap: 5px; }
+      body.inside #paxlist { display: flex; }
+      body.inside.dwell #cands, body.inside.dwell .dhead { display: none; }
+      .pl { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 3px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-size: 11.5px; font-weight: 900; }
+      .pl i { width: 20px; height: 20px; border: 1.5px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 10.5px; }
+      .pl b { font-family: var(--dela); font-weight: 400; }
+      .pl.ok { border-color: #2e8f62; background: #ddf3e6; }
+      .pl.bad { border-color: #b53e28; background: #fbe3dc; color: #8a1f0e; }
+      .pl-empty { font-size: 12px; font-weight: 700; color: var(--sub); }
+      #pax-card { position: absolute; z-index: 12; width: 220px; padding: 10px 12px; border: 2.5px solid var(--ink); border-radius: 12px; background: var(--card); box-shadow: 0 4px 0 var(--ink); display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 700; pointer-events: none; }
+      #pax-card[hidden] { display: none; }
+      #pax-card > b { font-size: 15px; }
+      #pax-card .dest { display: flex; align-items: center; gap: 5px; font-weight: 900; }
+      #pax-card .dest i { width: 11px; height: 11px; border: 1.5px solid var(--ink); border-radius: 50%; }
+      #pax-card .num { font-family: var(--dela); font-weight: 400; font-size: 15px; }
+      #pax-card .note { color: var(--sub); font-size: 11px; }
+      #btn-map { position: absolute; left: 10px; top: 112px; height: 32px; padding: 0 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-weight: 900; font-size: 12px; box-shadow: 0 2px 0 var(--ink); display: none; }
+      #map .box { width: min(460px, 100%); height: 100%; max-height: 100%; }
+      #map-advice { padding: 8px 10px; border: 2px solid var(--ink); border-radius: 10px; background: var(--mustard); font-weight: 900; font-size: 13px; }
+      #map-list { display: flex; flex-direction: column; overflow: auto; flex: 1; }
+      .m-st { display: grid; grid-template-columns: 14px 1fr auto auto 56px; align-items: center; gap: 2px 8px; padding: 6px 4px; border-radius: 10px; font-size: 12px; font-weight: 700; }
+      .m-st .dot { width: 14px; height: 14px; border: 2px solid var(--ink); border-radius: 50%; }
+      .m-st b { font-size: 15px; }
+      .m-st .al { grid-column: 2; grid-row: 2; font-size: 11px; color: #b53e28; font-weight: 900; }
+      .m-st .t { font-variant-numeric: tabular-nums; color: var(--sub); }
+      .m-st .d { text-align: right; font-family: var(--dela); font-size: 13px; }
+      .m-st .d.ok { color: #2e6b53; } .m-st .d.late { color: #b53e28; }
+      .m-st.here, .m-st.next { background: #fff4da; border: 2px solid var(--ink); }
+      .m-st.done b { color: var(--sub); }
+      .m-sec { display: flex; align-items: center; gap: 5px; padding: 4px 0 4px 9px; min-height: 34px; }
+      .m-sec .bar { width: 4px; align-self: stretch; background: var(--ink); border-radius: 2px; margin-right: 14px; }
+      .m-sec.cur .bar { background: var(--mint); }
+      .m-sec .ob { width: 24px; height: 24px; border: 2px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 900; background: #fff4da; }
+      .m-sec .ob.gone { opacity: 0.3; }
+      .m-sec .ob.unk { background: #e6e1d8; color: var(--sub); }
+      .m-sec .len { margin-left: auto; font-size: 10.5px; color: var(--sub); font-weight: 700; }
+      .m-sec .now { padding: 0 8px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mint); font-size: 10.5px; font-weight: 900; }
+
+      /* モーダル */
+      .modal { position: fixed; inset: 0; background: rgba(31,27,22,0.5); display: grid; place-items: center; padding: 14px; z-index: 20; }
+      .modal[hidden] { display: none; }
+      .box { width: min(440px, 100%); max-height: 100%; overflow: auto; background: var(--card); border: 2.5px solid var(--ink); border-radius: 16px; padding: 16px; box-shadow: 0 6px 0 var(--ink); display: flex; flex-direction: column; gap: 10px; }
+      .box h3 { margin: 0; font-family: var(--dela); font-weight: 400; font-size: 21px; line-height: 1.3; }
+      .box p { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--sub); }
+      #offer-cards { display: flex; flex-direction: column; gap: 8px; }
+      .ocard { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 2px solid var(--ink); border-radius: 12px; background: #fffdf6; text-align: left; font-size: 12.5px; font-weight: 700; }
+      .ocard b { font-size: 16px; }
+      .ocard .tag { align-self: flex-start; padding: 0 8px; border: 1.5px solid var(--ink); border-radius: 999px; font-size: 10px; font-weight: 900; background: #dff2e8; }
+      .ocard.o-mod .tag { background: var(--mustard); }
+      .ocard .d { color: var(--sub); }
+      .ocard { position: relative; }
+      .ocard .price { position: absolute; right: 10px; top: 9px; padding: 2px 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--card); font-family: var(--dela); font-size: 15px; }
+      .ocard.poor { opacity: .55; }
+      .ocard .price s { font-size: 11px; color: var(--sub); }
+      .ocard .sale { position: absolute; right: 12px; top: 40px; padding: 0 7px; border-radius: 999px; background: var(--tomato); color: #fffdf6; font-size: 10px; font-weight: 900; }
+      .ocard.sold { opacity: .4; }
+      .ocard.sold .price { font-family: 'Zen Maru Gothic', sans-serif; font-size: 11px; font-weight: 900; }
+      .shop-head { display: flex; align-items: center; justify-content: space-between; }
+      #shop-money { font-family: var(--dela); font-size: 17px; }
+      .shop-row { display: flex; gap: 8px; margin-top: 10px; }
+      .shop-row .btn { flex: 1; }
+      #btn-reroll:disabled { opacity: .45; }
+      #btn-shop { flex: .55; min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; background: #F3D27F; box-shadow: 3px 3px 0 var(--ink); font-size: 13px; font-weight: 900; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.15; }
+      #btn-shop small { font-size: 10px; }
+      #btn-shop:disabled { opacity: .45; box-shadow: none; }
+      #btn-reverse { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); height: 52px; padding: 0 22px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 16px; font-weight: 900; box-shadow: 0 4px 0 var(--ink); touch-action: none; z-index: 4; animation: beat 1s infinite; }
+      #btn-reverse:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 1px 0 var(--ink); animation: none; }
+      #btn-reverse[hidden] { display: none; }
+      #btn-eb { position: absolute; left: 12px; bottom: 14px; min-width: 132px; height: 64px; padding: 0 14px; border: 3px solid var(--ink); border-radius: 18px; background: #F08E78; color: var(--ink); box-shadow: 0 5px 0 var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; z-index: 4; touch-action: none; }
+      #btn-eb b { font-family: var(--dela); font-size: 15px; }
+      #btn-eb small { font-size: 10px; font-weight: 800; opacity: .7; }
+      #btn-eb.hot { background: var(--tomato); color: #FFFDF6; animation: beat .7s infinite; }
+      #btn-eb.cool { opacity: .55; }
+      #btn-eb:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
+      #btn-eb[hidden] { display: none; }
+      dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-weight: 700; font-size: 14px; }
+      dd { margin: 0; text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
+      dt.sum, dd.sum { padding-top: 6px; border-top: 2px solid var(--ink); font-family: var(--dela); font-weight: 400; font-size: 20px; }
+      .btn { min-height: 54px; border: 2.5px solid var(--ink); border-radius: 14px; font-size: 17px; font-weight: 900; box-shadow: 3px 3px 0 var(--ink); }
+      .btn.primary { background: var(--tomato); color: #fffdf6; }
+      .btn.secondary { background: var(--card); }
+
+      /* 車両基地 */
+      #hub { position: fixed; inset: 0; z-index: 18; background: var(--paper); overflow: auto; }
+      #hub[hidden] { display: none; }
+      .hub-in { max-width: 520px; margin: 0 auto; padding: 16px 14px 110px; display: flex; flex-direction: column; gap: 12px; }
+      .hub-title { font-size: 11px; font-weight: 900; letter-spacing: 0.06em; color: var(--sub); }
+      .hub-logo { margin: 0; font-family: var(--dela); font-weight: 400; font-size: 26px; line-height: 1.25; }
+      .hub-logo span { display: block; font-size: 15px; color: #e9b23e; -webkit-text-stroke: 0.6px var(--ink); }
+      .hub-bank { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--mustard); box-shadow: 3px 3px 0 var(--ink); }
+      .hub-bank b { font-family: var(--dela); font-weight: 400; font-size: 26px; }
+      #hub-sub { font-size: 12px; font-weight: 700; color: var(--sub); }
+      details.how { border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
+      details.how summary { padding: 10px 12px; font-weight: 900; font-size: 14px; cursor: pointer; }
+      details.how .rules { border: 0; border-top: 2px dashed rgba(31,27,22,0.2); border-radius: 0; }
+      .rules { margin: 0; padding: 10px 12px 10px 28px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); font-size: 12.5px; font-weight: 700; line-height: 1.6; }
+      .rules b { color: #b53e28; }
+      #ups { display: flex; flex-direction: column; gap: 8px; }
+      #ups { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .reset-row { display: flex; align-items: center; gap: 10px; margin: 14px 0 90px; padding-top: 12px; border-top: 1.5px dashed #b9b0a2; font-size: 11px; font-weight: 700; color: var(--sub); }
+      .reset-row span { flex: 1; }
+      #btn-reset { flex: none; padding: 8px 12px; border: 2px solid #b53e28; border-radius: 10px; background: var(--card); color: #b53e28; font-size: 12px; font-weight: 900; }
+      #btn-reset.armed { background: #b53e28; color: #fffdf6; max-width: 170px; }
+      .lo { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); text-align: left; font-size: 11.5px; font-weight: 800; line-height: 1.35; }
+      .lo.sel { background: #dff2e8; box-shadow: 0 0 0 3px var(--mint); }
+      .lo.locked { background: #ece6db; border-style: dashed; }
+      .lo.locked.can { border-style: solid; background: #fbecc4; }
+      .lo-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+      .lo-head b { font-size: 14px; }
+      .lo .pill { flex: none; padding: 1px 7px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mint); font-size: 10px; font-weight: 900; }
+      .lo .pill.cost { background: var(--card); }
+      .lo-up { color: #2e6b53; } .lo-down { color: #b53e28; }
+      .up { display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 12px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
+      .up-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+      .up-main b { font-size: 15px; }
+      .up .desc { font-size: 12px; font-weight: 700; color: #2e6b53; }
+      .dots { display: flex; gap: 4px; } .dots i { width: 10px; height: 10px; border: 1.5px solid var(--ink); border-radius: 50%; background: var(--card); } .dots i.on { background: var(--mint); }
+      .buy { width: 92px; min-height: 48px; border: 2px solid var(--ink); border-radius: 10px; background: var(--mint); font-family: var(--dela); font-size: 14px; box-shadow: 0 3px 0 var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
+      .buy small { font-family: 'Zen Maru Gothic', sans-serif; font-size: 10px; font-weight: 900; color: #b53e28; }
+      .buy.no, .buy:disabled { background: #e6e1d8; box-shadow: none; }
+      #btn-start { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; width: min(492px, calc(100% - 28px)); }
+      .dots i { border-style: dashed; } .dots i.on { border-style: solid; }
+    </style>
   </head>
   <body>
     <div id="app">
-      <header id="hud">
-        <div class="hud-row">
-          <span id="hud-line" class="chip chip-amber">江ノ島電鉄</span>
-          <span id="hud-station" class="hud-strong"></span>
-          <span id="hud-clock" class="hud-clock">10:00:00</span>
+      <header>
+        <div class="row"><span class="chip">江ノ島電鉄</span><span id="h-station"></span><span id="h-money"></span><button id="btn-sound" type="button" aria-label="音">♪</button></div>
+        <div class="gauges">
+          <div id="g-delay" class="gauge big"><div id="g-delay-fill" class="fill"></div><i class="tick" id="tk1" style="left:50%"><b></b></i><i class="tick" id="tk2" style="left:75%"><b></b></i><span id="g-delay-text" class="text"></span><span id="g-delay-trend" class="trend"></span></div>
+          <div id="g-trust" class="gauge big trust"><div id="g-trust-fill" class="fill"></div><span id="g-trust-text" class="text"></span></div>
         </div>
-        <div class="hud-row">
-          <span id="hud-countdown" class="chip"></span>
-          <span class="gauge-wrap">遅れ<span class="gauge"><span id="g-delay" class="gauge-fill gauge-red"></span></span></span>
-          <span class="gauge-wrap">信頼<span class="gauge"><span id="g-trust" class="gauge-fill gauge-mint"></span></span><b id="hud-trust"></b></span>
-        </div>
-        <div class="hud-row hud-sub">
-          <span id="hud-load"></span>
-          <span id="hud-formation"></span>
-          <span id="hud-money"></span>
-        </div>
+        <div id="h-mods"></div>
       </header>
-
-      <main id="stage">
+      <main>
         <canvas id="view"></canvas>
-        <button id="btn-out" class="btn-out" type="button" hidden>◀ 外へ</button>
-        <div id="toasts" aria-live="polite"></div>
-        <div id="offer" hidden>
-          <div class="offer-head">魔改造を1つ選ぶ（走行中も時計は進む）<button id="offer-skip" type="button">見送る</button></div>
-          <div id="offer-cards"></div>
-        </div>
+        <button id="btn-mode" type="button">車内 ▶</button>
+        <button id="btn-map" type="button">路線図</button>
+        <button id="btn-reverse" type="button" hidden>◀ 押している間バック</button>
+        <button id="btn-eb" type="button" hidden><b>急ブレーキ射出！</b><small>Space</small></button>
+        <div id="pax-card" hidden></div>
+        <div id="shock"></div>
+        <div id="toasts"></div>
       </main>
-
-      <footer id="controls">
-        <div id="car-strip" class="car-strip" aria-label="編成"></div>
-        <div id="ctl-run" class="ctl" hidden>
-          <button id="btn-brake" class="btn btn-brake" type="button">ブレーキ<small>長押し（スペースキー）</small></button>
+      <footer>
+        <div id="forecast">
+          <div id="fc-1"></div>
+          <div id="fc-scale"></div>
+          <div id="fc-bottom"><span id="fc-3"></span></div>
         </div>
-        <div id="ctl-dwell" class="ctl" hidden>
-          <button id="btn-depart" class="btn btn-primary btn-depart" type="button">発車 ▶</button>
+        <div id="cartabs"></div>
+        <div id="paxlist"></div>
+        <div id="items"></div>
+        <div id="run">
+          <div id="speedo"><div class="val"><span id="sp-num">0</span><span class="unit">km/h</span></div><div id="sp-track"><span class="t" style="left:0%">0</span><span class="t" style="left:25%">20</span><span class="t" style="left:50%">40</span><span class="t" style="left:75%">60</span><span class="t" style="left:100%">80</span><div id="sp-band" hidden></div><div id="sp-needle"></div><span id="sp-label"></span></div></div>
+          <div id="lever" aria-label="マスコン"></div>
+        </div>
+        <div id="dwell">
+          <div class="dhead"><b>乗せる客を選ぶ</b><span id="seats"></span><span id="seats-sub"></span></div>
+          <div id="cands"></div>
+          <div id="dwell-hint"></div>
+          <div class="drow"><button id="btn-shop" type="button">お店</button><button id="btn-auto" type="button">おまかせ配置</button><button id="btn-seat" type="button">車内で席を決める</button><button id="btn-depart" type="button">発車 ▶</button></div>
         </div>
       </footer>
-
-      <div id="drag-ghost" class="drag-ghost" hidden></div>
-
-      <section id="screen-title" class="screen">
-        <div class="screen-inner">
-          <div class="eyebrow">ブラウザ ローグライク × 鉄道 ・ 開発コード hakobi ・ v0.4</div>
-          <h1 class="title"><span class="led">まもなく、</span><span class="title-main">魔改造電車が<br />参ります</span></h1>
-          <ul class="howto">
-            <li>駅が近づいたら<b>ブレーキを長押し</b>。停止位置にぴったり止めよう</li>
-            <li>停車中も時計は進む。ドアは自動で開くので、乗せ終わったら時刻どおりに<b>発車</b></li>
-            <li>乗り切れない客は積み残し（信頼が減る）。何を諦めるかは自分しだい</li>
-            <li>電車か下の車両ボタンを押すと<b>車内</b>へ。人を車両ボタンへドラッグして、降りる駅で開く車両に移そう</li>
-            <li>駅を出るたびに<b>魔改造</b>を1つ。上限なしで重ねられる</li>
-            <li><b>遅れ5分</b>か<b>信頼0</b>で運転打ち切り</li>
-          </ul>
-          <button id="btn-start" class="btn btn-primary btn-big" type="button">江ノ島電鉄で出発</button>
-        </div>
-      </section>
-
-      <section id="screen-result" class="screen" hidden>
-        <div class="screen-inner">
-          <div id="result-led" class="led"></div>
-          <h2 id="result-title" class="result-title"></h2>
-          <p id="result-reason" class="result-reason"></p>
-          <dl id="result-stats" class="result-stats"></dl>
-          <button id="btn-retry" class="btn btn-primary btn-big" type="button">もう一度</button>
-        </div>
-      </section>
     </div>
-    <script type="module" src="/src/main.ts"></script>
+
+    <div id="map" class="modal" hidden>
+      <div class="box"><h3>路線図・ダイヤ</h3><p>開いている間はゲームが止まっている。障害は2区間先まで見える</p><div id="map-advice"></div><div id="map-list"></div><button id="btn-map-close" class="btn primary" type="button">閉じて再開 ▶</button></div>
+    </div>
+
+    <div id="offer" class="modal" hidden>
+      <div class="box"><div class="shop-head"><h3>駅のお店</h3><span id="shop-money"></span></div><p>停車中は時計が止まっている。お金が続くかぎり何枚でも買える</p><div id="offer-cards"></div><div class="shop-row"><button id="btn-reroll" class="btn" type="button">並べ替え</button><button id="btn-shop-close" class="btn primary" type="button">買い物を終える</button></div></div>
+    </div>
+
+    <div id="result" class="modal" hidden>
+      <div class="box">
+        <h3 id="result-title"></h3>
+        <p id="result-reason"></p>
+        <dl id="result-stats"></dl>
+        <dl id="result-money"></dl>
+        <p id="result-bank"></p>
+        <button id="btn-hub" class="btn primary" type="button">車両基地へ</button>
+        <button id="btn-again" class="btn secondary" type="button">もう一度走る</button>
+      </div>
+    </div>
+
+    <section id="hub">
+      <div class="hub-in">
+        <div class="hub-title">ブラウザ ローグライク × 鉄道 ・ 障害突破ラン</div>
+        <h1 class="hub-logo"><span>まもなく、</span>魔改造電車が参ります</h1>
+        <div class="hub-bank"><span><b id="hub-bank">0</b></span><span style="font-weight:900">車両基地の貯金</span></div>
+        <div id="hub-sub"></div>
+        <details class="how"><summary>遊び方（タップで開く）</summary><ul class="rules">
+          <li>駅で<b>乗せる客を選ぶ</b>。運賃は<i class="coin"></i>1〜<i class="coin"></i>5、耐えられる衝撃は客ごとに違う</li>
+          <li>駅の手前で<b>急ブレーキ射出</b>（Space）。耐えられない客が前へ飛ぶ。点線が着地予測</li>
+          <li>ホームに着地でGOOD、<b>×2マット</b>ならPERFECTで運賃2倍。駅ごとに連続で決めると上乗せ</li>
+          <li>速すぎると<b>車内の客まで飛ぶ</b>。席・つり革・屋根の配置で「誰が飛ぶか」を決めよう</li>
+          <li>倒木は速く（速すぎると揺れる）、急カーブは遅く。鹿はタップ、電柱は連打</li>
+          <li>稼いだコインは駅の<b>お店</b>で使う（何枚でも買える）。射出で通過した駅ではお店に寄れない</li>
+          <li>終点に着くと、稼ぎの半分＋残りの1/4（×ダイヤ評価）を持ち帰れる。貯金で<b>持ち込み改造</b>を解放しよう</li>
+          <li>遅れが上限を超えるか、信頼0で運転打ち切り</li>
+        </ul></details>
+        <div class="hub-title">持ち込み改造（1つだけ持っていける・貯金で解放すると選択肢が増える）</div>
+        <div id="ups"></div>
+        <div class="reset-row"><span>貯金・解放した改造・記録をすべて消します（音とズームの設定は残る）</span><button id="btn-reset" type="button">データ初期化</button></div>
+        <button id="btn-start" class="btn primary" type="button">江ノ電へ出発 ▶</button>
+      </div>
+    </section>
+    <script type="module" src="/src/game/main.ts"></script>
   </body>
 </html>

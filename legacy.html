@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1F1B16" />
+    <title>旧版（v0.3）：まもなく、魔改造電車が参ります</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Zen+Maru+Gothic:wght@500;700;900&display=swap"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <header id="hud">
+        <div class="hud-row">
+          <span id="hud-line" class="chip chip-amber">江ノ島電鉄</span>
+          <span id="hud-station" class="hud-strong"></span>
+          <span id="hud-clock" class="hud-clock">10:00:00</span>
+        </div>
+        <div class="hud-row">
+          <span id="hud-countdown" class="chip"></span>
+          <span class="gauge-wrap">遅れ<span class="gauge"><span id="g-delay" class="gauge-fill gauge-red"></span></span></span>
+          <span class="gauge-wrap">信頼<span class="gauge"><span id="g-trust" class="gauge-fill gauge-mint"></span></span><b id="hud-trust"></b></span>
+        </div>
+        <div class="hud-row hud-sub">
+          <span id="hud-load"></span>
+          <span id="hud-formation"></span>
+          <span id="hud-money"></span>
+        </div>
+      </header>
+
+      <main id="stage">
+        <canvas id="view"></canvas>
+        <button id="btn-out" class="btn-out" type="button" hidden>◀ 外へ</button>
+        <div id="toasts" aria-live="polite"></div>
+        <div id="offer" hidden>
+          <div class="offer-head">魔改造を1つ選ぶ（走行中も時計は進む）<button id="offer-skip" type="button">見送る</button></div>
+          <div id="offer-cards"></div>
+        </div>
+      </main>
+
+      <footer id="controls">
+        <div id="car-strip" class="car-strip" aria-label="編成"></div>
+        <div id="ctl-run" class="ctl" hidden>
+          <button id="btn-brake" class="btn btn-brake" type="button">ブレーキ<small>長押し（スペースキー）</small></button>
+        </div>
+        <div id="ctl-dwell" class="ctl" hidden>
+          <button id="btn-depart" class="btn btn-primary btn-depart" type="button">発車 ▶</button>
+        </div>
+      </footer>
+
+      <div id="drag-ghost" class="drag-ghost" hidden></div>
+
+      <section id="screen-title" class="screen">
+        <div class="screen-inner">
+          <div class="eyebrow">ブラウザ ローグライク × 鉄道 ・ 開発コード hakobi ・ v0.4</div>
+          <h1 class="title"><span class="led">まもなく、</span><span class="title-main">魔改造電車が<br />参ります</span></h1>
+          <ul class="howto">
+            <li>駅が近づいたら<b>ブレーキを長押し</b>。停止位置にぴったり止めよう</li>
+            <li>停車中も時計は進む。ドアは自動で開くので、乗せ終わったら時刻どおりに<b>発車</b></li>
+            <li>乗り切れない客は積み残し（信頼が減る）。何を諦めるかは自分しだい</li>
+            <li>電車か下の車両ボタンを押すと<b>車内</b>へ。人を車両ボタンへドラッグして、降りる駅で開く車両に移そう</li>
+            <li>駅を出るたびに<b>魔改造</b>を1つ。上限なしで重ねられる</li>
+            <li><b>遅れ5分</b>か<b>信頼0</b>で運転打ち切り</li>
+          </ul>
+          <button id="btn-start" class="btn btn-primary btn-big" type="button">江ノ島電鉄で出発</button>
+        </div>
+      </section>
+
+      <section id="screen-result" class="screen" hidden>
+        <div class="screen-inner">
+          <div id="result-led" class="led"></div>
+          <h2 id="result-title" class="result-title"></h2>
+          <p id="result-reason" class="result-reason"></p>
+          <dl id="result-stats" class="result-stats"></dl>
+          <button id="btn-retry" class="btn btn-primary btn-big" type="button">もう一度</button>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

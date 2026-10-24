@@ -1,6 +1,6 @@
 // 「障害突破ラン」の画面と入力。車両基地 → ラン → リザルト → 車両基地 の流れ。
 
-import { DEST_COLORS } from '../../data.ts';
+import { DEST_COLORS } from '../data.ts';
 import * as S from './state.ts';
 import { BAR_H, drawBar, drawInside, drawOutside, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';

@@ -1,7 +1,7 @@
 // 「障害突破ラン」のゲームの状態と進行。描画には触れない。
 
-import { randomLook, type Look } from '../../game.ts';
-import type { LineDef } from '../../data.ts';
+import { randomLook, type Look } from '../game.ts';
+import type { LineDef } from '../data.ts';
 
 // ---------- 路線（江ノ電を7駅に間引いたもの） ----------
 export const LINE: LineDef = {

@@ -6,12 +6,13 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
+        // 本編：射出配達ラン
         main: 'index.html',
-        // 試作：満員電車シェイク
-        shake: 'shake.html',
-        // 試作：障害突破ラン（v0.7）
+        // 旧URL（run.html）からトップへ転送
         run: 'run.html',
-        // 試作：射出配達
+        // 旧版（v0.3 の停車ゲーム）と試作
+        legacy: 'legacy.html',
+        shake: 'shake.html',
         launch: 'launch.html',
       },
     },

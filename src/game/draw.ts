@@ -1,10 +1,10 @@
 // 試作 v0.7 の描画：外（台座＋障害）、中（1両）、上のバー。
 
-import { CAR_LEN, DEST_COLORS } from '../../data.ts';
-import { carColor, drawExterior, type ExtResult } from '../../exterior.ts';
-import type { Game } from '../../game.ts';
-import { C30, INK, Iso, hash, shade } from '../../iso.ts';
-import { drawPerson, type Facing } from '../../people.ts';
+import { CAR_LEN, DEST_COLORS } from '../data.ts';
+import { carColor, drawExterior, type ExtResult } from '../exterior.ts';
+import type { Game } from '../game.ts';
+import { C30, INK, Iso, hash, shade } from '../iso.ts';
+import { drawPerson, type Facing } from '../people.ts';
 import {
   CURVE_V,
   KINDS,

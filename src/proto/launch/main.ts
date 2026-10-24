@@ -6,7 +6,7 @@ import { drawExterior } from '../../exterior.ts';
 import { randomLook, type Game, type Look } from '../../game.ts';
 import { INK, Iso } from '../../iso.ts';
 import { drawPerson, type Facing } from '../../people.ts';
-import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from '../run/audio.ts';
+import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from '../../game/audio.ts';
 
 // ---------- 路線 ----------
 const LINE: LineDef = {
