@@ -198,14 +198,8 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   drag = { id: (best.ref as Pax).id, sx: x, sy: y, pid: e.pointerId, moved: false };
   sfx.drag();
-  // 長押しで説明（指を離すか、動かしたら消える）
-  const id = drag.id;
-  const cx = e.clientX;
-  const cy = e.clientY;
-  clearTimeout(holdTimer);
-  holdTimer = window.setTimeout(() => {
-    if (drag && drag.id === id && !drag.moved) showPaxCard(id, cx, cy);
-  }, 300);
+  // 触った瞬間に説明（指を離すか、動かしたら消える）
+  showPaxCard(drag.id, e.clientX, e.clientY);
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!drag || drag.pid !== e.pointerId) return;
@@ -830,7 +824,7 @@ function renderHud() {
     $('btn-shop').innerHTML = `お店<small>${left}品</small>`;
     ($('btn-shop') as HTMLButtonElement).disabled = !R.offer;
     $('btn-seat').textContent = mode === 'in' ? '◀ 客選びに戻る' : `車内で席を決める（${R.pax.length}人）`;
-    $('dwell-hint').textContent = mode === 'in' ? '客をドラッグして席を決めよう。長押しで説明' : R.picked.size ? '乗せた客は端から詰めて座る。屋根などへは「車内で席を決める」で移そう' : '';
+    $('dwell-hint').textContent = mode === 'in' ? '客をドラッグして席を決めよう。触ると説明' : R.picked.size ? '乗せた客は端から詰めて座る。屋根などへは「車内で席を決める」で移そう' : '';
   } else candKey = '';
 
   // お店（停車中に何枚でも買える）
@@ -1017,16 +1011,17 @@ function showPaxCard(id: number, cx: number, cy: number) {
   const left = p.dest - nextStop + 1;
   const card = $('pax-card');
   card.innerHTML = `<b>${k.name}</b><span class="dest"><i style="background:${DEST_COLORS[p.dest]}"></i>${LINE.stations[p.dest].name}まで（${left <= 1 ? '次で降りる' : `あと${left}駅`}）</span><span>耐衝撃 <b class="num">${tol}</b>（${parts.join('＋')}）</span><span class="note">${k.note}</span>`;
-  const b = document.getElementById('app')!.getBoundingClientRect();
+  const b = card.parentElement!.getBoundingClientRect();
   card.style.left = `${Math.min(b.width - 230, Math.max(8, cx - b.left - 110))}px`;
-  card.style.top = `${Math.max(110, cy - b.top - 150)}px`;
   card.hidden = false;
+  // 指で隠れないよう、触った位置より上に出す（上に入らなければ下へ）
+  const h = card.offsetHeight;
+  const above = cy - b.top - h - 64;
+  card.style.top = `${above >= 8 ? above : cy - b.top + 56}px`;
 }
 function hidePaxCard() {
-  clearTimeout(holdTimer);
   $('pax-card').hidden = true;
 }
-let holdTimer = 0;
 canvas.addEventListener('pointercancel', hidePaxCard);
 canvas.addEventListener('lostpointercapture', hidePaxCard);
 
