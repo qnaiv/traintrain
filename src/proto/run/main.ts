@@ -311,11 +311,13 @@ function renderStatus() {
     const left = R.depart - R.time;
     txt.textContent = left > 0 ? `発車まで ${Math.ceil(left)}秒` : `発車遅れ ${mmss(-left)} / ${mmss(R.delayLimit)}`;
   } else {
-    txt.textContent = R.ahead < -1 ? `${Math.round(-R.ahead)}秒 早い` : `遅れ ${mmss(R.delay)} / ${mmss(R.delayLimit)}`;
+    txt.textContent = R.ahead < -1 ? `−${mmss(-R.ahead)} 早着ペース` : `遅れ ${mmss(R.delay)} / ${mmss(R.delayLimit)}`;
   }
+  $('tk1').querySelector('b')!.textContent = mmss(R.delayLimit * 0.5);
+  $('tk2').querySelector('b')!.textContent = mmss(R.delayLimit * 0.75);
   const ratio = Math.min(1, R.delay / R.delayLimit);
   fill.style.width = `${ratio * 100}%`;
-  dg.className = 'gauge big' + (ratio >= 0.75 ? ' red' : ratio >= 0.5 ? ' amber' : '');
+  dg.className = 'gauge big' + (ratio >= 0.75 ? ' red' : ratio >= 0.5 ? ' amber' : '') + (R.ahead < -1 && R.phase === 'running' ? ' early' : '');
   $('g-delay-trend').textContent = R.phase !== 'running' ? '' : trend > 0.3 ? '▲' : trend < -0.3 ? '▼' : '';
   $('g-delay-trend').className = 'trend ' + (trend > 0 ? 'up' : 'down');
   // 信頼
@@ -387,24 +389,32 @@ function renderForecast() {
     line1.textContent = '';
     line3.textContent = '';
   }
-  // 揺れ
+  // 揺れ（60km/h超）
   const jolt = $('fc-jolt');
+  let joltShock = 0;
   if (k > SHOCK.joltFrom && R.phase === 'running') {
-    const js = Math.max(0, Math.round((k - SHOCK.joltBase) * SHOCK.joltK - (R.mods.has('susp') ? 10 : 0) - R.meta.lv.susp * 3));
-    jolt.textContent = `揺れ ${SHOCK.joltEvery}秒ごと 衝撃${js}`;
+    joltShock = Math.max(0, Math.round((k - SHOCK.joltBase) * SHOCK.joltK - (R.mods.has('susp') ? 10 : 0) - R.meta.lv.susp * 3));
+    const jf = wouldFly(R, joltShock);
+    jolt.textContent = `揺れまで ${Math.max(0, R.jolt).toFixed(1)}秒 衝撃${joltShock}${jf.length ? `・${jf.length}人飛ぶ` : ''}`;
     jolt.hidden = false;
+    if (jf.length) {
+      line3.textContent = `揺れで ${jf.map((p) => KINDS[p.kind].name).join('・')} が飛ぶ！ 60km/h以下に落とせ`;
+      line3.className = 'warn';
+    }
+    if (!o) line1.innerHTML = `<span class="obs">高速走行</span><span>${Math.round(k)}km/h</span><span class="shock on">揺れ ≈${joltShock}</span>`;
   } else jolt.hidden = true;
   // 耐衝撃の目盛り
-  const key = R.pax.map((p) => `${p.id}:${effTol(R, p)}`).join(',') + '|' + shock;
+  const key = R.pax.map((p) => `${p.id}:${effTol(R, p)}`).join(',') + '|' + shock + '|' + joltShock;
   if (scale.dataset.k !== key) {
     scale.dataset.k = key;
     const max = 100;
     let html = `<div class="axis"></div>`;
     if (shock > 0) html += `<div class="line" style="left:${Math.min(100, (shock / max) * 100)}%"><span>${shock}</span></div>`;
+    if (joltShock > 0) html += `<div class="line jolt" style="left:${Math.min(100, (joltShock / max) * 100)}%"><span>揺${joltShock}</span></div>`;
     const sorted = [...R.pax].sort((a, b) => effTol(R, a) - effTol(R, b));
     sorted.forEach((p, i) => {
       const t = effTol(R, p);
-      const flies = shock > t && !R.airbag;
+      const flies = Math.max(shock, joltShock) > t && !R.airbag;
       html += `<div class="face ${flies ? 'fly' : ''}" style="left:${Math.min(100, (t / max) * 100)}%;top:${i % 2 ? 22 : 2}px" title="${KINDS[p.kind].name} 耐${t}"><b>${KINDS[p.kind].ch}</b><small>${t}</small></div>`;
     });
     if (!R.pax.length) html += '<div class="empty">乗っている客はいない</div>';
@@ -473,8 +483,8 @@ function renderHud() {
         b.addEventListener('click', () => togglePick(R, c.id));
         box.appendChild(b);
       }
-      $('seats').textContent = `定員 ${seatsUsed(R) + pickedSeats(R)}/${R.cap}`;
-      $('seats-sub').textContent = R.pax.length ? `乗車中 ${R.pax.length}人` : '';
+      $('seats').textContent = `席 ${seatsUsed(R) + pickedSeats(R)}/${R.cap}（${R.pax.length + R.picked.size}人）`;
+      $('seats-sub').textContent = R.pax.length ? `うち乗車中 ${R.pax.length}人` : '力士は席を3つ使う';
       const n = R.picked.size;
       $('btn-depart').textContent = n ? `${n}人を乗せて発車 ▶` : '誰も乗せずに発車 ▶';
     }
@@ -548,7 +558,7 @@ function showResult() {
     ['早着ボーナス', `¥${R.earlyBonus.toLocaleString()}`],
   ];
   if (clear) money.push(['完走ボーナス（+30%）', `¥${bonus.toLocaleString()}`]);
-  $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">車両基地へ</dt><dd class="sum">¥${total.toLocaleString()}</dd>`;
+  $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">今回の稼ぎ</dt><dd class="sum">¥${total.toLocaleString()}</dd>`;
   $('result-bank').textContent = `貯金 ¥${meta.bank.toLocaleString()}`;
   $('result').hidden = false;
 }

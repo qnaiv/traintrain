@@ -31,6 +31,9 @@
       .gauge.big.amber .fill { background: var(--mustard); }
       .gauge.big.red .fill { background: var(--tomato); }
       .gauge.big .tick { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(31,27,22,0.35); }
+      .gauge.big .tick b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 900; color: var(--sub); margin-top: 1px; }
+      .gauge.big.early .text { color: #2e6b53; }
+      .gauges { margin-bottom: 6px; }
       .gauge.big .text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--dela); font-size: 13px; white-space: nowrap; text-shadow: 0 0 3px #fffdf6, 0 0 3px #fffdf6; }
       .trend { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 900; }
       .trend:empty { display: none; }
@@ -75,13 +78,15 @@
       #fc-scale { position: relative; height: 46px; margin: 0 14px; }
       #fc-scale .axis { position: absolute; left: 0; right: 0; top: 22px; height: 2px; background: rgba(31,27,22,0.2); }
       #fc-scale .line { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; background: var(--tomato); border-radius: 2px; }
+      #fc-scale .line.jolt { background: var(--mustard); border: 1px solid var(--ink); }
+      #fc-scale .line.jolt span { color: #8a5d00; left: auto; right: 5px; }
       #fc-scale .line span { position: absolute; top: -2px; left: 5px; font-family: var(--dela); font-size: 11px; color: var(--tomato); }
       #fc-scale .face { position: absolute; width: 26px; margin-left: -13px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
       #fc-scale .face b { width: 22px; height: 22px; border: 2px solid var(--ink); border-radius: 50%; background: var(--mint); display: grid; place-items: center; font-size: 11px; }
       #fc-scale .face small { font-size: 9px; font-weight: 900; margin-top: 1px; }
       #fc-scale .face.fly b { background: var(--tomato); color: #fffdf6; animation: shiver 0.12s infinite; }
       @keyframes shiver { 50% { transform: translateX(1px); } }
-      #fc-scale .empty { position: absolute; left: 0; right: 0; top: 14px; text-align: center; font-size: 11px; font-weight: 700; color: var(--sub); }
+      #fc-scale .empty { position: absolute; left: 0; top: 0; text-align: left; font-size: 11px; font-weight: 700; color: var(--sub); }
       #fc-bottom { display: flex; align-items: center; gap: 8px; min-height: 16px; }
       #fc-3 { font-size: 11.5px; font-weight: 900; color: #2e6b53; }
       #fc-3.warn { color: #b53e28; }
@@ -105,12 +110,13 @@
       #sp-needle { position: absolute; top: -8px; width: 0; height: 0; margin-left: -7px; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 10px solid var(--ink); }
       #sp-needle.bad { border-top-color: var(--tomato); animation: beat 0.5s infinite; }
       #sp-label { position: absolute; right: 4px; top: -16px; font-size: 10px; font-weight: 900; color: #2e6b53; }
+      #sp-track .t { position: absolute; top: 100%; font-size: 9px; font-weight: 900; color: var(--sub); transform: translateX(-50%); margin-top: 1px; }
+      #speedo { margin-bottom: 6px; }
       #speedo.jolting #sp-num { color: #b07a10; animation: shiver 0.1s infinite; }
       #lever { display: grid; grid-template-columns: 1.3fr repeat(7, 1fr); gap: 4px; touch-action: none; }
       .notch { height: 58px; border: 2px solid var(--ink); border-radius: 10px; background: var(--card); font-weight: 900; font-size: 14px; padding: 0; position: relative; }
       .notch.brake { background: #fbe3dc; } .notch.power { background: #dff2e8; } .notch.eb { background: #f5c6b8; }
       .notch.on { transform: translateY(-4px); box-shadow: 0 4px 0 var(--ink); border-width: 3px; }
-      .notch.on::after { content: '▼'; position: absolute; top: -16px; left: 50%; transform: translateX(-50%); font-size: 10px; }
       .notch.brake.on { background: var(--tomato); color: #fffdf6; } .notch.power.on { background: var(--mint); } .notch:not(.brake):not(.power).on { background: var(--mustard); }
       #dwell { display: none; flex-direction: column; gap: 7px; }
       body.dwell #dwell { display: flex; } body.dwell #run { display: none; }
@@ -125,7 +131,6 @@
       .cand { position: relative; min-width: 0; padding: 5px 3px 5px; border: 2px solid var(--ink); border-radius: 11px; background: var(--card); display: flex; flex-direction: column; align-items: center; gap: 1px; }
       .cand.sel { border: 3px solid #2e8f62; background: #ddf3e6; box-shadow: 0 0 0 3px rgba(111,195,160,0.45); }
       .cand.req:not(.sel) { background: #fff4da; }
-      .cand.risky:not(.sel) { border-style: dashed; border-color: #b53e28; }
       .cand .flag { position: absolute; right: -4px; top: -9px; padding: 0 6px; border: 1.5px solid var(--ink); border-radius: 999px; background: #2e8f62; color: #fffdf6; font-size: 10px; font-weight: 900; }
       .cand .flag.req { background: var(--mustard); color: var(--ink); }
       .cand .ic { width: 26px; height: 26px; border: 2px solid var(--ink); border-radius: 50%; display: grid; place-items: center; font-weight: 900; font-size: 13px; }
@@ -160,13 +165,16 @@
       /* 車両基地 */
       #hub { position: fixed; inset: 0; z-index: 18; background: var(--paper); overflow: auto; }
       #hub[hidden] { display: none; }
-      .hub-in { max-width: 520px; margin: 0 auto; padding: 16px 14px 24px; display: flex; flex-direction: column; gap: 12px; }
+      .hub-in { max-width: 520px; margin: 0 auto; padding: 16px 14px 110px; display: flex; flex-direction: column; gap: 12px; }
       .hub-title { font-size: 11px; font-weight: 900; letter-spacing: 0.06em; color: var(--sub); }
       .hub-logo { margin: 0; font-family: var(--dela); font-weight: 400; font-size: 26px; line-height: 1.25; }
       .hub-logo span { display: block; font-size: 15px; color: #e9b23e; -webkit-text-stroke: 0.6px var(--ink); }
       .hub-bank { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 2.5px solid var(--ink); border-radius: 14px; background: var(--mustard); box-shadow: 3px 3px 0 var(--ink); }
       .hub-bank b { font-family: var(--dela); font-weight: 400; font-size: 26px; }
       #hub-sub { font-size: 12px; font-weight: 700; color: var(--sub); }
+      details.how { border: 2px solid var(--ink); border-radius: 12px; background: var(--card); }
+      details.how summary { padding: 10px 12px; font-weight: 900; font-size: 14px; cursor: pointer; }
+      details.how .rules { border: 0; border-top: 2px dashed rgba(31,27,22,0.2); border-radius: 0; }
       .rules { margin: 0; padding: 10px 12px 10px 28px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); font-size: 12.5px; font-weight: 700; line-height: 1.6; }
       .rules b { color: #b53e28; }
       #ups { display: flex; flex-direction: column; gap: 8px; }
@@ -178,7 +186,8 @@
       .buy { width: 92px; min-height: 48px; border: 2px solid var(--ink); border-radius: 10px; background: var(--mint); font-family: var(--dela); font-size: 14px; box-shadow: 0 3px 0 var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.2; }
       .buy small { font-family: 'Zen Maru Gothic', sans-serif; font-size: 10px; font-weight: 900; color: #b53e28; }
       .buy.no, .buy:disabled { background: #e6e1d8; box-shadow: none; }
-      #btn-start { position: sticky; bottom: 10px; }
+      #btn-start { position: fixed; left: 50%; transform: translateX(-50%); bottom: 14px; width: min(492px, calc(100% - 28px)); }
+      .dots i { border-style: dashed; } .dots i.on { border-style: solid; }
     </style>
   </head>
   <body>
@@ -186,7 +195,7 @@
       <header>
         <div class="row"><span class="chip">江ノ島電鉄</span><span id="h-station"></span><span id="h-money"></span><button id="btn-sound" type="button" aria-label="音">♪</button></div>
         <div class="gauges">
-          <div id="g-delay" class="gauge big"><div id="g-delay-fill" class="fill"></div><i class="tick" style="left:50%"></i><i class="tick" style="left:75%"></i><span id="g-delay-text" class="text"></span><span id="g-delay-trend" class="trend"></span></div>
+          <div id="g-delay" class="gauge big"><div id="g-delay-fill" class="fill"></div><i class="tick" id="tk1" style="left:50%"><b></b></i><i class="tick" id="tk2" style="left:75%"><b></b></i><span id="g-delay-text" class="text"></span><span id="g-delay-trend" class="trend"></span></div>
           <div id="g-trust" class="gauge big trust"><div id="g-trust-fill" class="fill"></div><span id="g-trust-text" class="text"></span></div>
         </div>
         <div id="h-mods"></div>
@@ -205,7 +214,7 @@
         </div>
         <div id="run">
           <div id="items"></div>
-          <div id="speedo"><div class="val"><span id="sp-num">0</span><span class="unit">km/h</span></div><div id="sp-track"><div id="sp-jolt"></div><div id="sp-band" hidden></div><div id="sp-needle"></div><span id="sp-label"></span></div></div>
+          <div id="speedo"><div class="val"><span id="sp-num">0</span><span class="unit">km/h</span></div><div id="sp-track"><span class="t" style="left:0%">0</span><span class="t" style="left:25%">20</span><span class="t" style="left:50%">40</span><span class="t" style="left:75%">60</span><span class="t" style="left:100%">80</span><div id="sp-jolt"></div><div id="sp-band" hidden></div><div id="sp-needle"></div><span id="sp-label"></span></div></div>
           <div id="lever" aria-label="マスコン"></div>
         </div>
         <div id="dwell">
@@ -238,13 +247,13 @@
         <h1 class="hub-logo"><span>まもなく、</span>魔改造電車が参ります</h1>
         <div class="hub-bank"><span><b id="hub-bank">¥0</b></span><span style="font-weight:900">車両基地の貯金</span></div>
         <div id="hub-sub"></div>
-        <ul class="rules">
+        <details class="how"><summary>遊び方（タップで開く）</summary><ul class="rules">
           <li>駅で<b>乗せる客を選ぶ</b>。客ごとに耐えられる衝撃が違う</li>
           <li>倒木は<b>速く</b>、急カーブは<b>遅く</b>。鹿はタップ、電柱は連打</li>
           <li>衝撃が耐性を超えた客は<b>窓から吹っ飛ぶ</b>。車内で座席・つり革へ移して守ろう</li>
           <li>速く走れば遅れを取り戻せるが、60km/h超は揺れる</li>
           <li>遅れが上限を超えるか、信頼0で運転打ち切り</li>
-        </ul>
+        </ul></details>
         <div class="hub-title">恒久強化（稼いだ運賃で）</div>
         <div id="ups"></div>
         <button id="btn-start" class="btn primary" type="button">江ノ電へ出発 ▶</button>
