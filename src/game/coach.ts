@@ -124,6 +124,13 @@ function tutorial(r: Run, meta: Meta): Say | null {
   const kidAboard = r.pax.find((p) => p.id === kidId);
   const kidFlier = r.fliers.find((f) => f.pax.id === kidId);
   const tree = r.obstacles[0]?.[0];
+  if (!r.tutorial) {
+    // 研修をやめた
+    tutStep = 0;
+    failSay = null;
+    hide();
+    return null;
+  }
   if ((r.phase === 'clear' || r.phase === 'over') && tutStep < 6) {
     endTutorial(r, meta);
     return null;

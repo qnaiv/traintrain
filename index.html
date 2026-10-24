@@ -25,6 +25,13 @@
       .chip { padding: 2px 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 12px; font-weight: 900; white-space: nowrap; }
       #h-station { font-size: 14px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #h-money { margin-left: auto; font-family: var(--dela); font-size: 17px; }
+      #btn-menu { width: 34px; height: 30px; border: 2px solid var(--ink); border-radius: 8px; background: var(--card); padding: 0 7px; flex: none; display: flex; flex-direction: column; justify-content: center; gap: 3px; margin-left: 4px; }
+      #btn-menu i { display: block; height: 2.5px; border-radius: 2px; background: var(--ink); }
+      .menu-box { display: flex; flex-direction: column; gap: 10px; min-width: 260px; }
+      .menu-box h3 { margin: 0 0 4px; font-family: var(--dela); font-weight: 400; font-size: 22px; text-align: center; }
+      .btn.quit { background: var(--card); color: #b53e28; border-color: #b53e28; }
+      .btn.quit.armed { background: #b53e28; color: #fffdf6; }
+      #menu-note { margin: 0; font-size: 12px; font-weight: 700; color: var(--sub); line-height: 1.5; text-align: center; }
       #btn-sound { width: 34px; height: 30px; border: 2px solid var(--ink); border-radius: 8px; background: var(--card); font-size: 14px; padding: 0; flex: none; }
       .gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       .gauge.big { position: relative; height: 26px; border: 2px solid var(--ink); border-radius: 13px; background: var(--card); overflow: visible; }
@@ -434,7 +441,7 @@
     <div id="coach" hidden></div>
     <div id="app">
       <header>
-        <div class="row"><span class="chip">江ノ島電鉄</span><span id="h-station"></span><span id="h-money"></span><button id="btn-sound" type="button" aria-label="音">♪</button></div>
+        <div class="row"><span class="chip">江ノ島電鉄</span><span id="h-station"></span><span id="h-money"></span><button id="btn-sound" type="button" aria-label="音">♪</button><button id="btn-menu" type="button" aria-label="メニュー"><i></i><i></i><i></i></button></div>
         <div class="gauges">
           <div id="g-delay" class="gauge big"><div id="g-delay-fill" class="fill"></div><i class="tick" id="tk1" style="left:50%"><b></b></i><i class="tick" id="tk2" style="left:75%"><b></b></i><span id="g-delay-text" class="text"></span><span id="g-delay-trend" class="trend"></span></div>
           <div id="g-trust" class="gauge big trust"><div id="g-trust-fill" class="fill"></div><span id="g-trust-text" class="text"></span></div>
@@ -477,6 +484,15 @@
 
     <div id="map" class="modal" hidden>
       <div class="box"><h3>路線図・ダイヤ</h3><p>開いている間はゲームが止まっている。障害は2区間先まで見える</p><div id="map-advice"></div><div id="map-list"></div><button id="btn-map-close" class="btn primary" type="button">閉じて再開 ▶</button></div>
+    </div>
+
+    <div id="menu" class="modal" hidden>
+      <div class="box menu-box">
+        <h3>一時停止中</h3>
+        <button id="btn-resume" class="btn primary" type="button">再開 ▶</button>
+        <button id="btn-quit" class="btn quit" type="button">車両基地へ戻る</button>
+        <p id="menu-note"></p>
+      </div>
     </div>
 
     <div id="inv" class="modal full" hidden>

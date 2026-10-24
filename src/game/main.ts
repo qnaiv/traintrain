@@ -1054,6 +1054,53 @@ function renderPaxList() {
 // ---------- 音 ----------
 window.addEventListener('pointerdown', unlock, { capture: true });
 window.addEventListener('keydown', unlock, { capture: true });
+// ---------- 一時停止メニュー（途中でやめて車両基地へ） ----------
+let menuOpen = false;
+let quitArmed = false;
+function openMenu() {
+  if (screen !== 'run' || R.phase === 'clear' || R.phase === 'over') return;
+  menuOpen = true;
+  quitArmed = false;
+  R.paused = true;
+  const qb = $('btn-quit');
+  qb.textContent = R.tutorial ? '研修をやめて車両基地へ' : '車両基地へ戻る';
+  qb.classList.remove('armed');
+  $('menu-note').textContent = R.tutorial ? (meta.tutorialDone ? '研修は車両基地の「研修運転をもう一度」からいつでもできる' : '研修は次に出発したとき、また最初から始まる') : `このランは打ち切り。稼いだコインの1/4（今なら${Math.floor(earnedOf(R) / 4)}枚）を持ち帰る`;
+  $('menu').hidden = false;
+}
+function closeMenu() {
+  menuOpen = false;
+  R.paused = false;
+  $('menu').hidden = true;
+}
+$('btn-menu').addEventListener('click', openMenu);
+$('btn-resume').addEventListener('click', closeMenu);
+$('btn-quit').addEventListener('click', () => {
+  const qb = $('btn-quit');
+  if (!quitArmed) {
+    quitArmed = true;
+    qb.textContent = 'もう一度押すと戻る';
+    qb.classList.add('armed');
+    sfx.bad();
+    return;
+  }
+  closeMenu();
+  if (R.tutorial) {
+    // 研修は済みにしない
+    R.tutorial = false;
+    hideCoach();
+    toHub();
+    return;
+  }
+  R.phase = 'over';
+  R.overReason = '途中でやめた';
+});
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Escape' || screen !== 'run') return;
+  if (menuOpen) closeMenu();
+  else openMenu();
+});
+
 const soundBtn = $('btn-sound');
 const paintSound = () => (soundBtn.textContent = isMuted() ? '×' : '♪');
 paintSound();
