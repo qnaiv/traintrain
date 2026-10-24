@@ -11,9 +11,11 @@ import {
   LINE,
   OBS_INFO,
   POS,
-  SPOTS,
   STOP_HI,
   STOP_LO,
+  WAVE_PERIOD,
+  WAVE_UP,
+  waveUp,
   effTol,
   nextObstacle,
   predictShock,
@@ -129,7 +131,7 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
             const [dx, dy] = iso.P(f.x + uu * 6, 1.0 - uu * 10, 3.2 + Math.sin(uu * Math.PI) * 9 - uu * 3.6 + 1);
             iso.ell(dx, dy, 2, 2, INK, 0);
           }
-          const h = sized(iso, x, y, z, f.pax, 'stand', ((Math.floor(u * 10) % 4) as Facing), scaleOf(f.pax) * 1.5);
+          const h = sized(iso, x, y, z, f.pax, 'stand', ((Math.floor(u * 10) % 4) as Facing), scaleOf(f.pax) * 2.2);
           tagAt(ctx, h.hx + 30, h.hy - 18, 'わ〜っ！', '#FFFDF6');
         } else {
           const [sx, sy] = iso.P(f.x + 6, -9, -0.3);
@@ -184,8 +186,7 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
       });
       if (next) labels.push(() => {
         const [sx, sy] = iso.P(x, -1, 5.5);
-        pill(ctx, sx, sy - 26, `${treeNeed(r)}km/h以上で突き破れ`, '#E9B23E', INK, 11);
-        pill(ctx, sx, sy - 2, `今のままなら衝撃 ≈${predictShock(r, o)}`, '#FFFDF6', '#B53E28', 10);
+        pill(ctx, sx, sy - 14, `${treeNeed(r)}km/h以上で突き破れ`, '#E9B23E', INK, 11);
       });
     } else if (age < 1.2) {
       // 木っ端
@@ -243,6 +244,24 @@ function drawObstacle(iso: Iso, put: (x: number, y: number, f: () => void) => vo
         });
       }
     }
+  } else if (o.kind === 'wave') {
+    const ph = r.time % WAVE_PERIOD;
+    const up = waveUp(r.time);
+    const k = up ? Math.sin((ph / WAVE_UP) * Math.PI) : 0;
+    put(x + o.len / 2, -2, () => {
+      iso.rectZ(x - 2, x + o.len + 2, -9.5, 2.5, 0.25, 'rgba(91,184,201,' + (0.15 + k * 0.35) + ')', 0);
+      if (k > 0.05) {
+        iso.box(x, x + o.len, -9 + k * 4, -3 + k * 5.5, 0.2, 0.2 + k * 3.6, '#5BB8C9', { top: '#CFE6EE' });
+        for (let i = 0; i < 5; i++) {
+          const fx = x + (i + 0.5) * (o.len / 5);
+          iso.box(fx - 0.9, fx + 0.9, -3.3 + k * 5.5, -2.9 + k * 5.5, 0.2 + k * 3.6, 0.6 + k * 3.8, '#FFFDF6', { lw: iso.lw * 0.6 });
+        }
+      }
+    });
+    if (next) labels.push(() => {
+      const [sx, sy] = iso.P(x + o.len / 2, 0, 5);
+      pill(ctx, sx, sy - 10, up ? '波が来ている！' : `波が引いた！ 今のうち（${(WAVE_PERIOD - ph).toFixed(1)}秒）`, up ? '#E4553A' : '#6FC3A0', up ? '#FFFDF6' : INK, 12);
+    });
   } else if (o.kind === 'curve') {
     // 速度制限の標識と、区間の印
     for (const sx of [x, x + o.len]) {
@@ -305,18 +324,18 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
     const done = o.state !== 'wait';
     ctx.globalAlpha = done ? 0.35 : 1;
     ctx.beginPath();
-    ctx.arc(ox, y + 4.5, 12, 0, Math.PI * 2);
+    ctx.arc(ox, y + 4.5, 14, 0, Math.PI * 2);
     ctx.fillStyle = o.kind === 'pole' || o.kind === 'deer' ? '#FBE3DC' : o.kind === 'tree' ? '#FFF4DA' : '#FFFDF6';
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = INK;
-    ctx.font = '900 12px "Zen Maru Gothic", sans-serif';
+    ctx.font = '900 13px "Zen Maru Gothic", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(OBS_INFO[o.kind].ch, ox, y + 5);
-    ctx.font = '700 10px "Zen Maru Gothic", sans-serif';
-    const sub = o.kind === 'tree' ? `${treeNeed(r)}↑` : o.kind === 'curve' ? `${CURVE_V}↓` : o.kind === 'pole' ? `連打${o.need}` : 'タップ';
-    ctx.fillText(sub, ox, y + 27);
+    ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
+    const sub = o.kind === 'tree' ? `${treeNeed(r)}↑` : o.kind === 'curve' ? `${CURVE_V}↓` : o.kind === 'pole' ? `連打${o.need}` : o.kind === 'wave' ? 'すきに' : 'タップ';
+    ctx.fillText(sub, ox, y + 30);
     ctx.globalAlpha = 1;
   }
   // 駅
@@ -330,15 +349,14 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
   ctx.fillText('駅', sx - 6, y + 5);
   ctx.textAlign = 'right';
-  ctx.font = '700 10px "Zen Maru Gothic", sans-serif';
-  ctx.fillText(LINE.stations[Math.min(LINE.stations.length - 1, sec + 1)].name, x1, y + 27);
-  // 停止範囲の案内
+  ctx.font = '900 11px "Zen Maru Gothic", sans-serif';
+  const name = LINE.stations[Math.min(LINE.stations.length - 1, sec + 1)].name;
   if (r.phase === 'running') {
     const d = POS[st] + STOP_LO - r.x;
-    ctx.textAlign = 'left';
-    ctx.font = '700 11px "Zen Maru Gothic", sans-serif';
-    ctx.fillText(d > 0 ? `${LINE.stations[st].name}の停止範囲まで ${Math.round(d)}m` : r.x <= POS[st] + STOP_HI ? '停止範囲内。止まれば停車' : 'オーバーラン！', x0, y - 10);
-  }
+    const msg = d > 0 ? `${name} あと${Math.round(d)}m` : r.x <= POS[st] + STOP_HI ? `${name} 停止範囲内！` : 'オーバーラン！';
+    ctx.fillStyle = d <= 0 && r.x <= POS[st] + STOP_HI ? '#2E6B53' : INK;
+    ctx.fillText(msg, x1, y + 30);
+  } else ctx.fillText(`次 ${name}`, x1, y + 30);
 }
 
 // ---------------- 中 ----------------
@@ -373,7 +391,7 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
     iso.rectZ(d - 0.62, d + 0.62, -1.3, -1.04, 0.004, '#E9B23E', 0);
   }
   // 立ち位置の目印
-  SPOTS.forEach((sp, i) => {
+  r.spots.forEach((sp, i) => {
     const [mx, my] = iso.P(sp.x, sp.y, sp.kind === 'seat' ? 0.53 : 0.006);
     const occ = r.pax.some((p) => p.spot === i);
     hits.push({ kind: 'spot', ref: i, x: mx, y: my, r: 0.9 * s });
@@ -384,8 +402,9 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
   });
   // 奥の壁と座席（2つだけ）
   iso.box(0, L, -1.3, -1.2, 0, 0.32, color, { lw: iso.lw * 0.8 });
-  const b0 = 4.6;
-  const b1 = 7.4;
+  const seatXs = r.spots.filter((q) => q.kind === 'seat').map((q) => q.x);
+  const b0 = Math.min(...seatXs) - 0.6;
+  const b1 = Math.max(...seatXs) + 0.6;
   iso.box(b0, b1, -1.2, -0.78, 0, 0.4, '#B3A68E', { lw: iso.lw * 0.8 });
   iso.box(b0, b1, -1.2, -0.74, 0.4, 0.52, '#6FBF95', { lw: iso.lw * 0.8 });
   iso.box(b0, b1, -1.2, -1.05, 0.52, 1.0, '#5DAA84', { lw: iso.lw * 0.8 });
@@ -396,7 +415,7 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
   const shock = o ? predictShock(r, o, o.kind === 'tree' ? Math.max(r.v, (treeNeed(r) + 2) / 3.6) : r.v) : 0;
   for (const p of r.pax) {
     if (drag && drag.id === p.id) continue;
-    const sp = SPOTS[p.spot];
+    const sp = r.spots[p.spot];
     if (!sp) continue;
     items.push({
       d: sp.x + sp.y,
@@ -432,15 +451,15 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
   }
   // つり革
   iso.line([0.4, 0.4, 2.05], [L - 0.4, 0.4, 2.05], '#9A9184', Math.max(1, s * 0.07));
-  for (const sp of SPOTS) {
+  for (const sp of r.spots) {
     if (sp.kind !== 'strap') continue;
     iso.line([sp.x, sp.y, 2.05], [sp.x, sp.y, 1.8], '#3F8FA3', 1.6);
     const [rx, ry] = iso.P(sp.x, sp.y, 1.72);
     iso.ell(rx, ry, 0.09 * s, 0.09 * s, null, 2.2, '#3F8FA3');
   }
   // 床の文字
-  iso.label(6, -1.15, 1.3, `座席 −${r.mods.has('belt') ? 50 : 20}`, 11, '#2E8F62');
-  iso.label(8.8, 1.05, 0.02, 'つり革 −10', 11, '#3F8FA3');
+  iso.label((b0 + b1) / 2, -1.15, 1.3, `座席 −${(r.mods.has('belt') ? 50 : 20) + r.meta.lv.cushion * 5}`, 11, '#2E8F62');
+  iso.label(9.9, 1.05, 0.02, 'つり革 −10', 11, '#3F8FA3');
   iso.label(2.2, -0.6, 0.02, '通路 ±0', 11, '#5A5045');
   badges.forEach((f) => f());
   // 持ち上げている客
