@@ -808,12 +808,12 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
       sub.lw = iso.lw;
       drawPerson(sub, 0, 0, 0, look(p), { pose: 'stand', facing: 0, lift: 0.2 });
     }
-    // 降ろすゾーン
-    const zy = bottom - 64;
-    const over = drag.sy > zy;
+    // 降ろすゾーン：電車の上側（レバーや段のタブから離す）
+    const z = ejectZone(w, top);
+    const over = drag.sx >= z.x && drag.sx <= z.x + z.w && drag.sy >= z.y && drag.sy <= z.y + z.h;
     ctx.setLineDash([8, 6]);
     ctx.beginPath();
-    ctx.roundRect(12, zy, w - 24, 56, 14);
+    ctx.roundRect(z.x, z.y, z.w, z.h, 14);
     ctx.fillStyle = over ? 'rgba(228,85,58,0.35)' : 'rgba(228,85,58,0.12)';
     ctx.fill();
     ctx.strokeStyle = '#B53E28';
@@ -821,12 +821,19 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = '#8A1F0E';
-    ctx.font = '900 14px "Zen Maru Gothic", sans-serif';
+    ctx.font = '900 13px "Zen Maru Gothic", sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(r.phase === 'running' ? 'ここで離すと窓から降ろす（信頼が減る）' : 'ここで離すと降りてもらう（信頼が減る）', w / 2, zy + 28);
+    ctx.fillText(r.phase === 'running' ? 'ここで離すと窓から降ろす' : 'ここで離すと降りてもらう', z.x + z.w / 2, z.y + z.h / 2 - 8);
+    ctx.font = '800 11px "Zen Maru Gothic", sans-serif';
+    ctx.fillText('信頼が減る', z.x + z.w / 2, z.y + z.h / 2 + 10);
   }
   return { shock, obstacle: o };
+}
+
+/** 車内画面の「降ろす」エリア：上端（路線の帯の下）、右上の「外へ」ボタンは避ける */
+export function ejectZone(w: number, top: number) {
+  return { x: 12, y: top + 6, w: w - 24 - 110, h: 56 };
 }
 
 export { hash };

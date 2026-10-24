@@ -3,7 +3,7 @@
 import { DEST_COLORS } from '../data.ts';
 import * as S from './state.ts';
 import { hideCoach, setRewinder, startCoach, updateCoach } from './coach.ts';
-import { BAR_H, drawBar, drawInside, drawOutside, drawSection, type Hit } from './draw.ts';
+import { BAR_H, drawBar, drawInside, drawOutside, drawSection, ejectZone, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
   CURVE_V,
@@ -218,7 +218,6 @@ canvas.addEventListener('pointerup', (e) => {
       best = h.ref as number;
     }
   }
-  const ch = canvas.getBoundingClientRect().height;
   const tab = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('.cartab');
   if (!drag.moved) {
     showPaxCard(drag.id, e.clientX, e.clientY);
@@ -228,7 +227,7 @@ canvas.addEventListener('pointerup', (e) => {
     const ok = tab.dataset.d != null ? moveToLevel(R, drag.id, c, d) : c !== focus ? moveToCar(R, drag.id, c) : false;
     if (ok) sfx.drop();
     else sfx.bad();
-  } else if (drag.moved && y > ch - 2 - 64) {
+  } else if (drag.moved && inEject(x, y)) {
     eject(R, drag.id);
     sfx.fly();
   } else if (drag.moved && best >= 0) {
@@ -238,6 +237,10 @@ canvas.addEventListener('pointerup', (e) => {
   drag = null;
 });
 canvas.addEventListener('pointercancel', () => (drag = null));
+function inEject(x: number, y: number) {
+  const z = ejectZone(canvas.getBoundingClientRect().width, BAR_H);
+  return x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h;
+}
 
 function ripple(x: number, y: number) {
   const d = document.createElement('div');
@@ -1114,7 +1117,7 @@ function watchSounds() {
 // ---------- ループ ----------
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get('speed')) || 1);
-if (params.has('debug')) Object.assign(window, { __S: S, __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
+if (params.has('debug')) Object.assign(window, { __hits: () => hits, __S: S, __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
 if (params.has('go')) startRun(params.has('tutorial'));
 else renderHub();
 let last = performance.now();
