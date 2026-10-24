@@ -505,7 +505,12 @@ setRewinder((snap) => {
 // データ初期化（2回押しで確定）
 let resetArmed = -Infinity;
 // タブは最初は閉じておく。押すと開き、もう一度押すと閉じる
-let hubTab: 'lo' | 'book' | null = null;
+let hubTab: 'how' | 'lo' | 'book' | null = null;
+$('tab-how').addEventListener('click', () => {
+  hubTab = hubTab === 'how' ? null : 'how';
+  sfx.select();
+  renderHub();
+});
 $('tab-lo').addEventListener('click', () => {
   hubTab = hubTab === 'lo' ? null : 'lo';
   sfx.select();
@@ -547,13 +552,15 @@ function renderHub() {
   // はじめて：研修運転だけを見せる
   const first = !meta.tutorialDone && meta.runs === 0;
   $('hub-first').hidden = !first;
-  for (const sel of ['.how', '.hub-tabs', '.reset-row']) {
+  for (const sel of ['.hub-tabs', '.reset-row']) {
     const el = document.querySelector<HTMLElement>(sel);
     if (el) el.hidden = first;
   }
   const found = COMBOS.filter((c) => meta.combos[c.id]).length;
   $('tab-book').innerHTML = `コンボ図鑑 <small>${found}/${COMBOS.length}</small>`;
   $('lo-panel').hidden = first || hubTab !== 'lo';
+  $('how-panel').hidden = first || hubTab !== 'how';
+  $('tab-how').classList.toggle('on', hubTab === 'how');
   $('book').hidden = first || hubTab !== 'book';
   $('tab-lo').classList.toggle('on', hubTab === 'lo');
   $('tab-book').classList.toggle('on', hubTab === 'book');
