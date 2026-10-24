@@ -27,6 +27,10 @@ export interface RunLine extends LineDef {
   /** 乗客の出やすさ・観光客の行きたい駅 */
   weights: Record<Kind, number>;
   sights: number[];
+  /** 混む駅（候補が増える）と、路線全体の上乗せ・団体客の出やすさ */
+  crowd: Record<number, number>;
+  crowdAdd: number;
+  groupChance: number;
 }
 const mkSt = (name: string) => ({ name, platformCars: 2, demand: 0 });
 export const LINES: Record<string, RunLine> = {
@@ -50,6 +54,9 @@ export const LINES: Record<string, RunLine> = {
     poleAdd: 0,
     weights: { old: 1, kid: 1, sal: 2, stu: 1, sumo: 1, vip: 0, bride: 0.3, carp: 0.5, tour: 0.6 },
     sights: [2, 6],
+    crowd: { 0: 2, 2: 3 },
+    crowdAdd: 0,
+    groupChance: 0.4,
   },
   ginza: {
     id: 'ginza',
@@ -71,6 +78,9 @@ export const LINES: Record<string, RunLine> = {
     poleAdd: 4,
     weights: { old: 1, kid: 0.5, sal: 3, stu: 1, sumo: 0.5, vip: 0, bride: 0.4, carp: 0.6, tour: 1.2 },
     sights: [3, 6],
+    crowd: { 0: 2, 3: 3, 5: 2 },
+    crowdAdd: 1,
+    groupChance: 0.5,
   },
 };
 export let LINE: RunLine = LINES.enoden;
@@ -182,6 +192,25 @@ export interface Pax {
   from: number;
   dest: number;
   spot: number; // 車内の位置。-1 はホーム
+  /** 団体客の組（全員そろって乗る） */
+  group?: number;
+}
+/** 団体客の種類 */
+export const GROUPS: { id: string; name: string; kind: Kind; size: number }[] = [
+  { id: 'ensoku', name: '遠足', kind: 'kid', size: 5 },
+  { id: 'tour', name: '観光ツアー', kind: 'tour', size: 4 },
+  { id: 'shuugaku', name: '修学旅行', kind: 'stu', size: 5 },
+  { id: 'shain', name: '社員旅行', kind: 'sal', size: 4 },
+];
+/** 駅の混み具合（候補の人数） */
+export const CROWD = { base: 6, perSt: 1, max: 13 };
+export interface GroupState {
+  name: string;
+  size: number;
+  dest: number;
+  /** 届けた人数・誰か欠けたか */
+  done: number;
+  lost: boolean;
 }
 
 // ---------- 車内の位置 ----------
@@ -314,8 +343,8 @@ const TREE: M[] = [
   ['roof', '屋根席', '満員', 'Ⅰ', undefined, 4, '屋根に乗れる人数 +1（全車両）。屋根は射出台'],
   ['roof2', '屋根席Ⅱ', '満員', 'Ⅱ', 'roof', 7, '屋根に乗れる人数 さらに+2（全車両）'],
   ['view', '展望デッキ', '満員', '分岐', 'roof', 6, '屋根から届けた客の運賃 +1'],
-  ['car', '増結', '満員', 'Ⅰ', undefined, 5, '車両を1両つなぐ。定員+5（何両でも、買うたび高くなる）。そのぶん加速が少し鈍る'],
-  ['deck', '二階建て', '満員', '分岐', 'car', 8, '全車両を二階建てに。定員+両数×6。2階は耐衝撃−10'],
+  ['car', '増結', '満員', 'Ⅰ', undefined, 5, '車両を1両つなぐ。定員+5（何両でも、買うたび¢4高くなる）。そのぶん加速が少し鈍る'],
+  ['deck', '二階建て', '満員', '分岐', 'car', 10, '全車両を二階建てに。定員+両数×6。2階は耐衝撃−10（値段は両数で上がる）'],
 ];
 export const OFFERS: Offer[] = [
   { id: 'jump', name: 'ジャンプ台', desc: '次の障害の手前で電車ごと跳ぶ。速いほど高く遠くへ、空中でも少し加減速できる。着地の衝撃なし。空中で非常ブレーキを引くと、空から客を射出できる', kind: 'item', price: 2 },
@@ -742,6 +771,8 @@ export interface Run {
   launchLog: Record<number, { perfect: number; tours: number; decks: Set<number>; done: Set<string> }>;
   /** 着地ネットを構えている */
   net: boolean;
+  /** 団体客 */
+  groups: Record<number, GroupState>;
   stuck: number; // 障害で止められている残り時間
   reverse: boolean; // バック中（ボタンを押している間）
   overReason: string;
@@ -783,7 +814,9 @@ function genObstacles(sec: number): Obstacle[] {
 
 function genCandidates(r: Run, st: number): Pax[] {
   const out: Pax[] = [];
-  const n = r.lo === 'bullet' ? 4 : r.lo === 'trip' ? 9 : 7;
+  // 先へ進むほど混む。名所・ターミナルはさらに混む
+  const crowd = Math.min(CROWD.max, CROWD.base + Math.round(st * CROWD.perSt) + (LINE.crowd[st] ?? 0) + LINE.crowdAdd);
+  const n = r.lo === 'bullet' ? 4 : r.lo === 'trip' ? crowd + 2 : crowd;
   const w = LINE.weights;
   let bride = false;
   const draw = (): Kind => {
@@ -807,7 +840,38 @@ function genCandidates(r: Run, st: number): Pax[] {
     }
     out.push({ id: r.nextId++, kind, look: randomLook(rnd), from: st, dest, spot: -1 });
   }
+  // 団体客（全員まとめて乗る。そろって届けるとボーナス）
+  if (st >= 1 && N_ST - 1 - st >= 2 && r.lo !== 'bullet' && rnd() < LINE.groupChance) {
+    // 遠足の引率なら遠足が出やすい
+    const g = r.lo === 'trip' && rnd() < 0.4 ? GROUPS[0] : pick(GROUPS);
+    const gid = r.nextId++;
+    const dest = st + 1 + Math.floor(rnd() * 2);
+    r.groups[gid] = { name: g.name, size: g.size, dest, done: 0, lost: false };
+    for (let i = 0; i < g.size; i++) out.push({ id: r.nextId++, kind: g.kind, look: randomLook(rnd), from: st, dest, spot: -1, group: gid });
+  }
   return out;
+}
+/** 団体の1人を届けた／失った */
+function groupDelivered(r: Run, p: Pax, x: number) {
+  const g = p.group != null ? r.groups[p.group] : null;
+  if (!g) return;
+  g.done++;
+  if (g.done === g.size && !g.lost) {
+    r.money += g.size;
+    r.pops.push({ text: `${g.name} 全員到着！ +¢${g.size}`, x, t: r.time, good: true });
+    toast(r, `${g.name}の${g.size}人をそろって届けた +¢${g.size}`, 'good');
+  }
+}
+function groupLost(r: Run, p: Pax) {
+  const g = p.group != null ? r.groups[p.group] : null;
+  if (g && !g.lost) {
+    g.lost = true;
+    toast(r, `${g.name}がばらばらに…（団体ボーナスなし）`, 'bad');
+  }
+}
+/** 団体のメンバー（ホームか車内にいる人） */
+export function groupMembers(r: Run, gid: number): Pax[] {
+  return [...r.candidates, ...r.pax].filter((q, i, a) => q.group === gid && a.indexOf(q) === i);
 }
 
 export function newRun(meta: Meta, tutorial = false): Run {
@@ -869,6 +933,7 @@ export function newRun(meta: Meta, tutorial = false): Run {
     vz: 0,
     cannonArm: false,
     net: false,
+    groups: {},
     cutins: [],
     launchSeq: 0,
     launchLog: {},
@@ -1169,6 +1234,7 @@ function judgeLanding(r: Run, f: Flier) {
     }
     r.money += fare;
     r.stats.carried++;
+    groupDelivered(r, p, f.landX);
     const log = f.launch ? r.launchLog[f.launch] : null;
     if (log) {
       if (perfect) log.perfect++;
@@ -1195,6 +1261,7 @@ function judgeLanding(r: Run, f: Flier) {
     }
     return;
   }
+  groupLost(r, p);
   if (at >= 0 && at !== p.dest) {
     f.result = 'lost';
     r.trust -= p.kind === 'vip' && r.lo === 'vipcar' ? 50 : 10;
@@ -1310,6 +1377,30 @@ export const ITEM_NAME: Record<ItemId, string> = { jump: 'ジャンプ台', saw:
 export function togglePick(r: Run, id: number) {
   const c = r.candidates.find((q) => q.id === id);
   if (!c) return;
+  // 団体はまとめて
+  if (c.group != null) {
+    const ms = r.candidates.filter((q) => q.group === c.group);
+    if (r.picked.has(c.id)) {
+      for (const m of ms) {
+        r.picked.delete(m.id);
+        r.pax = r.pax.filter((q) => q !== m);
+        m.spot = -1;
+      }
+      return;
+    }
+    if (seatsUsed(r) + ms.length > r.cap) {
+      toast(r, `定員オーバー（${r.groups[c.group]?.name ?? '団体'}は${ms.length}人そろって乗る）`, 'bad');
+      return;
+    }
+    for (const m of ms) {
+      const sp = fillSpot(r);
+      if (sp < 0) break;
+      m.spot = sp;
+      r.pax.push(m);
+      r.picked.add(m.id);
+    }
+    return;
+  }
   if (r.picked.has(id)) {
     r.picked.delete(id);
     r.pax = r.pax.filter((q) => q !== c);
@@ -1358,6 +1449,11 @@ export function moveToSpot(r: Run, id: number, spot: number) {
 export function depart(r: Run) {
   if (r.phase !== 'dwell') return;
   if (r.target >= N_ST - 1) return;
+  // 定員いっぱいで乗せきれなかった運賃（罰はなし、見せるだけ）
+  if (seatsUsed(r) >= r.cap) {
+    const left = r.candidates.filter((c) => !r.picked.has(c.id)).reduce((a, c) => a + fareOf(r, c), 0);
+    if (left > 0) toast(r, `満員！ 乗せきれなかった客 ¢${left} ぶん`, '');
+  }
   r.offer = null;
   r.candidates = [];
   r.picked.clear();
@@ -1404,6 +1500,12 @@ export function modEligible(r: Run, o: Offer): boolean {
   if (id === 'magnet' && r.lo === 'bigmat' && r.mods.has('mat2')) return false;
   return true;
 }
+/** 今の値段（増結は買うたびに、二階建ては両数で、アイテムは駅が進むほど高い） */
+export function modPrice(r: Run, o: Offer): number {
+  if (o.id === 'car') return o.price + 4 * (r.cars - r.startCars);
+  if (o.id === 'deck') return 4 + 3 * r.cars;
+  return o.kind === 'item' ? itemPrice(r, o.price) : o.price;
+}
 /** アイテムの値段：駅が進むほど高い（元の値段の2倍まで） */
 export function itemPrice(r: Run, base: number): number {
   return Math.min(base * 2, base + Math.max(0, r.target - 1));
@@ -1429,7 +1531,7 @@ function rollShop(r: Run): ShopCard[] {
   }
   const cards = opts.map((o) => {
     // 増結は買うたびに高くなる。アイテムは駅が進むほど高い
-    const price = o.id === 'car' ? o.price + 3 * (r.cars - r.startCars) : o.kind === 'item' ? itemPrice(r, o.price) : o.price;
+    const price = modPrice(r, o);
     return { ...o, price, full: price, sold: false };
   });
   // セール：たまに1枚だけ −1
@@ -1480,6 +1582,7 @@ function arrive(r: Run) {
     if (p.kind === 'old') r.trust = Math.min(100, r.trust + 5);
     earned += fare;
     r.stats.carried++;
+    groupDelivered(r, p, POS[st]);
     r.pax = r.pax.filter((q) => q !== p);
   }
   r.money += earned;
@@ -1839,6 +1942,12 @@ export function eject(r: Run, id: number) {
   const big = p.kind === 'old' || p.kind === 'kid' || p.kind === 'vip';
   const loss = r.phase === 'running' ? (big ? 15 : 8) : big ? 8 : 4;
   r.trust -= loss;
+  if (r.picked.has(id) && p.group != null) {
+    // 団体はまとめてホームに戻す
+    r.trust += loss;
+    togglePick(r, id);
+    return;
+  }
   if (r.picked.has(id)) {
     // 停車中に乗せたばかりの客ならホームに戻すだけ
     r.picked.delete(id);
@@ -1848,6 +1957,7 @@ export function eject(r: Run, id: number) {
     return;
   }
   r.pax = r.pax.filter((q) => q !== p);
+  groupLost(r, p);
   if (r.phase === 'running') {
     launchPax(r, p);
     r.fliers[r.fliers.length - 1].judged = true; // 降ろしただけ（判定しない）
@@ -1901,7 +2011,8 @@ function applyMod(r: Run, id: ModId) {
     const before = r.spots.filter((sp) => sp.deck === 2).length;
     fillRoof(r, 0, 2 + roofExtra(r));
     for (let c = 1; c < r.cars; c++) fillRoof(r, c, roofExtra(r));
-    r.cap += Math.max(0, r.spots.filter((sp) => sp.deck === 2).length - before) > 0 ? (id === 'roof' ? 1 : 2) : 0;
+    // 増えた屋根席の数だけ定員も増える
+    r.cap += Math.max(0, r.spots.filter((sp) => sp.deck === 2).length - before);
   }
 }
 

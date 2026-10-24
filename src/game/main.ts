@@ -623,7 +623,7 @@ function renderTree(box: HTMLElement, r: Run | null) {
   const node = (o: S.Offer) => {
     const st = treeState(r, o);
     const extra = o.id === 'car' && r && r.cars > r.startCars ? ` ×${r.cars - r.startCars}` : '';
-    const price = o.id === 'car' && r ? o.price + 3 * (r.cars - r.startCars) : o.price;
+    const price = r ? S.modPrice(r, o) : o.price;
     return `<div class="tr-node ${st}"><div class="nh"><span class="tier">${o.tier}</span><b>${o.name}${extra}</b></div><span class="ne">${o.desc}</span>${st === 'own' && o.id !== 'car' ? '' : `<span class="np">${coinHtml(price)}</span>`}</div>`;
   };
   const count = (b: Tag) => `${mods.filter((o) => o.branch === b && r && treeState(r, o) === 'own').length}/${mods.filter((o) => o.branch === b).length}`;
@@ -868,17 +868,24 @@ function renderHud() {
       candKey = key;
       const box = $('cands');
       box.innerHTML = '';
+      const shownGroups = new Set<number>();
       for (const c of R.candidates) {
         const k = KINDS[c.kind];
         const sel = R.picked.has(c.id);
+        const g = c.group != null ? R.groups[c.group] : null;
+        if (c.group != null) {
+          if (shownGroups.has(c.group)) continue;
+          shownGroups.add(c.group);
+        }
         const risky = '';
         const b = document.createElement('button');
         b.type = 'button';
         b.dataset.id = String(c.id);
-        b.className = 'cand' + (sel ? ' sel' : '') + (c.kind === 'vip' ? ' req' : '') + (risky ? ' risky' : '');
+        b.className = 'cand' + (g ? ' grp' : '') + (sel ? ' sel' : '') + (c.kind === 'vip' ? ' req' : '') + (risky ? ' risky' : '');
         const fare = fareOf(R, c);
         // 3行：アイコン／行き先／運賃と耐衝撃。特性は★を長押しで
-        b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="star">★</span><span class="ic" style="background:${k.color}">${k.ch}</span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
+        if (g) b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : '<span class="flag grp">団体</span>'}<span class="star">★</span><span class="gtop"><span class="ic" style="background:${k.color}">${k.ch}</span><b>${g.name}<small>×${g.size}</small></b></span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}×${g.size}</span><span class="bonus">そろって+${coinHtml(g.size)}</span><span class="tol">🛡${k.tol}</span></span>`;
+        else b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="star">★</span><span class="ic" style="background:${k.color}">${k.ch}</span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
         let pressT = 0;
         let long = false;
         b.addEventListener('pointerdown', () => {
@@ -887,7 +894,9 @@ function renderHud() {
             long = true;
             const tip = $('cand-tip');
             const bb = b.getBoundingClientRect();
-            tip.innerHTML = `<b>${k.name}${k.size > 1 ? `（席${k.size}つ）` : ''}</b><br>${coinText(k.note)}`;
+            tip.innerHTML = g
+              ? `<b>団体：${g.name}（${k.name}${g.size}人）</b><br>${g.size}人まとめて乗る。全員を${LINE.stations[g.dest].name}にそろって届けると ${coinHtml(g.size)}。1人でも落とすとボーナスなし`
+              : `<b>${k.name}${k.size > 1 ? `（席${k.size}つ）` : ''}</b><br>${coinText(k.note)}`;
             tip.hidden = false;
             tip.style.left = `${Math.max(8, Math.min(window.innerWidth - 230, bb.left))}px`;
             tip.style.top = `${bb.top - tip.offsetHeight - 8}px`;
