@@ -25,6 +25,9 @@ export const N_ST = LINE.stations.length;
 /** 停止できる範囲（先頭の位置。停止目標からの差） */
 export const STOP_LO = -14;
 export const STOP_HI = 4;
+/** ここまで行き過ぎたら通過扱い（それまではバックで戻れる） */
+export const OVERRUN_MAX = 60;
+export const REVERSE_V = 3.5;
 /** 予定の平均速度 [m/s]（これより速く走れば遅れを取り戻せる） */
 export const PLAN_V = 11;
 export const DWELL_PLAN = 20;
@@ -255,6 +258,7 @@ export interface Run {
   toasts: { text: string; kind: string; t: number }[];
   offer: Offer[] | null;
   stuck: number; // 障害で止められている残り時間
+  reverse: boolean; // バック中（ボタンを押している間）
   overReason: string;
   stats: { carried: number; flew: number; shocks: number; maxShock: number; early: number };
   nextId: number;
@@ -330,6 +334,7 @@ export function newRun(meta: Meta): Run {
     toasts: [],
     offer: null,
     stuck: 0,
+    reverse: false,
     overReason: '',
     stats: { carried: 0, flew: 0, shocks: 0, maxShock: 0, early: 0 },
     nextId: 1,
@@ -661,6 +666,10 @@ function driving(r: Run, dt: number) {
   r.v = Math.max(0, Math.min(VMAX, r.v + a * dt));
   const x0 = r.x;
   r.x += r.v * dt;
+  // バック（止まっているときだけ。停止位置より手前までは戻らない）
+  if (r.reverse && r.v < 0.05 && r.notch <= 4) {
+    r.x = Math.max(POS[st] + STOP_LO - 2, r.x - REVERSE_V * dt);
+  }
   // 高速走行の揺れ
   if (kmh(r.v) > SHOCK.joltFrom) {
     r.jolt -= dt;
@@ -743,8 +752,8 @@ function driving(r: Run, dt: number) {
   }
   // 駅
   const stop = POS[st];
-  if (r.v < 0.05 && r.notch <= 4 && r.x >= stop + STOP_LO && r.x <= stop + STOP_HI) arrive(r);
-  else if (r.x > stop + STOP_HI + 8) {
+  if (!r.reverse && r.v < 0.05 && r.notch <= 4 && r.x >= stop + STOP_LO && r.x <= stop + STOP_HI) arrive(r);
+  else if (r.x > stop + OVERRUN_MAX) {
     const missed = r.pax.filter((p) => p.dest === st);
     for (const p of missed) p.dest = Math.min(N_ST - 1, st + 1);
     if (missed.length) {
@@ -758,4 +767,25 @@ function driving(r: Run, dt: number) {
       r.target++;
     }
   }
+}
+
+/** バックできる状態か（行き過ぎて止まっている） */
+export function canReverse(r: Run): boolean {
+  if (r.phase !== 'running') return false;
+  const stop = POS[r.target];
+  return r.x > stop + STOP_HI && r.x <= stop + OVERRUN_MAX && r.v < 0.05;
+}
+
+/** 客を降ろす（いつでも）。走行中なら窓から放り出す */
+export function eject(r: Run, id: number) {
+  const p = r.pax.find((q) => q.id === id);
+  if (!p) return;
+  const big = p.kind === 'old' || p.kind === 'kid' || p.kind === 'vip';
+  const loss = r.phase === 'running' ? (big ? 15 : 8) : big ? 8 : 4;
+  r.trust -= loss;
+  r.pax = r.pax.filter((q) => q !== p);
+  if (r.phase === 'running') {
+    r.fliers.push({ pax: p, t: r.time, x: r.x - 12 + (r.spots[p.spot]?.x ?? 6) });
+    toast(r, `${KINDS[p.kind].name}を窓から降ろした（信頼−${loss}）`, 'bad');
+  } else toast(r, `${KINDS[p.kind].name}に途中で降りてもらった（信頼−${loss}）`, 'bad');
 }

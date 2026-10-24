@@ -154,7 +154,11 @@
       .ocard { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 2px solid var(--ink); border-radius: 12px; background: #fffdf6; text-align: left; font-size: 12.5px; font-weight: 700; }
       .ocard b { font-size: 16px; }
       .ocard .tag { align-self: flex-start; padding: 0 8px; border: 1.5px solid var(--ink); border-radius: 999px; font-size: 10px; font-weight: 900; background: #dff2e8; }
-      .ocard.mod .tag { background: var(--mustard); }
+      .ocard.o-mod .tag { background: var(--mustard); }
+      .ocard span:last-child { color: var(--sub); }
+      #btn-reverse { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); height: 52px; padding: 0 22px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--mustard); font-size: 16px; font-weight: 900; box-shadow: 0 4px 0 var(--ink); touch-action: none; z-index: 4; animation: beat 1s infinite; }
+      #btn-reverse:active { transform: translateX(-50%) translateY(3px); box-shadow: 0 1px 0 var(--ink); animation: none; }
+      #btn-reverse[hidden] { display: none; }
       dl { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 0; font-weight: 700; font-size: 14px; }
       dd { margin: 0; text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
       dt.sum, dd.sum { padding-top: 6px; border-top: 2px solid var(--ink); font-family: var(--dela); font-weight: 400; font-size: 20px; }
@@ -203,6 +207,7 @@
       <main>
         <canvas id="view"></canvas>
         <button id="btn-mode" type="button">車内 ▶</button>
+        <button id="btn-reverse" type="button" hidden>◀ 押している間バック</button>
         <div id="shock"></div>
         <div id="toasts"></div>
       </main>

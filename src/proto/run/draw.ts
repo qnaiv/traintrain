@@ -353,7 +353,7 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   const name = LINE.stations[Math.min(LINE.stations.length - 1, sec + 1)].name;
   if (r.phase === 'running') {
     const d = POS[st] + STOP_LO - r.x;
-    const msg = d > 0 ? `${name} あと${Math.round(d)}m` : r.x <= POS[st] + STOP_HI ? `${name} 停止範囲内！` : 'オーバーラン！';
+    const msg = d > 0 ? `${name} あと${Math.round(d)}m` : r.x <= POS[st] + STOP_HI ? `${name} 停止範囲内！` : '行き過ぎ！ バックで戻れる';
     ctx.fillStyle = d <= 0 && r.x <= POS[st] + STOP_HI ? '#2E6B53' : INK;
     ctx.fillText(msg, x1, y + 30);
   } else ctx.fillText(`次 ${name}`, x1, y + 30);
@@ -427,7 +427,12 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
         hits.push({ kind: 'pax', ref: p, x: h.hx, y: h.hy + h.hr * 2.5, r: Math.max(22, h.hr * 3.4) });
         const tol = effTol(r, p);
         const ok = !o || shock <= tol;
-        badges.push(() => tagAt(ctx, h.hx, h.hy - h.hr * 1.5 - 4, `${KINDS[p.kind].name} ${tol}${o ? (ok ? ' ◯' : ' ✕') : ''}`, ok ? '#6FC3A0' : '#E4553A', ok ? INK : '#FFFDF6'));
+        const nextStop = r.phase === 'dwell' ? r.target + 1 : r.target;
+        const dest = LINE.stations[p.dest]?.name ?? '';
+        badges.push(() => {
+          tagAt(ctx, h.hx, h.hy - h.hr * 1.5 - 22, `${p.dest === nextStop ? '次で降りる ' : ''}→${dest}`, DEST_COLORS[p.dest] ?? '#FFFDF6', INK);
+          tagAt(ctx, h.hx, h.hy - h.hr * 1.5 - 4, `${KINDS[p.kind].name} 耐${tol}${o ? (ok ? ' ◯' : ' ✕') : ''}`, ok ? '#6FC3A0' : '#E4553A', ok ? INK : '#FFFDF6');
+        });
       },
     });
   }
@@ -470,6 +475,25 @@ export function drawInside(ctx: CanvasRenderingContext2D, r: Run, w: number, top
       sub.lw = iso.lw;
       drawPerson(sub, 0, 0, 0, look(p), { pose: 'stand', facing: 0, lift: 0.2 });
     }
+  }
+  // 降ろすゾーン（ドラッグ中だけ）
+  if (drag) {
+    const zy = bottom - 64;
+    const over = drag.sy > zy;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.roundRect(12, zy, w - 24, 56, 14);
+    ctx.fillStyle = over ? 'rgba(228,85,58,0.35)' : 'rgba(228,85,58,0.12)';
+    ctx.fill();
+    ctx.strokeStyle = '#B53E28';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#8A1F0E';
+    ctx.font = '900 14px "Zen Maru Gothic", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(r.phase === 'running' ? 'ここで離すと窓から降ろす（信頼が減る）' : 'ここで離すと降りてもらう（信頼が減る）', w / 2, zy + 28);
   }
   return { shock, obstacle: o };
 }

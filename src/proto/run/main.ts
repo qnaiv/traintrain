@@ -16,6 +16,8 @@ import {
   buyUpgrade,
   chooseOffer,
   depart,
+  canReverse,
+  eject,
   effTol,
   kmh,
   loadMeta,
@@ -130,7 +132,11 @@ canvas.addEventListener('pointerup', (e) => {
       best = h.ref as number;
     }
   }
-  if (drag.moved && best >= 0) {
+  const ch = canvas.getBoundingClientRect().height;
+  if (drag.moved && y > ch - 2 - 64) {
+    eject(R, drag.id);
+    sfx.fly();
+  } else if (drag.moved && best >= 0) {
     moveToSpot(R, drag.id, best);
     sfx.drop();
   }
@@ -219,6 +225,29 @@ for (const it of ITEM_DEF) {
 }
 
 $('btn-depart').addEventListener('click', () => depart(R));
+
+// バック（押している間だけ）
+const revBtn = $('btn-reverse');
+const revOn = (e: PointerEvent) => {
+  e.preventDefault();
+  try {
+    revBtn.setPointerCapture(e.pointerId);
+  } catch {
+    // 合成イベント
+  }
+  R.reverse = true;
+};
+const revOff = () => (R.reverse = false);
+revBtn.addEventListener('pointerdown', revOn);
+revBtn.addEventListener('pointerup', revOff);
+revBtn.addEventListener('pointercancel', revOff);
+revBtn.addEventListener('lostpointercapture', revOff);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyB' && screen === 'run') R.reverse = true;
+});
+window.addEventListener('keyup', (e) => {
+  if (e.code === 'KeyB') R.reverse = false;
+});
 
 // ---------- 画面の切り替え ----------
 function startRun() {
@@ -452,6 +481,8 @@ function renderHud() {
   renderForecast();
   renderSpeedo();
   document.body.classList.toggle('dwell', R.phase === 'dwell');
+  revBtn.hidden = !(canReverse(R) || R.reverse);
+  if (revBtn.hidden) R.reverse = false;
   document.querySelectorAll<HTMLElement>('.notch').forEach((n) => n.classList.toggle('on', Number(n.dataset.n) === R.notch));
   itemsBox.querySelectorAll<HTMLButtonElement>('.item').forEach((b) => {
     const id = b.dataset.id as ItemId;
@@ -501,7 +532,7 @@ function renderHud() {
     R.offer?.forEach((o, i) => {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'ocard ' + o.kind;
+      b.className = 'ocard ' + (o.kind === 'mod' ? 'o-mod' : 'o-item');
       b.innerHTML = `<span class="tag">${o.kind === 'item' ? 'アイテム' : '魔改造（このラン中ずっと）'}</span><b>${o.name}</b><span>${o.desc}</span>`;
       b.addEventListener('click', () => chooseOffer(R, i));
       cards.appendChild(b);
