@@ -1,3 +1,4 @@
+import { faceIcon } from './faces.ts';
 // 試作 v0.7 の描画：外（台座＋障害）、中（1両）、上のバー。
 
 import { CAR_LEN, DEST_COLORS } from '../data.ts';
@@ -1349,130 +1350,14 @@ export function drawSide(ctx: CanvasRenderingContext2D, r: Run, w: number, h: nu
   return tap;
 }
 
-// ---------- 乗客のバストアップ（アイコン用。斜め前から見た本物の人形） ----------
-const bustCache = new Map<string, HTMLCanvasElement>();
-/** 乗客の胸から上を、背景色の丸の中に描いた画像（px × px） */
+// ---------- 乗客アイコン（正面ちびフェイス。faces.ts） ----------
 export function bustOf(p: Pax, px = 64): HTMLCanvasElement {
-  const key = `${p.id}:${p.kind}:${px}`;
-  const hit = bustCache.get(key);
-  if (hit) return hit;
-  const dpr = Math.min(3, window.devicePixelRatio || 1);
-  const W = Math.round(px * dpr);
-  // いったん大きく描いてから、頭と肩のまわりを切り抜く
-  const big = document.createElement('canvas');
-  big.width = W * 3;
-  big.height = W * 3;
-  const bc = big.getContext('2d')!;
-  const s = W * 0.95;
-  const iso = new Iso(bc, s, W * 1.5, W * 2.6);
-  iso.lw = Math.max(1.2, W / 34);
-  const k = scaleOf(p);
-  const sub = new Iso(bc, s * k, 0, 0);
-  const [qx, qy] = sub.P(0, 0, 0);
-  sub.ox = W * 1.5 - qx;
-  sub.oy = W * 2.6 - qy;
-  sub.lw = iso.lw;
-  const h = drawPerson(sub, 0, 0, 0, look(p), { pose: 'stand', facing: ((globalThis as { __bf?: Facing }).__bf ?? 2) as Facing });
-  const out = document.createElement('canvas');
-  out.width = W;
-  out.height = W;
-  const c = out.getContext('2d')!;
-  // 丸い背景（客の種類の色）
-  c.beginPath();
-  c.arc(W / 2, W / 2, W / 2 - 1, 0, Math.PI * 2);
-  c.fillStyle = KINDS[p.kind].color;
-  c.fill();
-  c.save();
-  c.clip();
-  const crop = h.hr * ((globalThis as { __bc?: number }).__bc ?? 3.2);
-  const cx = h.hx;
-  const cy = h.hy + h.hr * 0.5;
-  c.drawImage(big, cx - crop / 2, cy - crop / 2, crop, crop, 0, 0, W, W);
-  // 見分けやすいように、種類ごとの持ち物・目印を足す
-  const hx = W / 2 + (h.hx - cx) * (W / crop);
-  const hy = W / 2 + (h.hy - cy) * (W / crop);
-  const hr = h.hr * (W / crop);
-  const lw = Math.max(1.2, W / 36);
-  c.lineWidth = lw;
-  c.strokeStyle = INK;
-  const shape = (f: () => void, fill: string) => {
-    c.beginPath();
-    f();
-    c.fillStyle = fill;
-    c.fill();
-    c.stroke();
-  };
-  if (p.kind === 'old') {
-    // 丸めがね
-    for (const sgn of [-1, 1]) {
-      c.beginPath();
-      c.arc(hx + sgn * hr * 0.38, hy + hr * 0.1, hr * 0.26, 0, Math.PI * 2);
-      c.fillStyle = 'rgba(207,230,238,0.6)';
-      c.fill();
-      c.stroke();
-    }
-  } else if (p.kind === 'sal') {
-    // ネクタイ
-    shape(() => {
-      c.moveTo(hx - hr * 0.16, hy + hr * 1.25);
-      c.lineTo(hx + hr * 0.16, hy + hr * 1.25);
-      c.lineTo(hx + hr * 0.26, hy + hr * 2.3);
-      c.lineTo(hx, hy + hr * 2.6);
-      c.lineTo(hx - hr * 0.26, hy + hr * 2.3);
-      c.closePath();
-    }, '#2C47A0');
-  } else if (p.kind === 'vip') {
-    // 王冠とサングラス
-    shape(() => {
-      const y0 = hy - hr * 0.6;
-      c.moveTo(hx - hr * 0.55, y0);
-      c.lineTo(hx - hr * 0.62, y0 - hr * 0.45);
-      c.lineTo(hx - hr * 0.28, y0 - hr * 0.2);
-      c.lineTo(hx, y0 - hr * 0.55);
-      c.lineTo(hx + hr * 0.28, y0 - hr * 0.2);
-      c.lineTo(hx + hr * 0.62, y0 - hr * 0.45);
-      c.lineTo(hx + hr * 0.55, y0);
-      c.closePath();
-    }, '#F2C94C');
-    shape(() => c.roundRect(hx - hr * 0.7, hy - hr * 0.05, hr * 1.4, hr * 0.32, hr * 0.12), '#1F1B16');
-  } else if (p.kind === 'stu') {
-    // 学生帽
-    shape(() => c.roundRect(hx - hr * 0.95, hy - hr * 1.05, hr * 1.9, hr * 0.55, hr * 0.2), '#1F2440');
-    shape(() => c.ellipse(hx + hr * 0.2, hy - hr * 0.5, hr * 0.7, hr * 0.16, 0, 0, Math.PI * 2), '#1F2440');
-  } else if (p.kind === 'tour') {
-    // サングラス
-    shape(() => c.roundRect(hx - hr * 0.7, hy - hr * 0.02, hr * 1.4, hr * 0.3, hr * 0.12), '#3A3631');
-  } else if (p.kind === 'kid') {
-    // ほっぺの絆創膏
-    shape(() => c.roundRect(hx + hr * 0.2, hy + hr * 0.3, hr * 0.5, hr * 0.2, hr * 0.08), '#F3D27F');
-  }
-  c.restore();
-  // 右下に種類の札
-  const br = W * 0.2;
-  c.beginPath();
-  c.arc(W - br - 1, W - br - 1, br, 0, Math.PI * 2);
-  c.fillStyle = '#FFFDF6';
-  c.fill();
-  c.lineWidth = Math.max(1.2, W / 40);
-  c.strokeStyle = INK;
-  c.stroke();
-  c.fillStyle = INK;
-  c.font = `900 ${Math.round(br * 1.25)}px "Zen Maru Gothic", sans-serif`;
-  c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  c.fillText(KINDS[p.kind].ch, W - br - 1, W - br);
-  c.beginPath();
-  c.arc(W / 2, W / 2, W / 2 - 1, 0, Math.PI * 2);
-  c.strokeStyle = INK;
-  c.lineWidth = Math.max(1.5, W / 28);
-  c.stroke();
-  bustCache.set(key, out);
-  return out;
+  return faceIcon(p.kind, px);
 }
 /** img タグ用 */
 const bustUrlCache = new Map<string, string>();
 export function bustURL(p: Pax, px = 64): string {
-  const key = `${p.id}:${p.kind}:${px}`;
+  const key = `${p.kind}:${px}`;
   let u = bustUrlCache.get(key);
   if (!u) {
     u = bustOf(p, px).toDataURL();
