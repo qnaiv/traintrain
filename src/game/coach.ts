@@ -1,5 +1,5 @@
 // 見習い車掌：研修運転の案内と、初めて出会ったときだけのヒント
-import { KINDS, LINE, POS, kmh, nextObstacle, saveMeta, treeNeed, tutorialStation1, PRIO_LOSS, type Meta, type Run } from './state.ts';
+import { KINDS, LINE, NEAR, POS, kmh, nextObstacle, saveMeta, treeNeed, tutorialStation1, PRIO_LOSS, type Meta, type Run } from './state.ts';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -205,6 +205,16 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
           : k > need + 5
             ? `速すぎると屋根の子どもが飛ぶ！ <b>N</b>や<b>B1</b>で<b class="hl">${need}〜${need + 4}km/h</b>くらいに`
             : `いい速さ！ そのまま突き破れ（速すぎると屋根の子が飛ぶ）`;
+      // まだ倒木が下のパネルに出ていない（遠い）あいだは、まず走り出すことだけ伝える
+      if (tree.x - r.x > NEAR) {
+        return {
+          text: k < 1 ? '発車！ <b class="hl">レバー</b>を<b>P3</b>まで上げて加速しよう' : 'この先に<b>倒木</b>がある。近づくと<b class="hl">下のパネル</b>に出るので、それまで加速しておこう',
+          target: k < 1 ? '#lever' : undefined,
+          shortTarget: '#lever',
+          step: '研修 4/8',
+          tut: true,
+        };
+      }
       return {
         id: 'tree',
         text: `この先に<b>倒木</b>。光っている<b>下のパネル</b>に、横から見た倒木までの距離と、<b class="hl">${need}km/h以上</b>で突き破れることが出ている。電車の上の顔は乗客で、数字は<b>耐えられる衝撃</b>。赤くなった客は飛んでしまう。<b>レバー</b>で速さを合わせよう（P3で加速、N・B1で抑える）`,
