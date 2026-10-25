@@ -704,8 +704,8 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
   ctx.textAlign = 'right';
   ctx.fillText('タップで路線図・ダイヤ', x1 + 6, y + 31);
-  // 運ぶ人数のノルマ
-  if (!r.demo) {
+  // 運ぶ人数のノルマ（研修では出さない）
+  if (!r.demo && LINE.quota > 0) {
     const ok = r.delivered >= LINE.quota;
     ctx.textAlign = 'left';
     ctx.font = '900 10px "Zen Maru Gothic", sans-serif';

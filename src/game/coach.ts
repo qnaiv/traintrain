@@ -145,7 +145,7 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
         tutStep = 2;
         return tutorial(r, meta, shopOpen);
       }
-      return { text: 'まずは<b class="hl">鵠沼まで行く子ども</b>を乗せよう。カードをタップ！', target: `.cand[data-id="${kidId}"]`, step: '研修 1/8', tut: true };
+      return { text: 'まずは<b class="hl">入地まで行く子ども</b>を乗せよう。カードをタップ！', target: `.cand[data-id="${kidId}"]`, step: '研修 1/8', tut: true };
     case 2:
       if (kidAboard && r.spots[kidAboard.spot]?.deck === 2) {
         tutStep = 3;
@@ -231,7 +231,7 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
         );
       }
       if (kidAboard && r.target > 1) {
-        return fail(r, `射出しないまま<b class="hl">鵠沼を通り過ぎた</b>。乗り過ごした客は次の駅まで連れて行かれて、<b>信頼が減る</b>。駅の手前でレバーを<b>非常</b>へ！`, cpLaunch ?? cpTree, 5);
+        return fail(r, `射出しないまま<b class="hl">入地を通り過ぎた</b>。乗り過ごした客は次の駅まで連れて行かれて、<b>信頼が減る</b>。駅の手前でレバーを<b>非常</b>へ！`, cpLaunch ?? cpTree, 5);
       }
       if (!kidAboard && r.phase === 'dwell') {
         return fail(r, `止まって降ろすのもアリ。でも研修では<b class="hl">射出</b>を覚えよう。射出なら止まらずに届けられて、◎マットなら運賃アップ`, cpLaunch ?? cpTree, 5);
@@ -240,7 +240,7 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
         r.slow = 0.4;
         return {
           id: 'launch',
-          text: `鵠沼が近い。光っている<b>下のパネル</b>の<b>点線</b>が、今急ブレーキしたときの子どもの飛び先。点線の先が<b class="ok">緑（PERFECT）</b>になった瞬間に、レバーを左端の<b class="hl">「非常」</b>へ入れると射出！ 時間はゆっくりになっている`,
+          text: `入地が近い。光っている<b>下のパネル</b>の<b>点線</b>が、今急ブレーキしたときの子どもの飛び先。点線の先が<b class="ok">緑（PERFECT）</b>になった瞬間に、レバーを左端の<b class="hl">「非常」</b>へ入れると射出！ 時間はゆっくりになっている`,
           short: `下のパネルの点線が<b class="ok">緑</b>になったらレバーを<b class="hl">非常</b>へ！${tries ? '（速さで届く先が変わる）' : ''}`,
           target: '#fc-side',
           shortTarget: '#lever',
@@ -273,20 +273,20 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
       };
     }
     case 7: {
-      // 鵠沼に止まる
+      // 入地に止まる
       if (r.phase === 'dwell' && r.target === 1) {
         tutorialStation1(r);
         tutStep = 8;
         return tutorial(r, meta, shopOpen);
       }
-      if (r.target > 1) return fail(r, `止まらずに<b class="hl">鵠沼を通り過ぎた</b>。今回は鵠沼に止まって、お店と乗客を見てみよう。射出したあとはレバーを<b>非常</b>のまま止まる`, cpLaunch ?? cpTree, 5);
+      if (r.target > 1) return fail(r, `止まらずに<b class="hl">入地を通り過ぎた</b>。今回は入地に止まって、お店と乗客を見てみよう。射出したあとはレバーを<b>非常</b>のまま止まる`, cpLaunch ?? cpTree, 5);
       const back = r.x > POS[1] + 4;
       return {
         text: back
           ? '少し行き過ぎた。下の<b class="hl">◀ バック</b>を押している間だけ戻れる。駅の手前まで戻ろう'
           : r.v < 0.1
             ? 'ホームの手前で止まった。レバーを<b>P1</b>にしてゆっくり進み、<b>N</b>に戻して止まろう（上の路線バーで駅の手前に入れば停車）'
-            : '射出したら、そのままレバーを<b>非常</b>かB3にして<b>鵠沼で止まろう</b>。止まれば客を乗せられて、お店にも寄れる',
+            : '射出したら、そのままレバーを<b>非常</b>かB3にして<b>入地で止まろう</b>。止まれば客を乗せられて、お店にも寄れる',
         target: back ? '#btn-reverse' : '#lever',
         step: '研修 6/8',
         tut: true,
@@ -327,13 +327,13 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
     case 10:
       r.paused = true;
       return {
-        text: `最後に<b>ノルマ</b>。本番では上の<b>路線バーの左下</b>に「ノルマ 0/8人」と出る。終点までに<b>届ける人数</b>で、足りないとクリアにならない。止まる駅・射出で飛ばす駅・通過する駅を選んで進もう。<br>研修は次の<b>江ノ島</b>が終点。急カーブに気をつけて、着けば修了！`,
+        text: `最後に<b>ノルマ</b>。本番では上の<b>路線バーの左下</b>に「ノルマ 0/8人」と出る。終点までに<b>届ける人数</b>で、足りないとクリアにならない。止まる駅・射出で飛ばす駅・通過する駅を選んで進もう。<br>研修は次の<b>竜ヶ崎</b>が終点。急カーブに気をつけて、着けば修了！`,
         target: '#view',
         step: '研修 最後',
         tut: true,
         buttons: [
           {
-            label: '江ノ島へ ▶',
+            label: '竜ヶ崎へ ▶',
             main: true,
             fn: () => {
               r.paused = false;
@@ -347,8 +347,8 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
         endTutorial(r, meta);
         return null;
       }
-      if (r.phase === 'dwell') return { text: '客を乗せたら<b>発車</b>。江ノ島に着けば研修修了！', target: '#btn-depart', step: '研修 最後', tut: true };
-      return { text: '<b>江ノ島</b>に着けば研修修了！ 急カーブは<b>20km/h以下</b>で（超えると脱輪）。客は止まって降ろしても、射出してもいい', step: '研修 最後', tut: true };
+      if (r.phase === 'dwell') return { text: '客を乗せたら<b>発車</b>。竜ヶ崎に着けば研修修了！', target: '#btn-depart', step: '研修 最後', tut: true };
+      return { text: '<b>竜ヶ崎</b>に着けば研修修了！ 急カーブは<b>20km/h以下</b>で（超えると脱輪）。客は止まって降ろしても、射出してもいい', step: '研修 最後', tut: true };
   }
   return null;
 }
