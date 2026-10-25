@@ -327,12 +327,28 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
     case 10:
       r.paused = true;
       return {
-        text: `最後に<b>ノルマ</b>。上の<b>路線バーの左下</b>の「ノルマ ${r.delivered}/${LINE.quota}人」が、終点までに<b>届ける人数</b>。足りないとクリアにならない。止まる駅・射出で飛ばす駅・通過する駅を選んで進もう。研修はここまで！`,
+        text: `最後に<b>ノルマ</b>。本番では上の<b>路線バーの左下</b>に「ノルマ 0/8人」と出る。終点までに<b>届ける人数</b>で、足りないとクリアにならない。止まる駅・射出で飛ばす駅・通過する駅を選んで進もう。<br>研修は次の<b>江ノ島</b>が終点。急カーブに気をつけて、着けば修了！`,
         target: '#view',
-        step: '研修おわり',
+        step: '研修 最後',
         tut: true,
-        buttons: [{ label: '本番スタート ▶', main: true, fn: () => endTutorial(r, meta) }],
+        buttons: [
+          {
+            label: '江ノ島へ ▶',
+            main: true,
+            fn: () => {
+              r.paused = false;
+              tutStep = 11;
+            },
+          },
+        ],
       };
+    case 11:
+      if (r.phase === 'clear' || r.phase === 'over') {
+        endTutorial(r, meta);
+        return null;
+      }
+      if (r.phase === 'dwell') return { text: '客を乗せたら<b>発車</b>。江ノ島に着けば研修修了！', target: '#btn-depart', step: '研修 最後', tut: true };
+      return { text: '<b>江ノ島</b>に着けば研修修了！ 急カーブは<b>20km/h以下</b>で（超えると脱輪）。客は止まって降ろしても、射出してもいい', step: '研修 最後', tut: true };
   }
   return null;
 }

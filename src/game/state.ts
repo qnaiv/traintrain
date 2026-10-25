@@ -44,6 +44,8 @@ export type Role = 'normal' | 'crowd' | 'nostop';
 export const CROWD_ROLE = { extra: 3, prio: 2 };
 /** 飛び乗りステップが効く速さ */
 export const HOP_V = 25;
+/** 信頼の最大値（3〜4回のミスで尽きる） */
+export const TRUST_MAX = 50;
 /** 止まって降ろすとき、1人あたり時計が進む秒数 */
 export const ALIGHT_TIME = 2;
 /** 優先客を置き去りにしたときの信頼の減り（1人あたり） */
@@ -104,6 +106,19 @@ export const LINES: Record<string, RunLine> = {
     noStops: 2,
     prio: [1, 2, 2, 2, 3, 3],
   },
+};
+/** 研修運転：江ノ電の最初の3駅だけ（藤沢→鵠沼→江ノ島） */
+LINES.tutorial = {
+  ...LINES.enoden,
+  id: 'tutorial',
+  name: '江ノ島電鉄（研修）',
+  stations: LINES.enoden.stations.slice(0, 3),
+  sections: [380, 440],
+  scenery: ['town', 'street'],
+  quota: 0,
+  noStops: 0,
+  prio: [0, 0],
+  needs: 'never',
 };
 export let LINE: RunLine = LINES.enoden;
 export let POS: number[] = [];
@@ -314,9 +329,9 @@ export function waveUp(t: number): boolean {
 }
 
 // ---------- 3択（ランの中だけ） ----------
-export type ItemId = 'jump' | 'saw' | 'airbag' | 'nitro' | 'net' | 'dia';
+export type ItemId = 'jump' | 'saw' | 'airbag' | 'nitro' | 'net' | 'dia' | 'sorry';
 export type ModId =
-  | 'hop' | 'belt' | 'belt2' | 'ram' | 'ram2' | 'plow' | 'susp' | 'susp2' | 'susp3' | 'car' | 'deck' | 'roof' | 'roof2' | 'view'
+  | 'hop' | 'host' | 'host2' | 'belt' | 'belt2' | 'ram' | 'ram2' | 'plow' | 'susp' | 'susp2' | 'susp3' | 'car' | 'deck' | 'roof' | 'roof2' | 'view'
   | 'rocket' | 'motor' | 'mat' | 'mat2' | 'kidlove' | 'chute' | 'chute2' | 'rubber' | 'hbrake' | 'hbrake2' | 'sand' | 'sand2' | 'tilt' | 'magnet';
 export interface Offer {
   id: ItemId | ModId;
@@ -356,6 +371,8 @@ const TREE: M[] = [
   ['belt', 'シートベルト', '守り', 'Ⅰ', undefined, 3, '座席の耐衝撃 +20 → +30'],
   ['belt2', '全席シートベルト', '守り', 'Ⅱ', 'belt', 6, '座席の耐衝撃 → +50'],
   ['rubber', 'ゴムの手すり', '守り', '分岐', 'belt', 5, '射出以外の衝撃では、屋根の客の耐衝撃 +30'],
+  ['host', 'おもてなし', '守り', 'Ⅰ', undefined, 4, '信頼の最大値 +15（いまの信頼も+15）'],
+  ['host2', 'おもてなしⅡ', '守り', 'Ⅱ', 'host', 7, '信頼の最大値 さらに+15（いまの信頼も+15）'],
   ['ram', '衝角', '突破', 'Ⅰ', undefined, 3, '倒木を突き破る速さ 40 → 32km/h'],
   ['ram2', '衝角Ⅱ', '突破', 'Ⅱ', 'ram', 6, '倒木を突き破る速さ → 20km/h'],
   ['plow', '排障器', '突破', '分岐', 'ram', 6, '倒木・鹿・工事区間の衝撃が半分'],
@@ -378,6 +395,7 @@ export const OFFERS: Offer[] = [
   { id: 'nitro', name: 'ニトロ', desc: 'その場で +20km/h。空中では使えない', kind: 'item', price: 2 },
   { id: 'net', name: '着地ネット', desc: '次の射出だけ、ホームから4mはみ出してもGOOD', kind: 'item', price: 2 },
   { id: 'dia', name: '臨時ダイヤ', desc: '遅れを20秒なかったことに（予定より早くはならない）', kind: 'item', price: 3 },
+  { id: 'sorry', name: 'お詫びの菓子折り', desc: '信頼を+15回復（最大値まで）', kind: 'item', price: 3 },
   ...TREE.map(([id, name, branch, tier, req, price, desc]): Offer => ({ id, name, desc, kind: 'mod', price, branch, tier, req })),
 ];
 /** 改造ツリーの1つ */
@@ -430,7 +448,7 @@ export const LOADOUTS: Loadout[] = [
   { id: 'packed', name: 'ぎゅうぎゅう詰め', up: '定員 +3', down: 'つり革なし。全員の耐衝撃 −10', cost: 10 },
   { id: 'bullet', name: '弾丸特急', up: '駅を通過するたびに ¢2', down: '停車した駅の客が4人だけ', cost: 12 },
   { id: 'rocketd', name: 'ロケット直結', up: 'ロケットブースターを積んで出発', down: 'ブレーキ（B1〜B3）の効きが −30%', cost: 12 },
-  { id: 'vipcar', name: 'VIP専用車', up: '毎駅 VIPがいる。VIPのPERFECTは ¢6', down: 'VIPを着地ミスさせると信頼 −50', cost: 15 },
+  { id: 'vipcar', name: 'VIP専用車', up: '毎駅 VIPがいる。VIPのPERFECTは ¢6', down: 'VIPを着地ミスさせると信頼 −25', cost: 15 },
 ];
 // ---------- キーワードとコンボ ----------
 export type Tag = '射出' | '守り' | '突破' | '満員';
@@ -442,6 +460,7 @@ export const OFFER_TAGS: Record<string, Tag[]> = {
   nitro: ['突破'],
   net: ['射出'],
   dia: ['突破'],
+  sorry: ['守り'],
 };
 export type ComboId = 'cannon' | 'retro' | 'bumper' | 'wall' | 'upper' | 'salvo' | 'sling' | 'tour';
 export interface ComboDef {
@@ -749,6 +768,8 @@ export interface Run {
   money: number;
   earlyBonus: number;
   trust: number;
+  /** 信頼の最大値（魔改造で増える） */
+  trustMax: number;
   delay: number;
   /** 予定に対する差（負なら早い） */
   ahead: number;
@@ -933,7 +954,7 @@ export function groupMembers(r: Run, gid: number): Pax[] {
 }
 
 export function newRun(meta: Meta, tutorial = false): Run {
-  setLine(tutorial ? 'enoden' : meta.line);
+  setLine(tutorial ? 'tutorial' : meta.line);
   const r: Run = {
     meta,
     spots: [...lowerSpots(meta, 0), ...roofSpots(0).slice(0, 2)],
@@ -960,13 +981,14 @@ export function newRun(meta: Meta, tutorial = false): Run {
     candidates: [],
     picked: new Set(),
     obstacles: LINE.sections.map((_, i) => genObstacles(i)),
-    items: { jump: 1, saw: meta.lv.kit >= 1 ? 1 : 0, airbag: meta.lv.kit >= 2 ? 1 : 0, nitro: 0, net: 0, dia: 0 },
+    items: { jump: 1, saw: meta.lv.kit >= 1 ? 1 : 0, airbag: meta.lv.kit >= 2 ? 1 : 0, nitro: 0, net: 0, dia: 0, sorry: 0 },
     mods: new Set(),
     armed: null,
     airbag: false,
     money: START_MONEY,
     earlyBonus: 0,
-    trust: 100,
+    trust: TRUST_MAX,
+    trustMax: TRUST_MAX,
     delay: 0,
     ahead: 0,
     clock: 0,
@@ -1059,7 +1081,7 @@ export function prioCount(r: Run, st: number): number {
 /** 研修：鵠沼に着いたら、お店と客を決まった中身に（ランダムなし） */
 export function tutorialStation1(r: Run) {
   const mk = (kind: Kind, dest: number, prio = false): Pax => ({ id: r.nextId++, kind, look: randomLook(rnd), from: 1, dest, spot: -1, prio });
-  r.candidates = [mk('old', 2, true), mk('sal', 3), mk('kid', 2), mk('stu', 3), mk('sal', 2)];
+  r.candidates = [mk('old', 2, true), mk('sal', 2), mk('kid', 2), mk('stu', 2), mk('sal', 2)];
   r.picked.clear();
   r.money = Math.max(r.money, 7);
   const card = (id: string): ShopCard => {
@@ -1072,8 +1094,11 @@ export function tutorialStation1(r: Run) {
 function setupTutorial(r: Run) {
   r.offer = null;
   r.mats[1].x = POS[1] - 10;
+  r.mats[2].x = POS[2] - 10;
+  // 2区間目は急カーブ1つだけ
+  r.obstacles[1] = [{ kind: 'curve', x: POS[1] + 200, len: 30, taps: 0, need: 0, state: 'wait', t: 0 }];
   const mk = (kind: Kind, dest: number): Pax => ({ id: r.nextId++, kind, look: randomLook(rnd), from: 0, dest, spot: -1 });
-  r.candidates = [mk('kid', 1), mk('sal', 2), mk('stu', 3), mk('old', 2)];
+  r.candidates = [mk('kid', 1), mk('sal', 2), mk('stu', 2), mk('old', 1)];
   r.obstacles[0] = [{ kind: 'tree', x: POS[0] + 190, len: 0, taps: 0, need: 0, state: 'wait', t: 0 }];
 }
 function applyLoadout(r: Run) {
@@ -1398,14 +1423,14 @@ function judgeLanding(r: Run, f: Flier) {
   groupLost(r, p);
   if (at >= 0 && at !== p.dest) {
     f.result = 'lost';
-    r.trust -= p.kind === 'vip' && r.lo === 'vipcar' ? 50 : 10;
+    r.trust -= p.kind === 'vip' && r.lo === 'vipcar' ? 25 : 10;
     r.missHere++;
     r.pops.push({ text: `${LINE.stations[at].name}に着地…${LINE.stations[p.dest].name}行きなのに`, x: f.landX, t: r.time, good: false });
     logIt(r, `${k.name}（${LINE.stations[p.dest].name}行き）が${LINE.stations[at].name}に着地してしまった`, false);
     return;
   }
   f.result = 'miss';
-  r.trust -= p.kind === 'vip' && r.lo === 'vipcar' ? 50 : big ? 18 : 12;
+  r.trust -= p.kind === 'vip' && r.lo === 'vipcar' ? 25 : big ? 18 : 12;
   r.missHere++;
   r.pops.push({ text: `${k.name}が${LINE.scenery[Math.max(0, Math.min(LINE.sections.length - 1, POS.findIndex((pos) => pos > f.landX) - 1))] === 'coast' ? '海' : LINE.scenery.includes('tunnel') ? '線路わき' : '田んぼ'}にポチャン`, x: f.landX, t: r.time, good: false });
   logIt(r, `${k.name}（${LINE.stations[p.dest].name}行き）がホームに届かず落ちた`, false);
@@ -1452,11 +1477,12 @@ export function isArmed(r: Run, id: ItemId): boolean {
   return id === 'jump' ? r.armed === 'jump' : id === 'saw' ? r.sawArmed : id === 'net' ? r.net : r.airbag;
 }
 /** その場で効くアイテム（構えない） */
-export const INSTANT: ItemId[] = ['nitro', 'dia'];
+export const INSTANT: ItemId[] = ['nitro', 'dia', 'sorry'];
 /** 今使えるか（使えないならその理由） */
 export function itemBlock(r: Run, id: ItemId): string {
   if (id === 'nitro') return r.phase !== 'running' ? '走っているときに使う' : r.air ? '空中では使えない' : '';
   if (id === 'dia') return diaGain(r) <= 0 ? '遅れていないときは使えない' : '';
+  if (id === 'sorry') return r.trust >= r.trustMax ? '信頼は満タン' : '';
   return '';
 }
 /** 臨時ダイヤで取り戻せる秒数（予定より早くはならない） */
@@ -1477,6 +1503,10 @@ export function useItem(r: Run, id: ItemId) {
     if (id === 'nitro') {
       r.v += 20 / 3.6;
       toast(r, 'ニトロ点火！ +20km/h', 'good');
+    } else if (id === 'sorry') {
+      const g = Math.min(15, r.trustMax - r.trust);
+      r.trust += g;
+      toast(r, `お詫びの菓子折りを配った 信頼+${Math.round(g)}`, 'good');
     } else {
       const g = diaGain(r);
       r.clock -= g;
@@ -1512,7 +1542,7 @@ export function useItem(r: Run, id: ItemId) {
     toast(r, '次の衝撃でエアバッグ（もう一度押すと取り消し）', 'good');
   }
 }
-export const ITEM_NAME: Record<ItemId, string> = { jump: 'ジャンプ台', saw: 'チェーンソー', airbag: 'エアバッグ', nitro: 'ニトロ', net: '着地ネット', dia: '臨時ダイヤ' };
+export const ITEM_NAME: Record<ItemId, string> = { jump: 'ジャンプ台', saw: 'チェーンソー', airbag: 'エアバッグ', nitro: 'ニトロ', net: '着地ネット', dia: '臨時ダイヤ', sorry: 'お詫びの菓子折り' };
 
 /** 選んだ客はその場で乗り込む（停車中に席を決められる）。もう一度押すとホームに戻る */
 export function togglePick(r: Run, id: number) {
@@ -1726,7 +1756,7 @@ function arrive(r: Run) {
     if (p.kind === 'bride' && diff > 0) fare = Math.ceil(fare / 2);
     if (p.kind === 'tour' && r.spots[p.spot]?.deck === 2) fare += 1;
     if (r.mods.has('view') && r.spots[p.spot]?.deck === 2) fare += 1;
-    if (p.kind === 'old') r.trust = Math.min(100, r.trust + 5);
+    if (p.kind === 'old') r.trust = Math.min(r.trustMax, r.trust + 3);
     earned += fare;
     r.stats.carried++;
     off.push(KINDS[p.kind].name);
@@ -2150,6 +2180,10 @@ function fillRoof(r: Run, c: number, n: number) {
 }
 function applyMod(r: Run, id: ModId) {
   r.mods.add(id);
+  if (id === 'host' || id === 'host2') {
+    r.trustMax += 15;
+    r.trust += 15;
+  }
   if (id === 'car') {
     const c = r.cars;
     r.cars++;

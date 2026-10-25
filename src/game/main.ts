@@ -347,6 +347,7 @@ const ITEM_DEF: { id: ItemId; name: string; ch: string; col: string; tip: string
   { id: 'nitro', name: 'ニトロ', ch: '爆', col: '#F08E78', tip: 'その場で +20km/h' },
   { id: 'net', name: '着地ネット', ch: '網', col: '#A6DCC3', tip: '次の射出だけホーム外4mまでGOOD' },
   { id: 'dia', name: '臨時ダイヤ', ch: '時', col: '#CFE6EE', tip: '遅れを20秒取り戻す' },
+  { id: 'sorry', name: 'お詫びの菓子折り', ch: '菓', col: '#F3D27F', tip: '信頼+15' },
 ];
 // 持ち物：全画面のダイアログ。開いている間は時間が止まる
 let invOpen = false;
@@ -374,6 +375,7 @@ const ITEM_DESC: Record<ItemId, string> = {
   nitro: 'その場で +20km/h。坂の手前や遅れの取り戻しに（空中では使えない）',
   net: '次の射出だけ、ホームから4mはみ出してもGOOD',
   dia: '遅れを20秒なかったことに（予定より早くはならない）',
+  sorry: '信頼を+15回復（最大値まで）',
 };
 function renderInv() {
   // 持っているものを先に、持っていないものは後ろへ
@@ -482,7 +484,7 @@ function startRun(tutorial = !meta.tutorialDone) {
   offerShown = null;
   shopOpen = false;
   shopKey = '';
-  lastTrust = 100;
+  lastTrust = R.trust;
   $('hub').hidden = true;
   $('result').hidden = true;
 }
@@ -619,6 +621,7 @@ function renderLines(first: boolean) {
   if (first) return;
   box.innerHTML = '';
   for (const l of Object.values(S.LINES)) {
+    if (l.id === 'tutorial') continue;
     const open = S.lineOpen(meta, l.id);
     const b = document.createElement('button');
     b.type = 'button';
@@ -756,9 +759,9 @@ function renderStatus() {
   $('g-delay-trend').textContent = R.phase !== 'running' ? '' : trend > 0.3 ? '▲' : trend < -0.3 ? '▼' : '';
   $('g-delay-trend').className = 'trend ' + (trend > 0 ? 'up' : 'down');
   // 信頼
-  $('g-trust-fill').style.width = `${R.trust}%`;
-  $('g-trust-text').textContent = `信頼 ${Math.round(R.trust)}`;
-  $('g-trust').className = 'gauge big trust' + (R.trust <= 30 ? ' red' : '');
+  $('g-trust-fill').style.width = `${(Math.max(0, R.trust) / R.trustMax) * 100}%`;
+  $('g-trust-text').textContent = `信頼 ${Math.max(0, Math.round(R.trust))}/${R.trustMax}`;
+  $('g-trust').className = 'gauge big trust' + (R.trust <= R.trustMax * 0.35 ? ' red' : '');
   if (R.trust < lastTrust - 0.5) {
     const f = document.createElement('div');
     f.className = 'float-minus';
@@ -769,7 +772,7 @@ function renderStatus() {
     setTimeout(() => $('g-trust').classList.remove('shake'), 300);
   }
   lastTrust = R.trust;
-  document.body.classList.toggle('danger', R.delay > R.delayLimit * 0.8 || R.trust <= 20);
+  document.body.classList.toggle('danger', R.delay > R.delayLimit * 0.8 || R.trust <= R.trustMax * 0.25);
   const names: Record<string, string> = { belt: 'シートベルト', ram: '衝角', susp: 'エアサス', car: `${R.cars}両編成`, deck: '二階建て', roof: '屋根席', rocket: 'ロケット' };
   const mods = [...R.mods].map((m) => names[m]).join('・');
   const lo = R.lo !== 'normal' ? `持ち込み：${loadoutOf(R.lo).name}` : '';
@@ -1035,7 +1038,7 @@ function showResult() {
   meta.runs += 1;
   meta.best = Math.max(meta.best, total);
   saveMeta(meta);
-  $('result-title').textContent = clear ? (R.kaisou ? `回送扱い（ノルマ未達）` : `終点 ${LINE.stations[LINE.stations.length - 1].name} 到着！`) : `${LINE.stations[st].name}の手前で運転打ち切り`;
+  $('result-title').textContent = clear && R.tutorial ? '研修修了！' : clear ? (R.kaisou ? `回送扱い（ノルマ未達）` : `終点 ${LINE.stations[LINE.stations.length - 1].name} 到着！`) : `${LINE.stations[st].name}の手前で運転打ち切り`;
   $('result-reason').textContent = clear
     ? R.kaisou
       ? `終点には着いたが、届けた客は ${R.delivered}/${LINE.quota}人。ノルマに届かずクリアにならない`
@@ -1238,7 +1241,7 @@ function openMenu() {
   const qb = $('btn-quit');
   qb.textContent = R.tutorial ? '研修をやめて車両基地へ' : '車両基地へ戻る';
   qb.classList.remove('armed');
-  $('menu-note').textContent = R.tutorial ? (meta.tutorialDone ? '研修は車両基地の「研修運転をもう一度」からいつでもできる' : '研修は次に出発したとき、また最初から始まる') : `このランは打ち切り。稼いだコインの1/4（今なら${Math.floor(earnedOf(R) / 4)}枚）を持ち帰る`;
+  $('menu-note').textContent = R.tutorial ? (meta.tutorialDone ? '研修は車両基地の「研修運転をもう一度」からいつでもできる' : '研修は次に出発したとき、また最初から始まる') : `このランは打ち切り。稼いだコインの1/12（今なら${Math.floor(earnedOf(R) / 12)}枚）を持ち帰る`;
   $('menu').hidden = false;
 }
 function closeMenu() {
