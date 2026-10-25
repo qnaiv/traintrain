@@ -2,7 +2,7 @@
 
 import { DEST_COLORS } from '../data.ts';
 import * as S from './state.ts';
-import { hideCoach, setRewinder, startCoach, updateCoach } from './coach.ts';
+import { hideCoach, setPaxLocator, setRewinder, startCoach, updateCoach } from './coach.ts';
 import { setCarPalette } from '../exterior.ts';
 import { makeDemo, stepDemo } from './demo.ts';
 import { BAR_H, bustURL, drawBar, drawInside, drawOutside, drawSection, drawSide, ejectZone, type Hit } from './draw.ts';
@@ -497,6 +497,13 @@ function toHub() {
 $('btn-start').addEventListener('click', () => startRun());
 $('btn-tutorial').addEventListener('click', () => startRun(true));
 // 研修のやり直し：チェックポイントの状態に差し替える
+setPaxLocator((id) => {
+  if (mode !== 'in') return null;
+  const h = hits.find((q) => q.kind === 'pax' && (q.ref as Pax).id === id);
+  if (!h) return null;
+  const b = canvas.getBoundingClientRect();
+  return { x: b.left + h.x, y: b.top + h.y };
+});
 setRewinder((snap) => {
   R = snap;
   W.taps.clear();

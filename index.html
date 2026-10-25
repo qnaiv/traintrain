@@ -293,6 +293,18 @@
       #coach.mini .face { width: 30px; height: 30px; transform: scale(.7); transform-origin: left center; margin-right: -12px; }
       #coach.mini .ctext { font-size: 12.5px; line-height: 1.35; }
       #coach-ring { position: fixed; z-index: 39; border: 3px solid #f2c94c; border-radius: 14px; box-shadow: 0 0 0 4px rgba(242,201,76,.45), 0 0 0 9999px rgba(31,27,22,.32); pointer-events: none; transition: all .2s; }
+      #coach-pax { position: fixed; z-index: 39; width: 64px; height: 92px; margin: -46px 0 0 -32px; border: 3px solid #f2c94c; border-radius: 32px; box-shadow: 0 0 0 4px rgba(242,201,76,.45), 0 0 18px 6px rgba(242,201,76,.7); pointer-events: none; animation: paxGlow 1s ease-in-out infinite alternate; }
+      #coach-pax[hidden], #coach-hand[hidden] { display: none; }
+      @keyframes paxGlow { from { transform: scale(.94); } to { transform: scale(1.06); } }
+      #coach-hand { position: fixed; z-index: 41; left: 0; top: 0; font-size: 40px; line-height: 1; margin: -4px 0 0 -14px; pointer-events: none; filter: drop-shadow(2px 2px 0 rgba(0,0,0,.35)); animation: dragDemo 2.2s ease-in-out infinite; }
+      @keyframes dragDemo {
+        0% { transform: translate(var(--x0), var(--y0)) scale(1.15); opacity: 0; }
+        12% { transform: translate(var(--x0), var(--y0)) scale(1.15); opacity: 1; }
+        24% { transform: translate(var(--x0), var(--y0)) scale(.95); opacity: 1; }
+        78% { transform: translate(var(--x1), var(--y1)) scale(.95); opacity: 1; }
+        90% { transform: translate(var(--x1), var(--y1)) scale(1.1); opacity: 1; }
+        100% { transform: translate(var(--x1), var(--y1)) scale(1.1); opacity: 0; }
+      }
       #coach-ring.soft { box-shadow: 0 0 0 4px rgba(242,201,76,.45); }
       .first-only[hidden] { display: none !important; }
       .hub-first { display: flex; flex-direction: column; gap: 10px; }
@@ -504,6 +516,8 @@
   </head>
   <body>
     <div id="coach-ring" hidden></div>
+    <div id="coach-pax" hidden></div>
+    <div id="coach-hand" hidden>👆</div>
     <div id="coach" hidden></div>
     <div id="app">
       <header>

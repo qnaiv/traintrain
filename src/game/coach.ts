@@ -29,6 +29,8 @@ interface Say {
   short?: string;
   /** 一行表示のときに光らせる要素 */
   shortTarget?: string;
+  /** この客（車内の絵）から target までドラッグする手本を見せる */
+  dragPax?: number;
 }
 
 let shown = '';
@@ -47,6 +49,11 @@ let tries = 0;
 const acked = new Set<string>();
 let tipNow: Say | null = null;
 let rewinder: ((r: Run) => void) | null = null;
+let locator: ((id: number) => { x: number; y: number } | null) | null = null;
+/** 車内の客の画面上の位置を返す方法（main から渡す） */
+export function setPaxLocator(fn: (id: number) => { x: number; y: number } | null) {
+  locator = fn;
+}
 
 /** 研修のやり直しで Run を差し替える方法（main から渡す） */
 export function setRewinder(fn: (r: Run) => void) {
@@ -154,7 +161,7 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
       // 乗った客は端から詰めて座る。屋根（射出台）へは自分で移す
       if (!document.body.classList.contains('inside'))
         return { text: '乗った客は<b>端から詰めて</b>座る。子どもを<b class="hl">屋根の上</b>（射出台）に移そう。<b>車内で席を決める</b>を押して', target: '#btn-seat', step: '研修 2/8', tut: true };
-      return { text: '子どもを、上の<b class="hl">「屋根の上」</b>タブまで<b>ドラッグ</b>！', target: '.cartab[data-d="2"]', step: '研修 2/8', tut: true };
+      return { text: '光っている<b class="hl">子ども</b>をつかんで、下の<b class="hl">「屋根の上」</b>タブまで<b>ドラッグ</b>！', target: '.cartab[data-d="2"]', dragPax: kidId, step: '研修 2/8', tut: true };
     case 3:
       if (r.phase === 'running') {
         cpTree = snap(r);
@@ -408,6 +415,8 @@ export function hideCoach() {
 function hide() {
   $('coach').hidden = true;
   $('coach-ring').hidden = true;
+  $('coach-pax').hidden = true;
+  $('coach-hand').hidden = true;
   shown = '';
 }
 
@@ -485,4 +494,23 @@ function render(say0: Say | null, r: Run, meta: Meta) {
     ring.style.width = `${b.width + 8}px`;
     ring.style.height = `${b.height + 8}px`;
   } else ring.hidden = true;
+  // ドラッグの手本：客を光らせ、指が客→対象へ動く。全体は暗くしない
+  const ring2 = $('coach-pax');
+  const hand = $('coach-hand');
+  const pp = say.dragPax != null && !mini && locator ? locator(say.dragPax) : null;
+  if (pp && el && el.offsetParent) {
+    ring.classList.add('soft');
+    ring2.hidden = false;
+    hand.hidden = false;
+    ring2.style.left = `${pp.x}px`;
+    ring2.style.top = `${pp.y}px`;
+    const b = el.getBoundingClientRect();
+    hand.style.setProperty('--x0', `${pp.x}px`);
+    hand.style.setProperty('--y0', `${pp.y}px`);
+    hand.style.setProperty('--x1', `${b.left + b.width / 2}px`);
+    hand.style.setProperty('--y1', `${b.top + b.height / 2}px`);
+  } else {
+    ring2.hidden = true;
+    hand.hidden = true;
+  }
 }
