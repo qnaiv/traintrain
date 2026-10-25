@@ -37,8 +37,13 @@ function init() {
 /** 最初のタップで音を有効にする（ブラウザの決まり） */
 export function unlock() {
   init();
-  if (ac && ac.state === 'suspended') void ac.resume();
+  // 他のアプリに切り替えたあとなどに止まった音を戻す（suspended 以外に interrupted もある）
+  if (ac && ac.state !== 'running' && ac.state !== 'closed') void ac.resume().catch(() => {});
 }
+// 画面に戻ってきたときも音を戻す
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && ac && ac.state !== 'running' && ac.state !== 'closed') void ac.resume().catch(() => {});
+});
 export function isMuted() {
   return muted;
 }
