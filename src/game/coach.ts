@@ -311,7 +311,7 @@ function tip(r: Run, meta: Meta, shopOpen: boolean, _now: number): Say | null {
   if (r.phase !== 'running') return null;
   const o = nextObstacle(r);
   if (o && o.x - r.x < 130) {
-    if (o.kind === 'curve' && !seen('curve')) return fire('curve', '<b>急カーブ！</b> 20km/hまで落とせば衝撃なし。<b>B2</b>で早めに減速');
+    if (o.kind === 'curve' && !seen('curve')) return fire('curve', '<b>急カーブ！</b> 20km/hを1km/hでも超えると<b class="hl">脱輪して止まる</b>（衝撃も大きい）。<b>B2</b>で早めに減速');
     if (o.kind === 'deer' && !seen('deer')) return fire('deer', '<b>鹿！</b> 画面の鹿をタップして警笛で追い払え');
     if (o.kind === 'pole' && !seen('pole')) return fire('pole', '<b>倒れた電柱</b>：タップ連打で片付ける。学生が乗っていると手伝ってくれる');
     if (o.kind === 'wave' && !seen('wave')) return fire('wave', '<b>江ノ島の大波</b>：波が引いたすきに通れば衝撃なし。ジャンプで越えてもいい');

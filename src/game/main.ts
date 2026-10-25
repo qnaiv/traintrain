@@ -462,6 +462,8 @@ window.addEventListener('keyup', (e) => {
 // ---------- 画面の切り替え ----------
 function startRun(tutorial = !meta.tutorialDone) {
   R = newRun(meta, tutorial);
+  slowT = 0;
+  slowLaunches = 0;
   setCarPalette(S.LINE.cars);
   $('h-line').textContent = S.LINE.short;
   $('h-line').style.background = S.LINE.color;
@@ -1376,10 +1378,16 @@ function drawHubScene(dt: number) {
   drawOutside(c, r, rc.width, 0, rc.height - 2, [], demoZoom);
 }
 
+// ---------- 射出のスロー ----------
+const SLOWMO = 0.4;
+let slowT = 0;
+let slowLaunches = 0;
+let camOff = 4;
+
 // ---------- ループ ----------
 const params = new URLSearchParams(location.search);
 const SPEED = Math.max(1, Number(params.get('speed')) || 1);
-if (params.has('debug')) Object.assign(window, { __demo: () => demo, __hits: () => hits, __S: S, __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
+if (params.has('debug')) Object.assign(window, { __cam: () => ({ zoomS, slowT, camOff, userZoom, tw: trainBox ? Math.round(trainBox.x1 - trainBox.x0) : 0 }), __demo: () => demo, __hits: () => hits, __S: S, __R: () => R, __mode: setMode, __start: startRun, __meta: meta });
 if (params.has('go')) startRun(params.has('tutorial'));
 else renderHub();
 let last = performance.now();
@@ -1387,7 +1395,15 @@ function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000) * SPEED;
   last = now;
   if (screen === 'run') {
-    const sdt = dt * R.slow;
+    // 射出のスローモーション：客が飛んでいる間はゆっくり、カメラも客を追う
+    if (R.stats.launches !== slowLaunches) {
+      if (R.stats.launches > slowLaunches && R.fliers.some((f) => !f.judged && f.launch)) slowT = 3.5;
+      slowLaunches = R.stats.launches;
+    }
+    const flying = R.fliers.filter((f) => !f.judged && f.launch);
+    if (slowT > 0) slowT = flying.length ? slowT - dt : Math.min(slowT, 0.35) - dt;
+    const slowing = slowT > 0 && !R.paused;
+    const sdt = dt * R.slow * (slowing ? SLOWMO : 1);
     const steps = Math.ceil(sdt / 0.02);
     for (let i = 0; i < steps; i++) update(R, sdt / steps);
     if (mode === 'in' && R.phase === 'running') {
@@ -1401,9 +1417,14 @@ function frame(now: number) {
     ctx.fillRect(0, 0, w, h);
     hits = [];
     if (mode === 'out') {
-      const zt = userZoom * (R.phase === 'dwell' ? DWELL_ZOOM : 1);
+      const zt = userZoom * (R.phase === 'dwell' ? DWELL_ZOOM : 1) * (slowing ? 1.8 : 1);
       zoomS += (zt - zoomS) * Math.min(1, dt * 6);
-      const res = drawOutside(ctx, R, w, BAR_H, h - 2, hits, zoomS);
+      // スロー中は飛んでいる客と電車の間を見る
+      const fx = slowing && flying.length ? (R.x + Math.max(...flying.map((f) => f.x + f.vx * Math.min(f.tLand, R.time - f.t)))) / 2 : null;
+      // 電車からのずれで追う（速く走っていても遅れない）
+      const offT = fx != null ? fx - R.x : R.phase === 'dwell' ? -(R.cars * 12) / 2 : 4;
+      camOff += (offT - camOff) * Math.min(1, dt * 4);
+      const res = drawOutside(ctx, R, w, BAR_H, h - 2, hits, zoomS, R.x + camOff);
       trainBox = res.train;
     } else {
       if (focus >= R.cars) focus = 0;

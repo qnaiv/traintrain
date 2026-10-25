@@ -361,7 +361,7 @@ const TREE: M[] = [
   ['plow', '排障器', '突破', '分岐', 'ram', 6, '倒木・鹿・工事区間の衝撃が半分'],
   ['sand', '砂まき装置', '突破', 'Ⅰ', undefined, 3, '急カーブの安全な速さ 20 → 25km/h'],
   ['sand2', '砂まき装置Ⅱ', '突破', 'Ⅱ', 'sand', 6, '急カーブの安全な速さ → 30km/h'],
-  ['tilt', '振り子台車', '突破', '分岐', 'sand', 7, '急カーブで脱輪しない（衝撃は受ける）'],
+  ['tilt', '振り子台車', '突破', '分岐', 'sand', 7, '急カーブで脱輪しない（超えた分の衝撃は受ける）'],
   ['motor', 'モーター', '突破', 'Ⅰ', undefined, 3, '加速 +15%'],
   ['rocket', 'ロケットブースター', '突破', '分岐', 'motor', 8, '加速×1.8、最高速度も伸び、射出も×1.5'],
   ['roof', '屋根席', '満員', 'Ⅰ', undefined, 4, '屋根に乗れる人数 +1（全車両）。屋根は射出台'],
@@ -469,7 +469,7 @@ export const PART_NAME: Record<string, string> = {
   tour: '観光客',
 };
 export const COMBOS: ComboDef[] = [
-  { id: 'cannon', name: '人間大砲', parts: ['roof', 'jump'], cond: '屋根席の拡張 ＋ ジャンプ台（駅の手前120m以内でジャンプ）', eff: '屋根の客が空中から射出される・飛距離×1.5', tags: ['射出'] },
+  { id: 'cannon', name: '人間大砲', parts: ['roof', 'jump'], cond: '屋根席 ＋ ジャンプ台。ジャンプ中に非常ブレーキで屋根の客を射出', eff: '空中から射出・飛距離×1.5', tags: ['射出'] },
   { id: 'retro', name: '逆噴射射出', parts: ['rocket', 'brake'], cond: 'ロケット ＋ 急ブレーキ射出', eff: '飛距離×1.5', tags: ['射出', '突破'] },
   { id: 'bumper', name: '力士バンパー', parts: ['ram', 'sumo'], cond: '衝角 ＋ 力士が乗っている状態で倒木を突き破る', eff: '倒木の衝撃0・突破ボーナス2倍', tags: ['突破', '守り'] },
   { id: 'wall', name: '鉄壁の選択射出', parts: ['belt', 'susp'], cond: '50km/h以上の射出で、屋根の客だけが2人以上飛ぶ', eff: '飛んだ客1人につき +¢1（最大¢3）', tags: ['守り', '射出'] },
@@ -501,15 +501,9 @@ export function comboHint(r: Run, offerId: string): { combo: ComboDef; partner: 
   return null;
 }
 /** 人間大砲の準備ができているなら、ジャンプの頂点（そこで屋根の客が飛ぶ） */
-export function cannonReady(r: Run): { apexX: number; apexZ: number } | null {
-  if (r.phase !== 'running' || !r.mods.has('roof')) return null;
-  if (r.air && (!r.cannonArm || r.vz <= 0)) return null;
-  const plan = jumpPlan(r);
-  if (!plan) return null;
-  const st = Math.min(r.target, LINE.stations.length - 1);
-  const d = POS[st] - plan.apexX;
-  if (d <= 0 || d >= 160) return null;
-  return r.pax.some((p) => r.spots[p.spot]?.deck === 2 && p.dest === st) ? { apexX: plan.apexX, apexZ: plan.apexZ } : null;
+export function cannonReady(_r: Run): { apexX: number; apexZ: number } | null {
+  // 人間大砲は空中で非常ブレーキを引いたときだけ。自動の予測線は出さない
+  return null;
 }
 /** コンボ発動（演出キューに積み、初めてなら図鑑に記録） */
 function triggerCombo(r: Run, id: ComboId, extra = '') {
@@ -1217,7 +1211,8 @@ function predictShock0(r: Run, o: Obstacle, v = r.v): number {
       return k >= treeNeed(r) ? soften(r, (k - treeNeed(r)) * SHOCK.treeOver) : soften(r, k * SHOCK.tree);
     case 'curve': {
       const cv = curveV(r);
-      return k > cv ? soften(r, (k - cv) * SHOCK.curveOver + (k > cv + 15 && !r.mods.has('tilt') ? SHOCK.curveBase : 0)) : 0;
+      // 1km/hでも超えたら脱輪（基本の衝撃つき）。振り子台車なら脱輪せず、超過分だけ
+      return k > cv + 0.5 ? soften(r, (k - cv) * SHOCK.curveOver + (r.mods.has('tilt') ? 0 : SHOCK.curveBase)) : 0;
     }
     case 'work': {
       if (k <= workV(r)) return 0;
@@ -1294,13 +1289,22 @@ export function brakeShock(r: Run, v = r.v): number {
   return soften(r, k * SHOCK.brake * rocket * hb);
 }
 /** 急ブレーキ射出：衝撃に耐えられない客が前へ飛ぶ。ボタンなら速度を落として走り続ける */
+/** 空中で射出すると遠くまで飛ぶ */
+export const AIR_BOOST = 1.5;
+/** 急ブレーキ射出の飛距離の倍率（ロケット・空中） */
+export function launchBase(r: Run): number {
+  return (r.mods.has('rocket') ? 1.5 : 1) * (r.air ? AIR_BOOST : 1);
+}
 export function brakeLaunch(r: Run, button = true) {
   if (r.phase !== 'running' || r.v < 2 || r.launchCool > 0) return;
   r.launchCool = 0.6;
   const k = kmh(r.v);
   const rocket = r.mods.has('rocket');
-  applyShock(r, brakeShock(r), `急ブレーキ射出（${Math.round(k)}km/h${rocket ? '・逆噴射' : ''}）`, rocket ? 1.5 : 1, true);
+  const n0 = r.fliers.length;
+  applyShock(r, brakeShock(r), `${r.air ? '空中から' : ''}急ブレーキ射出（${Math.round(k)}km/h${rocket ? '・逆噴射' : ''}）`, launchBase(r), true);
   r.stats.launches++;
+  // 人間大砲：屋根席を拡張して、ジャンプ中に屋根の客を射出
+  if (r.air && r.mods.has('roof') && r.fliers.slice(n0).some((f) => f.deck === 2)) triggerCombo(r, 'cannon');
   if (button) {
     r.v *= 0.45;
     r.notch = 4;
@@ -1853,24 +1857,8 @@ function driving(r: Run, dt: number) {
   }
   // 空中
   if (r.air) {
-    const vz0 = r.vz;
     r.vz -= 9.8 * dt;
     r.z += r.vz * dt;
-    // 頂点：人間大砲
-    if (vz0 > 0 && r.vz <= 0 && r.cannonArm) {
-      r.cannonArm = false;
-      const toSt = POS[st] - r.x;
-      const roofers = r.pax.filter((p) => r.spots[p.spot]?.deck === 2 && p.dest === st);
-      if (toSt > 0 && toSt < 160 && roofers.length) {
-        const id = ++r.launchSeq;
-        r.launchLog[id] = { perfect: 0, tours: 0, decks: new Set(), done: new Set() };
-        for (const p of roofers) {
-          r.pax = r.pax.filter((q) => q !== p);
-          launchPax(r, p, 1.2, id);
-        }
-        triggerCombo(r, 'cannon');
-      }
-    }
     if (r.z <= 0) {
       r.z = 0;
       r.vz = 0;
@@ -1954,19 +1942,19 @@ function driving(r: Run, dt: number) {
       if (x0 < o.x && r.x >= o.x && kmh(r.v) > cv + 0.5 && r.armed !== 'jump') {
         const k = kmh(r.v);
         o.shock = predictShock(r, o);
-        if (k > cv + 15 && r.mods.has('tilt')) {
+        if (r.mods.has('tilt')) {
           // 振り子台車：車体を傾けて脱輪しない
           applyShock(r, o.shock, `振り子台車で急カーブを${Math.round(k)}km/hで曲がり切った`);
           r.v *= 0.85;
-        } else if (k > cv + 15) {
+        } else {
+          // 少しでも速すぎれば脱輪して止まる。速いほど復旧に時間がかかる
           o.state = 'hit';
           o.t = r.time;
           applyShock(r, o.shock, `急カーブを${Math.round(k)}km/hで曲がって脱輪`);
+          const wait = Math.round(3 + Math.min(3, (k - cv) / 10));
           r.v = 0;
-          r.stuck = 5;
-          toast(r, '脱輪！ 復旧に5秒', 'bad');
-        } else {
-          applyShock(r, o.shock, `急カーブを${Math.round(k)}km/hで攻めた`);
+          r.stuck = wait;
+          toast(r, `脱輪！ 復旧に${wait}秒`, 'bad');
         }
       } else if (x0 < o.x + o.len && r.x >= o.x + o.len) {
         o.state = 'passed';

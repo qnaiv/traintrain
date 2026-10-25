@@ -30,6 +30,7 @@ import {
   spotWorldX,
   launchBoost,
   cannonReady,
+  launchBase,
   jumpPlan,
   jumpVz,
   threat,
@@ -114,7 +115,7 @@ export function pill(ctx: CanvasRenderingContext2D, x: number, y: number, text: 
 }
 
 // ---------------- 外 ----------------
-export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, top: number, bottom: number, hits: Hit[], zoom = 1): ExtResult {
+export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, top: number, bottom: number, hits: Hit[], zoom = 1, focusX?: number): ExtResult {
   const g = fakeGame(r);
   const sec = r.phase === 'dwell' ? r.target : r.target - 1;
   const obs = r.obstacles[sec] ?? [];
@@ -125,7 +126,7 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
     ahead: jp0 ? Math.max(46, Math.min(80, jp0.land - r.x + 10)) : 46,
     zoom,
     // 停車中は編成の真ん中、走行中は先頭の少し先を中心に寄る
-    focus: r.phase === 'dwell' ? r.x - (r.cars * 12) / 2 : r.x + 4,
+    focus: focusX ?? (r.phase === 'dwell' ? r.x - (r.cars * 12) / 2 : r.x + 4),
     extra: (iso, put) => {
       for (const o of obs) drawObstacle(iso, put, r, o, labels, hits);
       // 止まれない駅：ホームに工事の柵
@@ -221,7 +222,7 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
         const sh = brakeShock(r);
         const flyers = r.pax.filter((p) => sh > effTol(r, p, true));
         const seen = new Set<string>();
-        const boost = r.mods.has('rocket') ? 1.5 : 1;
+        const boost = launchBase(r);
         const mat = r.mats[r.target];
         for (const p of flyers) {
           const z = spotZ(r, p.spot);
