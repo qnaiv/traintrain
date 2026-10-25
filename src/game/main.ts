@@ -83,6 +83,7 @@ let focus = 0;
 let deckFocus = 0;
 let hits: Hit[] = [];
 let trainBox: { x0: number; y0: number; x1: number; y1: number } | null = null;
+const pan = { x: 0, y: 0 };
 let drag: { id: number; sx: number; sy: number; pid: number; moved: boolean } | null = null;
 
 function fit() {
@@ -1437,15 +1438,39 @@ function frame(now: number) {
     ctx.fillRect(0, 0, w, h);
     hits = [];
     if (mode === 'out') {
-      const zt = userZoom * BASE_ZOOM * (R.phase === 'dwell' ? DWELL_ZOOM : 1) * (slowing ? 1.8 : 1);
+      // 停車中は電車全体がちょうど収まる大きさに（長い編成ほど引く。ピンチの倍率は走行中だけ）
+      let dz = BASE_ZOOM * DWELL_ZOOM;
+      if (R.phase === 'dwell' && trainBox && zoomS > 0) {
+        const tw = (trainBox.x1 - trainBox.x0) / zoomS;
+        const th = (trainBox.y1 - trainBox.y0) / zoomS;
+        if (tw > 0) dz = Math.min(3, (w * 0.8) / tw, ((h - BAR_H) * 0.6) / Math.max(1, th));
+      }
+      const zt = R.phase === 'dwell' ? dz : userZoom * BASE_ZOOM * (slowing ? 1.8 : 1);
       zoomS += (zt - zoomS) * Math.min(1, dt * 6);
       // スロー中は飛んでいる客と電車の間を見る
       const fx = slowing && flying.length ? (R.x + Math.max(...flying.map((f) => f.x + f.vx * Math.min(f.tLand, R.time - f.t)))) / 2 : null;
       // 電車からのずれで追う（速く走っていても遅れない）
       const offT = fx != null ? fx - R.x : R.phase === 'dwell' ? -(R.cars * 12) / 2 : 4;
       camOff += (offT - camOff) * Math.min(1, dt * 4);
+      // 停車中は電車が画面の真ん中に来るようにずらす
+      let px = 0;
+      let py = 0;
+      if (R.phase === 'dwell' && trainBox) {
+        px = w / 2 - (trainBox.x0 + trainBox.x1) / 2 + pan.x;
+        py = (BAR_H + h) / 2 + 10 - (trainBox.y0 + trainBox.y1) / 2 + pan.y;
+      }
+      const k = Math.min(1, dt * 5);
+      pan.x += (px - pan.x) * k;
+      pan.y += (py - pan.y) * k;
+      ctx.save();
+      ctx.translate(pan.x, pan.y);
       const res = drawOutside(ctx, R, w, BAR_H, h - 2, hits, zoomS, R.x + camOff);
-      trainBox = res.train;
+      ctx.restore();
+      trainBox = res.train && { x0: res.train.x0 + pan.x, x1: res.train.x1 + pan.x, y0: res.train.y0 + pan.y, y1: res.train.y1 + pan.y };
+      for (const hh of hits) {
+        hh.x += pan.x;
+        hh.y += pan.y;
+      }
     } else {
       if (focus >= R.cars) focus = 0;
       if (deckFocus === 2 && !R.spots.some((sp) => sp.car === focus && sp.deck === 2)) deckFocus = 0;
