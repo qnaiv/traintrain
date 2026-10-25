@@ -1,5 +1,5 @@
 // 見習い車掌：研修運転の案内と、初めて出会ったときだけのヒント
-import { KINDS, LINE, POS, kmh, nextObstacle, saveMeta, treeNeed, PRIO_LOSS, type Meta, type Run } from './state.ts';
+import { KINDS, LINE, POS, kmh, nextObstacle, saveMeta, treeNeed, tutorialStation1, PRIO_LOSS, type Meta, type Run } from './state.ts';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -27,6 +27,8 @@ interface Say {
   id?: string;
   /** 「わかった」のあとに景色の上に残す一行 */
   short?: string;
+  /** 一行表示のときに光らせる要素 */
+  shortTarget?: string;
 }
 
 let shown = '';
@@ -86,6 +88,8 @@ function endTutorial(r: Run, meta: Meta) {
   r.paused = false;
   r.tutorial = false;
   meta.tutorialDone = true;
+  // 研修で説明したものは、初回ヒントを出さない
+  for (const id of ['shop', 'prio']) if (!meta.tips.includes(id)) meta.tips.push(id);
   saveMeta(meta);
   hide();
 }
@@ -94,7 +98,7 @@ function endTutorial(r: Run, meta: Meta) {
 export function updateCoach(r: Run, meta: Meta, shopOpen: boolean, now: number) {
   r.slow = 1;
   let say: Say | null = null;
-  if (tutStep > 0) say = tutorial(r, meta);
+  if (tutStep > 0) say = tutorial(r, meta, shopOpen);
   if (!say) say = tip(r, meta, shopOpen, now);
   render(say, r, meta);
 }
@@ -119,7 +123,7 @@ function fail(r: Run, text: string, cp: Run | null, step: number, delay = 0): Sa
   return failSay!;
 }
 
-function tutorial(r: Run, meta: Meta): Say | null {
+function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
   if (failSay) return failSay;
   const kidAboard = r.pax.find((p) => p.id === kidId);
   const kidFlier = r.fliers.find((f) => f.pax.id === kidId);
@@ -139,25 +143,25 @@ function tutorial(r: Run, meta: Meta): Say | null {
     case 1:
       if (r.picked.has(kidId) || kidAboard) {
         tutStep = 2;
-        return tutorial(r, meta);
+        return tutorial(r, meta, shopOpen);
       }
-      return { text: 'まずは<b class="hl">鵠沼まで行く子ども</b>を乗せよう。カードをタップ！', target: `.cand[data-id="${kidId}"]`, step: '研修 1/5', tut: true };
+      return { text: 'まずは<b class="hl">鵠沼まで行く子ども</b>を乗せよう。カードをタップ！', target: `.cand[data-id="${kidId}"]`, step: '研修 1/8', tut: true };
     case 2:
       if (kidAboard && r.spots[kidAboard.spot]?.deck === 2) {
         tutStep = 3;
-        return tutorial(r, meta);
+        return tutorial(r, meta, shopOpen);
       }
       // 乗った客は端から詰めて座る。屋根（射出台）へは自分で移す
       if (!document.body.classList.contains('inside'))
-        return { text: '乗った客は<b>端から詰めて</b>座る。子どもを<b class="hl">屋根の上</b>（射出台）に移そう。<b>車内で席を決める</b>を押して', target: '#btn-seat', step: '研修 2/5', tut: true };
-      return { text: '子どもを、上の<b class="hl">「屋根の上」</b>タブまで<b>ドラッグ</b>！', target: '.cartab[data-d="2"]', step: '研修 2/5', tut: true };
+        return { text: '乗った客は<b>端から詰めて</b>座る。子どもを<b class="hl">屋根の上</b>（射出台）に移そう。<b>車内で席を決める</b>を押して', target: '#btn-seat', step: '研修 2/8', tut: true };
+      return { text: '子どもを、上の<b class="hl">「屋根の上」</b>タブまで<b>ドラッグ</b>！', target: '.cartab[data-d="2"]', step: '研修 2/8', tut: true };
     case 3:
       if (r.phase === 'running') {
         cpTree = snap(r);
         tutStep = 4;
-        return tutorial(r, meta);
+        return tutorial(r, meta, shopOpen);
       }
-      return { text: '屋根に乗った！ 準備OK。<b>発車</b>しよう（ほかの客を乗せてもいい）', target: '#btn-depart', step: '研修 3/5', tut: true };
+      return { text: '屋根に乗った！ 準備OK。<b>発車</b>しよう（ほかの客を乗せてもいい）', target: '#btn-depart', step: '研修 3/8', tut: true };
     case 4: {
       const need = treeNeed(r);
       // 失敗：速すぎて屋根の子どもが飛んだ
@@ -178,12 +182,12 @@ function tutorial(r: Run, meta: Meta): Say | null {
         if (acked.has('treeOK')) {
           cpLaunch = null;
           tutStep = 5;
-          return tutorial(r, meta);
+          return tutorial(r, meta, shopOpen);
         }
         return {
           id: 'treeOK',
           text: '突き破った！ ちなみに<b>遅すぎると止められて遅れ</b>、<b>速すぎると屋根の客が飛ぶ</b>。ちょうどいい速さを狙うのがコツ',
-          step: '研修 4/5',
+          step: '研修 4/8',
           tut: true,
         };
       }
@@ -196,10 +200,11 @@ function tutorial(r: Run, meta: Meta): Say | null {
             : `いい速さ！ そのまま突き破れ（速すぎると屋根の子が飛ぶ）`;
       return {
         id: 'tree',
-        text: `この先に<b>倒木</b>。<b class="hl">${need}km/h以上</b>でぶつかると突き破れる。でも<b>速すぎると屋根の子どもが飛ぶ</b>。下の<b>レバー</b>で速さを合わせよう（P3で加速、N・B1で抑える）`,
+        text: `この先に<b>倒木</b>。光っている<b>下のパネル</b>に、横から見た倒木までの距離と、<b class="hl">${need}km/h以上</b>で突き破れることが出ている。電車の上の顔は乗客で、数字は<b>耐えられる衝撃</b>。赤くなった客は飛んでしまう。<b>レバー</b>で速さを合わせよう（P3で加速、N・B1で抑える）`,
         short: msg,
-        target: '#lever',
-        step: '研修 4/5',
+        target: '#fc-side',
+        shortTarget: '#lever',
+        step: '研修 4/8',
         tut: true,
       };
     }
@@ -210,12 +215,12 @@ function tutorial(r: Run, meta: Meta): Say | null {
       if (kidFlier) {
         if (!kidFlier.judged) {
           if (r.time - kidFlier.t < kidFlier.tLand) r.slow = 0.4;
-          return { text: '飛んだ！ 着地を見守ろう…', step: '研修 5/5', tut: true };
+          return { text: '飛んだ！ 着地を見守ろう…', step: '研修 5/8', tut: true };
         }
         if (kidFlier.result === 'perfect' || kidFlier.result === 'good') {
           tutResult = kidFlier.result;
           tutStep = 6;
-          return tutorial(r, meta);
+          return tutorial(r, meta, shopOpen);
         }
         return fail(
           r,
@@ -235,14 +240,15 @@ function tutorial(r: Run, meta: Meta): Say | null {
         r.slow = 0.4;
         return {
           id: 'launch',
-          text: `鵠沼が近い。屋根の子どもから<b>点線</b>が伸びているのが、今急ブレーキしたときの飛び先。点線の先が<b class="ok">緑の丸（◎マット）</b>に重なった瞬間に、レバーを左端の<b class="hl">「非常」</b>へ入れると射出！ 時間はゆっくりになっている`,
-          short: `点線の先が<b class="ok">緑の丸</b>に重なったらレバーを<b class="hl">非常</b>へ！${tries ? '（速さで届く先が変わる）' : ''}`,
-          target: '#lever',
-          step: '研修 5/5 ・ スロー',
+          text: `鵠沼が近い。光っている<b>下のパネル</b>の<b>点線</b>が、今急ブレーキしたときの子どもの飛び先。点線の先が<b class="ok">緑（PERFECT）</b>になった瞬間に、レバーを左端の<b class="hl">「非常」</b>へ入れると射出！ 時間はゆっくりになっている`,
+          short: `下のパネルの点線が<b class="ok">緑</b>になったらレバーを<b class="hl">非常</b>へ！${tries ? '（速さで届く先が変わる）' : ''}`,
+          target: '#fc-side',
+          shortTarget: '#lever',
+          step: '研修 5/8 ・ スロー',
           tut: true,
         };
       }
-      return { text: `${LINE.stations[1].name}が近づいたら、屋根の子どもを<b>急ブレーキで射出</b>してホームへ届ける`, step: '研修 5/5', tut: true };
+      return { text: `${LINE.stations[1].name}が近づいたら、屋根の子どもを<b>急ブレーキで射出</b>してホームへ届ける`, step: '研修 5/8', tut: true };
     }
     case 6: {
       const perfect = tutResult === 'perfect';
@@ -266,12 +272,66 @@ function tutorial(r: Run, meta: Meta): Say | null {
         ],
       };
     }
-    case 7:
+    case 7: {
+      // 鵠沼に止まる
+      if (r.phase === 'dwell' && r.target === 1) {
+        tutorialStation1(r);
+        tutStep = 8;
+        return tutorial(r, meta, shopOpen);
+      }
+      if (r.target > 1) return fail(r, `止まらずに<b class="hl">鵠沼を通り過ぎた</b>。今回は鵠沼に止まって、お店と乗客を見てみよう。射出したあとはレバーを<b>非常</b>のまま止まる`, cpLaunch ?? cpTree, 5);
+      const back = r.x > POS[1] + 4;
       return {
-        text: '駅に<b>止まれば</b>客を乗せられて<b>お店</b>にも寄れる。射出したあとレバーを<b>P</b>に戻して<b>通過</b>すれば時間を稼げる。どっちで行くかは自由！ 研修はここまで',
+        text: back
+          ? '少し行き過ぎた。下の<b class="hl">◀ バック</b>を押している間だけ戻れる。駅の手前まで戻ろう'
+          : r.v < 0.1
+            ? 'ホームの手前で止まった。レバーを<b>P1</b>にしてゆっくり進み、<b>N</b>に戻して止まろう（上の路線バーで駅の手前に入れば停車）'
+            : '射出したら、そのままレバーを<b>非常</b>かB3にして<b>鵠沼で止まろう</b>。止まれば客を乗せられて、お店にも寄れる',
+        target: back ? '#btn-reverse' : '#lever',
+        step: '研修 6/8',
+        tut: true,
+      };
+    }
+    case 8: {
+      // お店：決まった3枚。◎を体験して屋根席を買う
+      if (r.mods.has('roof')) {
+        if (!shopOpen) {
+          tutStep = 9;
+          return tutorial(r, meta, shopOpen);
+        }
+        return { text: '買えた！ 屋根に乗れる人数が増えた。<b>買い物を終える</b>を押そう', target: '#btn-shop-close', step: '研修 7/8 お店', tut: true, top: true };
+      }
+      if (!shopOpen) return { text: '駅に着いたら<b>お店</b>に寄れる。光っているボタンで開こう', target: '#btn-shop', step: '研修 7/8 お店', tut: true };
+      return {
+        text: '<b>駅のお店</b>。稼いだコインで<b>アイテム</b>（使い切り）や<b>魔改造</b>（ずっと効く）を買える。光っている<b>屋根席</b>には<b class="ok">◎</b>が付いている。今持っている<b>ジャンプ台</b>と組むと<b>コンボ</b>が起きる印。買ってみよう！',
+        target: '.ocard[data-id="roof"]',
+        step: '研修 7/8 お店',
+        tut: true,
+        top: true,
+      };
+    }
+    case 9: {
+      // 優先客
+      const prio = r.candidates.find((c) => c.prio);
+      if (!prio || r.picked.has(prio.id)) {
+        tutStep = 10;
+        return tutorial(r, meta, shopOpen);
+      }
+      return {
+        text: `<b class="hl">「優先」</b>の札の客は、乗せずに発車したり駅を通過したりすると<b>信頼−${PRIO_LOSS}</b>。行き先は近い駅。光っている<b>お年寄り</b>を乗せよう`,
+        target: `.cand[data-id="${prio.id}"]`,
+        step: '研修 8/8 優先客',
+        tut: true,
+      };
+    }
+    case 10:
+      r.paused = true;
+      return {
+        text: `最後に<b>ノルマ</b>。上の<b>路線バーの左下</b>の「ノルマ ${r.delivered}/${LINE.quota}人」が、終点までに<b>届ける人数</b>。足りないとクリアにならない。止まる駅・射出で飛ばす駅・通過する駅を選んで進もう。研修はここまで！`,
+        target: '#view',
         step: '研修おわり',
         tut: true,
-        buttons: [{ label: 'はじめる ▶', main: true, fn: () => endTutorial(r, meta) }],
+        buttons: [{ label: '本番スタート ▶', main: true, fn: () => endTutorial(r, meta) }],
       };
   }
   return null;
@@ -398,7 +458,8 @@ function render(say0: Say | null, r: Run, meta: Meta) {
   const barH = 108;
   box.style.top = say.top ? '6px' : `${Math.round(vr.top + (mini ? barH + 12 : Math.min(barH + 10, vr.height * 0.18)))}px`;
   // 光らせる対象（一行表示のときは暗くしない）
-  const el = say.target ? document.querySelector<HTMLElement>(say.target) : null;
+  const tgt = mini ? (say0.shortTarget ?? say.target) : say.target;
+  const el = tgt ? document.querySelector<HTMLElement>(tgt) : null;
   if (el && el.offsetParent) {
     const b = el.getBoundingClientRect();
     ring.hidden = false;

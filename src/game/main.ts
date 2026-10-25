@@ -967,6 +967,7 @@ function renderHud() {
         b.type = 'button';
         const can = !o.sold && R.money >= o.price;
         b.className = 'ocard ' + (o.kind === 'mod' ? 'o-mod' : 'o-item') + (o.sold ? ' sold' : can ? '' : ' poor');
+        b.dataset.id = o.id;
         b.disabled = o.sold;
         const hint = o.sold ? null : comboHint(R, o.id);
         const known = hint && meta.combos[hint.combo.id];

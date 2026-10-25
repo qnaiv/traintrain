@@ -705,7 +705,7 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   ctx.textAlign = 'right';
   ctx.fillText('タップで路線図・ダイヤ', x1 + 6, y + 31);
   // 運ぶ人数のノルマ
-  if (!r.tutorial) {
+  if (!r.demo) {
     const ok = r.delivered >= LINE.quota;
     ctx.textAlign = 'left';
     ctx.font = '900 10px "Zen Maru Gothic", sans-serif';
@@ -1061,7 +1061,7 @@ export function drawSide(ctx: CanvasRenderingContext2D, r: Run, w: number, h: nu
   const near = (x: number) => x - r.x <= NEAR;
   const showStation = running && (!o || o.x > stopX) && near(stopX);
   const showObs = running && !!o && o.x <= stopX && near(o.x);
-  const aheadX = running ? (showStation ? stopX : o!.x) : o ? o.x : stopX;
+  const aheadX = running ? (showStation || !o ? stopX : o.x) : o ? o.x : stopX;
   const dist = running ? aheadX - r.x : o ? o.x - r.x : 0;
   // 横の縮尺：電車の先頭から前方 range m を右側に収める
   const trainW = Math.min(w * 0.36, 130);

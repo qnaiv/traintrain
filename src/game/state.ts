@@ -1056,8 +1056,22 @@ export function prioCount(r: Run, st: number): number {
   return Math.max(0, (LINE.prio[st] ?? 0) + (role === 'crowd' ? CROWD_ROLE.prio : 0) - (r.lo === 'bullet' ? 1 : 0));
 }
 /** 研修運転：最初の区間は倒木1本だけ、鵠沼行きの子どもが待っている */
+/** 研修：鵠沼に着いたら、お店と客を決まった中身に（ランダムなし） */
+export function tutorialStation1(r: Run) {
+  const mk = (kind: Kind, dest: number, prio = false): Pax => ({ id: r.nextId++, kind, look: randomLook(rnd), from: 1, dest, spot: -1, prio });
+  r.candidates = [mk('old', 2, true), mk('sal', 3), mk('kid', 2), mk('stu', 3), mk('sal', 2)];
+  r.picked.clear();
+  r.money = Math.max(r.money, 7);
+  const card = (id: string): ShopCard => {
+    const o = OFFERS.find((q) => q.id === id)!;
+    return { ...o, full: o.price, sold: false };
+  };
+  r.offer = [card('roof'), card('jump'), card('susp')];
+  r.rerolls = 0;
+}
 function setupTutorial(r: Run) {
   r.offer = null;
+  r.mats[1].x = POS[1] - 10;
   const mk = (kind: Kind, dest: number): Pax => ({ id: r.nextId++, kind, look: randomLook(rnd), from: 0, dest, spot: -1 });
   r.candidates = [mk('kid', 1), mk('sal', 2), mk('stu', 3), mk('old', 2)];
   r.obstacles[0] = [{ kind: 'tree', x: POS[0] + 190, len: 0, taps: 0, need: 0, state: 'wait', t: 0 }];
