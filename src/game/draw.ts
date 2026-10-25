@@ -598,86 +598,101 @@ function deer(iso: Iso, x: number, y: number, hop: number) {
 }
 
 // ---------------- 上のバー：上段に全駅、下段に今の区間 ----------------
-export const BAR_H = 58;
-export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: number) {
-  const pad = 18;
+export const BAR_H = 92;
+/** 上の路線図：全駅の名前を上下互い違いに大きく。混・射は名前の横の札、降りる客の点は名前の反対側 */
+export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, _y: number) {
+  const pad = 24;
   const n = LINE.stations.length;
   const st = Math.min(r.target, n - 1);
   const x0 = pad;
   const x1 = w - pad;
+  const y = 50; // 線の高さ
   const total = POS[n - 1];
   const mapAll = (x: number) => x0 + (Math.max(0, Math.min(total, x)) / total) * (x1 - x0);
-  // 上段の背景（タップで路線図）
-  ctx.fillStyle = 'rgba(255,253,246,0.85)';
+  const F = '"Zen Maru Gothic", sans-serif';
+  // 背景（タップで路線図）
+  ctx.fillStyle = 'rgba(255,253,246,0.92)';
   ctx.beginPath();
-  ctx.roundRect(6, y - 10, w - 12, 46, 12);
+  ctx.roundRect(6, 8, w - 12, BAR_H - 12, 12);
   ctx.fill();
   ctx.strokeStyle = 'rgba(31,27,22,0.25)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
   // 線
+  ctx.lineCap = 'round';
   ctx.strokeStyle = INK;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(x0, y + 4);
-  ctx.lineTo(x1, y + 4);
+  ctx.moveTo(x0, y);
+  ctx.lineTo(x1, y);
   ctx.stroke();
   ctx.strokeStyle = '#6FC3A0';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(x0, y + 4);
-  ctx.lineTo(mapAll(r.x), y + 4);
+  ctx.moveTo(x0, y);
+  ctx.lineTo(mapAll(r.x), y);
   ctx.stroke();
-  // 降りる人の数
+  ctx.lineCap = 'butt';
   const counts = LINE.stations.map((_, i) => r.pax.filter((p) => p.dest === i).length);
   LINE.stations.forEach((s, i) => {
     const sx = mapAll(POS[i]);
     const passed = i < st || (i === st && r.phase === 'dwell');
+    const up = i % 2 === 0;
     ctx.beginPath();
-    ctx.arc(sx, y + 4, i === st ? 6 : 4.5, 0, Math.PI * 2);
+    ctx.arc(sx, y, i === st ? 7.5 : 5.5, 0, Math.PI * 2);
     ctx.fillStyle = i === st ? '#E9B23E' : passed ? '#6FC3A0' : '#FFFDF6';
     ctx.fill();
     ctx.strokeStyle = INK;
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 2.2;
     ctx.stroke();
+    // 駅名
+    const fs = i === st ? 14.5 : 13;
+    ctx.font = `900 ${fs}px ${F}`;
     ctx.fillStyle = passed && i !== st ? '#9A9184' : INK;
-    ctx.font = `900 ${i === st ? 10.5 : 9.5}px "Zen Maru Gothic", sans-serif`;
-    ctx.textAlign = i === 0 ? 'left' : i === n - 1 ? 'right' : 'center';
     ctx.textBaseline = 'alphabetic';
-    const label = s.name.length > 4 && i !== st ? s.name.slice(0, 3) + '…' : s.name;
-    ctx.fillText(label, sx + (i === 0 ? -6 : i === n - 1 ? 6 : 0), y - 1);
-    // 駅の役割：混＝大混雑駅、射＝止まれない駅（射出でしか届けられない）
+    const label = s.name.length > 4 ? s.name.slice(0, 3) + '…' : s.name;
+    const tw = ctx.measureText(label).width;
+    // 端の駅ははみ出さないように寄せる
+    let cx = sx;
+    if (cx - tw / 2 < 10) cx = 10 + tw / 2;
+    if (cx + tw / 2 > w - 10) cx = w - 10 - tw / 2;
     const role = roleOf(r, i);
+    if (role !== 'normal' && cx + tw / 2 + 17 > w - 8) cx = w - 25 - tw / 2;
+    const ty = up ? y - 13 : y + 25;
+    ctx.textAlign = 'center';
+    ctx.fillText(label, cx, ty);
+    // 駅の役割：混＝大混雑駅、射＝止まれない駅
     if (role !== 'normal') {
-      const bx = sx + 7;
-      const by = y - 3;
+      const bx = cx + tw / 2 + 2;
+      const by = ty - 13;
       ctx.beginPath();
-      ctx.roundRect(bx, by, 13, 13, 4);
+      ctx.roundRect(bx, by, 16, 16, 4);
       ctx.fillStyle = role === 'crowd' ? '#E4553A' : '#2C47A0';
       ctx.fill();
       ctx.strokeStyle = INK;
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.3;
       ctx.stroke();
       ctx.fillStyle = '#FFFDF6';
-      ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(role === 'crowd' ? '混' : '射', bx + 6.5, by + 10);
+      ctx.font = `900 11px ${F}`;
+      ctx.fillText(role === 'crowd' ? '混' : '射', bx + 8, by + 12.5);
     }
-    // 降りる客の点
+    // 降りる客の点（名前の反対側）
     const c = counts[i];
+    const dy = up ? y + 13 : y - 13;
     for (let k = 0; k < Math.min(c, 4); k++) {
       ctx.beginPath();
-      ctx.arc(sx - (Math.min(c, 4) - 1) * 4 + k * 8, y + 19, 3.3, 0, Math.PI * 2);
+      ctx.arc(sx - (Math.min(c, 4) - 1) * 4.5 + k * 9, dy, 4, 0, Math.PI * 2);
       ctx.fillStyle = DEST_COLORS[i];
       ctx.fill();
+      ctx.strokeStyle = INK;
       ctx.lineWidth = 1.2;
       ctx.stroke();
     }
     if (c > 4) {
       ctx.fillStyle = INK;
-      ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+      ctx.font = `900 10px ${F}`;
       ctx.textAlign = 'left';
-      ctx.fillText(`+${c - 4}`, sx + 14, y + 22);
+      ctx.fillText(`+${c - 4}`, sx + 15, dy + 4);
     }
   });
   // ゴーストと自分
@@ -685,7 +700,7 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   ctx.globalAlpha = 0.45;
   ctx.fillStyle = '#8299E0';
   ctx.beginPath();
-  ctx.roundRect(gx - 7, y - 1, 14, 10, 3);
+  ctx.roundRect(gx - 8, y - 6, 16, 12, 3);
   ctx.fill();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 1.2;
@@ -696,24 +711,15 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   const tx = mapAll(r.x);
   ctx.fillStyle = '#6FC3A0';
   ctx.beginPath();
-  ctx.roundRect(tx - 8, y - 2, 16, 12, 3);
+  ctx.roundRect(tx - 10, y - 7, 20, 14, 4);
   ctx.fill();
   ctx.strokeStyle = INK;
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.fillStyle = INK;
-  ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+  ctx.fillStyle = '#5A5045';
+  ctx.font = `700 10px ${F}`;
   ctx.textAlign = 'right';
-  ctx.fillText('タップで路線図・ダイヤ', x1 + 6, y + 31);
-  // 運ぶ人数のノルマ（研修では出さない）
-  if (!r.demo && LINE.quota > 0) {
-    const ok = r.delivered >= LINE.quota;
-    ctx.textAlign = 'left';
-    ctx.font = '900 10px "Zen Maru Gothic", sans-serif';
-    ctx.fillStyle = ok ? '#2E8F62' : '#B53E28';
-    ctx.fillText(`ノルマ ${Math.min(r.delivered, LINE.quota)}/${LINE.quota}人${ok ? ' ✓' : ''}　混＝大混雑・射＝止まれない`, x0 - 6, y + 31);
-  }
-
+  ctx.fillText('路線図 ▸', w - 12, BAR_H - 8);
 }
 
 /** 今の区間の障害バー（下のパネルの小さなキャンバスに描く） */

@@ -70,6 +70,12 @@
       .gauge.big .tick b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 900; color: var(--sub); margin-top: 1px; }
       .gauge.big.early .text { color: #2e6b53; }
       .gauges { margin-bottom: 6px; }
+      .gauges.q { grid-template-columns: 1fr 1fr auto; gap: 6px; }
+      #g-quota { height: 26px; box-sizing: border-box; padding: 0 9px; border: 2px solid var(--ink); border-radius: 13px; background: #fff1ee; color: var(--tomato); font-size: 12px; font-weight: 900; display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+      #g-quota b { font-family: var(--dela); font-size: 16px; color: var(--ink); margin-left: 3px; }
+      #g-quota small { font-size: 11px; font-weight: 900; }
+      #g-quota.ok { background: #e3f4ea; color: #2e8f62; }
+      #g-quota[hidden] { display: none; }
       .gauge.big .text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--dela); font-size: 13px; white-space: nowrap; text-shadow: 0 0 3px #fffdf6, 0 0 3px #fffdf6; }
       .trend { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 12px; font-weight: 900; }
       .trend:empty { display: none; }
@@ -525,6 +531,7 @@
         <div class="gauges">
           <div id="g-delay" class="gauge big"><div id="g-delay-fill" class="fill"></div><i class="tick" id="tk1" style="left:50%"><b></b></i><i class="tick" id="tk2" style="left:75%"><b></b></i><span id="g-delay-text" class="text"></span><span id="g-delay-trend" class="trend"></span></div>
           <div id="g-trust" class="gauge big trust"><div id="g-trust-fill" class="fill"></div><span id="g-trust-text" class="text"></span></div>
+          <div id="g-quota" hidden>ノルマ<b id="g-quota-n">0</b><small id="g-quota-of">/8人</small></div>
         </div>
         <div id="h-mods"></div>
       </header>

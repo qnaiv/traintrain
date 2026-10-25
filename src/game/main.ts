@@ -160,7 +160,7 @@ canvas.addEventListener('wheel', (e) => {
 canvas.addEventListener('pointerdown', (e) => {
   const [x, y] = pt(e);
   if (pinch) return;
-  if (y < 62) {
+  if (y < BAR_H) {
     openMap();
     return;
   }
@@ -755,7 +755,7 @@ function renderStatus() {
     trendT = 0;
   }
   if (R.phase === 'dwell') {
-    txt.textContent = R.ahead < -1 ? `停車中（時計停止）−${mmss(-R.ahead)}` : `停車中（時計停止）遅れ ${mmss(R.delay)}`;
+    txt.textContent = R.ahead < -1 ? `停車中 −${mmss(-R.ahead)}` : `停車中 遅れ ${mmss(R.delay)}`;
   } else {
     txt.textContent = R.ahead < -1 ? `−${mmss(-R.ahead)} 早着ペース` : `遅れ ${mmss(R.delay)} / ${mmss(R.delayLimit)}`;
   }
@@ -766,6 +766,15 @@ function renderStatus() {
   dg.className = 'gauge big' + (ratio >= 0.75 ? ' red' : ratio >= 0.5 ? ' amber' : '') + (R.ahead < -1 && R.phase === 'running' ? ' early' : '');
   $('g-delay-trend').textContent = R.phase !== 'running' ? '' : trend > 0.3 ? '▲' : trend < -0.3 ? '▼' : '';
   $('g-delay-trend').className = 'trend ' + (trend > 0 ? 'up' : 'down');
+  // ノルマ（研修では出さない）
+  const qOn = !R.demo && LINE.quota > 0;
+  $('g-quota').hidden = !qOn;
+  document.querySelector('.gauges')!.classList.toggle('q', qOn);
+  if (qOn) {
+    $('g-quota-n').textContent = String(Math.min(R.delivered, LINE.quota));
+    $('g-quota-of').textContent = `/${LINE.quota}人${R.delivered >= LINE.quota ? ' ✓' : ''}`;
+    $('g-quota').classList.toggle('ok', R.delivered >= LINE.quota);
+  }
   // 信頼
   $('g-trust-fill').style.width = `${(Math.max(0, R.trust) / R.trustMax) * 100}%`;
   $('g-trust-text').textContent = `信頼 ${Math.max(0, Math.round(R.trust))}/${R.trustMax}`;
