@@ -606,7 +606,8 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, _y: nu
   const st = Math.min(r.target, n - 1);
   const x0 = pad;
   const x1 = w - pad;
-  const y = 50; // 線の高さ
+  const y = 44; // 線の高さ
+  const gap = (x1 - x0) / Math.max(1, n - 1);
   const total = POS[n - 1];
   const mapAll = (x: number) => x0 + (Math.max(0, Math.min(total, x)) / total) * (x1 - x0);
   const F = '"Zen Maru Gothic", sans-serif';
@@ -637,7 +638,6 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, _y: nu
   LINE.stations.forEach((s, i) => {
     const sx = mapAll(POS[i]);
     const passed = i < st || (i === st && r.phase === 'dwell');
-    const up = i % 2 === 0;
     ctx.beginPath();
     ctx.arc(sx, y, i === st ? 7.5 : 5.5, 0, Math.PI * 2);
     ctx.fillStyle = i === st ? '#E9B23E' : passed ? '#6FC3A0' : '#FFFDF6';
@@ -645,26 +645,28 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, _y: nu
     ctx.strokeStyle = INK;
     ctx.lineWidth = 2.2;
     ctx.stroke();
-    // 駅名
-    const fs = i === st ? 14.5 : 13;
+    // 駅名：すべて線の上。となりと重ならない大きさまで縮める
+    const label = s.name.length > 4 ? s.name.slice(0, 3) + '…' : s.name;
+    let fs = i === st ? 14.5 : 13;
     ctx.font = `900 ${fs}px ${F}`;
+    let tw = ctx.measureText(label).width;
+    if (tw > gap - 5) {
+      fs = Math.max(9, fs * ((gap - 5) / tw));
+      ctx.font = `900 ${fs}px ${F}`;
+      tw = ctx.measureText(label).width;
+    }
     ctx.fillStyle = passed && i !== st ? '#9A9184' : INK;
     ctx.textBaseline = 'alphabetic';
-    const label = s.name.length > 4 ? s.name.slice(0, 3) + '…' : s.name;
-    const tw = ctx.measureText(label).width;
-    // 端の駅ははみ出さないように寄せる
     let cx = sx;
     if (cx - tw / 2 < 10) cx = 10 + tw / 2;
     if (cx + tw / 2 > w - 10) cx = w - 10 - tw / 2;
-    const role = roleOf(r, i);
-    if (role !== 'normal' && cx + tw / 2 + 17 > w - 8) cx = w - 25 - tw / 2;
-    const ty = up ? y - 13 : y + 25;
     ctx.textAlign = 'center';
-    ctx.fillText(label, cx, ty);
-    // 駅の役割：混＝大混雑駅、射＝止まれない駅
+    ctx.fillText(label, cx, y - 13);
+    // 線の下：駅の役割の札（混・射）と、降りる客の点
+    const role = roleOf(r, i);
     if (role !== 'normal') {
-      const bx = cx + tw / 2 + 2;
-      const by = ty - 13;
+      const bx = sx - 8;
+      const by = y + 9;
       ctx.beginPath();
       ctx.roundRect(bx, by, 16, 16, 4);
       ctx.fillStyle = role === 'crowd' ? '#E4553A' : '#2C47A0';
@@ -674,11 +676,10 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, _y: nu
       ctx.stroke();
       ctx.fillStyle = '#FFFDF6';
       ctx.font = `900 11px ${F}`;
-      ctx.fillText(role === 'crowd' ? '混' : '射', bx + 8, by + 12.5);
+      ctx.fillText(role === 'crowd' ? '混' : '射', sx, by + 12.5);
     }
-    // 降りる客の点（名前の反対側）
     const c = counts[i];
-    const dy = up ? y + 13 : y - 13;
+    const dy = role !== 'normal' ? y + 33 : y + 15;
     for (let k = 0; k < Math.min(c, 4); k++) {
       ctx.beginPath();
       ctx.arc(sx - (Math.min(c, 4) - 1) * 4.5 + k * 9, dy, 4, 0, Math.PI * 2);
@@ -718,8 +719,8 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, _y: nu
   ctx.stroke();
   ctx.fillStyle = '#5A5045';
   ctx.font = `700 10px ${F}`;
-  ctx.textAlign = 'right';
-  ctx.fillText('路線図 ▸', w - 12, BAR_H - 8);
+  ctx.textAlign = 'left';
+  ctx.fillText('路線図 ▸', 12, BAR_H - 8);
 }
 
 /** 今の区間の障害バー（下のパネルの小さなキャンバスに描く） */
