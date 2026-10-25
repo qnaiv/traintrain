@@ -7,6 +7,7 @@ import { C30, INK, Iso, hash, shade } from '../iso.ts';
 import { drawPerson, type Facing } from '../people.ts';
 import {
   curveV,
+  NEAR,
   roleOf,
   chuteSlack,
   workV,
@@ -1056,7 +1057,10 @@ export function drawSide(ctx: CanvasRenderingContext2D, r: Run, w: number, h: nu
   const o = nextObstacle(r);
   const stopX = POS[st];
   const running = r.phase === 'running';
-  const showStation = running && (!o || o.x > stopX);
+  // 遠い障害・駅はまだ出さない（近づいたら見える）
+  const near = (x: number) => x - r.x <= NEAR;
+  const showStation = running && (!o || o.x > stopX) && near(stopX);
+  const showObs = running && !!o && o.x <= stopX && near(o.x);
   const aheadX = running ? (showStation ? stopX : o!.x) : o ? o.x : stopX;
   const dist = running ? aheadX - r.x : o ? o.x - r.x : 0;
   // 横の縮尺：電車の先頭から前方 range m を右側に収める
@@ -1155,7 +1159,7 @@ export function drawSide(ctx: CanvasRenderingContext2D, r: Run, w: number, h: nu
   };
   // 距離の点線
   const ax = Math.min(w - 20, mx(aheadX));
-  if (dist > 3) {
+  if (dist > 3 && (showStation || showObs)) {
     ctx.setLineDash([4, 3]);
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1.4;
@@ -1170,7 +1174,12 @@ export function drawSide(ctx: CanvasRenderingContext2D, r: Run, w: number, h: nu
     ctx.fillText(`あと${Math.round(dist)}m`, (tx1 + ax) / 2, gy - 22);
   }
 
-  if (showStation || (!o && r.phase === 'dwell')) {
+  if (!showStation && !showObs) {
+    ctx.fillStyle = '#9A9184';
+    ctx.font = '900 10px "Zen Maru Gothic", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(running ? 'しばらく何もない…' : '', (tx1 + w) / 2, gy - 20);
+  } else if (showStation) {
     // ホーム・◎マット・駅名標
     const pa = mx(stopX + PLAT_LO);
     const pb = mx(stopX + PLAT_HI);
@@ -1229,7 +1238,7 @@ export function drawSide(ctx: CanvasRenderingContext2D, r: Run, w: number, h: nu
         }
       }
     }
-  } else if (o) {
+  } else if (o && showObs) {
     // 障害
     const ox = Math.min(w - 26, mx(o.x));
     ctx.lineWidth = 1.6;

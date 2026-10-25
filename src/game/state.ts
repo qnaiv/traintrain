@@ -1405,8 +1405,13 @@ export function perfectHalf(r: Run): number {
   return r.mods.has('magnet') ? Math.min(8, matWidth(r) / 2 + 2) : matWidth(r) / 2;
 }
 
+/** 障害の情報が出て、タップで片付けられるようになる距離 */
+export const NEAR = 110;
+export const TAP_REACH = 80;
 export function tapObstacle(r: Run, o: Obstacle) {
   if (o.state !== 'wait') return;
+  // 駅にいる間や遠くの障害は片付けられない
+  if (r.phase !== 'running' || o.x - r.x > TAP_REACH) return;
   if (o.kind === 'deer') {
     o.taps = 0;
     o.state = 'cleared';

@@ -122,7 +122,9 @@ function setUserZoom(z: number) {
   }
 }
 /** 停車中は電車を大きく */
-const DWELL_ZOOM = 2.4;
+const DWELL_ZOOM = 2.0;
+/** いつもの寄り具合（少し引き） */
+const BASE_ZOOM = 0.85;
 const touches = new Map<number, [number, number]>();
 let pinch: { d0: number; z0: number } | null = null;
 let pendingTrainTap = false;
@@ -794,7 +796,7 @@ function renderForecast() {
     if (!fly.length) line3.textContent = R.pax.some((p) => p.dest === R.target) ? 'このまま急ブレーキしても誰も飛ばない。もっと速く！' : S.roleOf(R, R.target) === 'nostop' ? '止まれない駅。そのまま通過しよう' : '止まって客を乗せよう';
     else line3.textContent = `今 急ブレーキ → ${here.map((p) => KINDS[p.kind].name).join('・') || 'なし'} が飛ぶ` + (wrong.length ? `　⚠ ${wrong.map((p) => KINDS[p.kind].name + '(' + LINE.stations[p.dest].name + ')').join('・')} も飛んでしまう` : '');
     line3.className = wrong.length ? 'warn' : '';
-  } else if (R.phase === 'running' && o) {
+  } else if (R.phase === 'running' && o && o.x - R.x <= S.NEAR) {
     const d = o.x - R.x;
     const secs = R.v > 0.5 ? Math.max(0, d / R.v) : null;
     shock = predictShock(R, o);
@@ -1424,7 +1426,7 @@ function frame(now: number) {
     ctx.fillRect(0, 0, w, h);
     hits = [];
     if (mode === 'out') {
-      const zt = userZoom * (R.phase === 'dwell' ? DWELL_ZOOM : 1) * (slowing ? 1.8 : 1);
+      const zt = userZoom * BASE_ZOOM * (R.phase === 'dwell' ? DWELL_ZOOM : 1) * (slowing ? 1.8 : 1);
       zoomS += (zt - zoomS) * Math.min(1, dt * 6);
       // スロー中は飛んでいる客と電車の間を見る
       const fx = slowing && flying.length ? (R.x + Math.max(...flying.map((f) => f.x + f.vx * Math.min(f.tLand, R.time - f.t)))) / 2 : null;
