@@ -5,7 +5,7 @@ import * as S from './state.ts';
 import { hideCoach, setRewinder, startCoach, updateCoach } from './coach.ts';
 import { setCarPalette } from '../exterior.ts';
 import { makeDemo, stepDemo } from './demo.ts';
-import { BAR_H, drawBar, drawInside, drawOutside, drawSection, drawSide, ejectZone, type Hit } from './draw.ts';
+import { BAR_H, bustURL, drawBar, drawInside, drawOutside, drawSection, drawSide, ejectZone, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
   KINDS,
@@ -904,8 +904,8 @@ function renderHud() {
         b.className = 'cand' + (g ? ' grp' : '') + (sel ? ' sel' : '') + (c.prio ? ' req' : '') + (risky ? ' risky' : '');
         const fare = fareOf(R, c);
         // 3行：アイコン／行き先／運賃と耐衝撃。特性は★を長押しで
-        if (g) b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : '<span class="flag grp">団体</span>'}<span class="star">★</span><span class="gtop"><span class="ic" style="background:${k.color}">${k.ch}</span><b>${g.name}<small>×${g.size}</small></b></span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}×${g.size}</span><span class="bonus">そろって+${coinHtml(g.size)}</span><span class="tol">🛡${k.tol}</span></span>`;
-        else b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.prio ? '<span class="flag req">優先</span>' : ''}<span class="star">★</span><span class="ic" style="background:${k.color}">${k.ch}</span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span>${S.roleOf(R, c.dest) === 'nostop' ? '<span class="shoot">射出のみ</span>' : ''}<span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
+        if (g) b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : '<span class="flag grp">団体</span>'}<span class="star">★</span><span class="gtop"><img class="ic bust" src="${bustURL(c, 40)}" alt="${k.name}"><b>${g.name}<small>×${g.size}</small></b></span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}×${g.size}</span><span class="bonus">そろって+${coinHtml(g.size)}</span><span class="tol">🛡${k.tol}</span></span>`;
+        else b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.prio ? '<span class="flag req">優先</span>' : ''}<span class="star">★</span><img class="ic bust" src="${bustURL(c, 48)}" alt="${k.name}"><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span>${S.roleOf(R, c.dest) === 'nostop' ? '<span class="shoot">射出のみ</span>' : ''}<span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
         let pressT = 0;
         let long = false;
         b.addEventListener('pointerdown', () => {
@@ -1221,7 +1221,7 @@ function renderPaxList() {
           const t = effTol(R, p);
           const bad = th > t && !R.airbag;
           const left = p.dest - nextStop + 1;
-          return `<span class="pl ${bad ? 'bad' : th ? 'ok' : ''}"><i style="background:${DEST_COLORS[p.dest]}">${left <= 1 ? '降' : left}</i>${KINDS[p.kind].name}<b>${t}</b>${th ? (bad ? '✕' : '◯') : ''}</span>`;
+          return `<span class="pl ${bad ? 'bad' : th ? 'ok' : ''}"><i style="background:${DEST_COLORS[p.dest]}">${left <= 1 ? '降' : left}</i><img class="plb" src="${bustURL(p, 28)}" alt="">${KINDS[p.kind].name}<b>${t}</b>${th ? (bad ? '✕' : '◯') : ''}</span>`;
         })
         .join('')
     : '<span class="pl-empty">乗っている客はいない</span>';
