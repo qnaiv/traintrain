@@ -397,9 +397,9 @@ function tip(r: Run, meta: Meta, shopOpen: boolean, _now: number): Say | null {
   const seen = (id: string) => meta.tips.includes(id);
   if (shopOpen && !seen('shop')) return fire('shop', '<b>駅のお店</b>：お金が続くかぎり何枚でも買える。<b class="ok">◎</b>は持ち物と組むとコンボになる印', true);
   if (r.phase === 'dwell' && !r.tutorial && r.candidates.some((c) => c.prio) && !seen('prio'))
-    return fire('prio', `<b>優先客</b>：「優先」の札の客は、乗せずに発車したり駅を通過したりすると<b class="hl">信頼−${PRIO_LOSS}</b>。終点までに<b>ノルマの人数</b>を届けないとクリアにならない（上の路線バーの左下に表示）`);
+    return fire('prio', `<b>優先客</b>（「優先」の札）<br>乗せずに発車・通過すると1人ごとに<b class="hl">信頼−${PRIO_LOSS}</b><br><b>ノルマ</b>：終点までに届ける人数（路線バーの左下）`);
   if (r.phase === 'dwell' && !r.tutorial && r.roles.some((x) => x !== 'normal') && !seen('roles'))
-    return fire('roles', '<b>駅の役割は毎回ちがう</b>：路線バーの<b class="hl">混</b>は大混雑駅（優先客が多い。通過すると信頼が大きく減る）、<b>射</b>は止まれない駅（ホーム工事中。そこ行きの客は<b>射出</b>で届けるしかない）。止まって降ろすと1人2秒かかる');
+    return fire('roles', `<b>駅の役割は毎回かわる</b>（路線バーの印）<br><b class="hl">混</b> 大混雑：優先客が多い。乗せ残すと1人ごとに<b>信頼−${PRIO_LOSS}</b><br><b class="hl">射</b> 工事中：止まれない。そこ行きの客は<b>射出</b>で届ける`);
   if (r.phase !== 'running') return null;
   const o = nextObstacle(r);
   if (o && o.x - r.x < 130) {
