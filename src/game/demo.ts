@@ -37,6 +37,7 @@ export function makeDemo(meta: Meta): Run {
   m.loadout = 'normal';
   const r = newRun(m, false);
   r.demo = true;
+  r.roles = [];
   r.offer = null;
   r.delayLimit = 9999;
   dwellT = 0;

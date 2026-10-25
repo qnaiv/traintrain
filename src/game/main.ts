@@ -789,8 +789,8 @@ function renderForecast() {
     const here = fly.filter((p) => p.dest === R.target);
     const wrong = fly.filter((p) => p.dest !== R.target);
     shock = sh;
-    line1.innerHTML = `<span class="obs">${LINE.stations[Math.min(R.target, LINE.stations.length - 1)].name}</span><span>あと${Math.max(0, Math.round(toStop))}m</span><span class="cond">${R.streak ? `連続着地 ${R.streak}駅（×${(1 + R.streak * 0.25).toFixed(2)}）` : '止まる？飛ばす？'}</span><span class="shock ${sh > 0 ? 'on' : ''}">急ブレーキ ${sh}</span>`;
-    if (!fly.length) line3.textContent = R.pax.some((p) => p.dest === R.target) ? 'このまま急ブレーキしても誰も飛ばない。もっと速く！' : '止まって客を乗せよう';
+    line1.innerHTML = `<span class="obs">${LINE.stations[Math.min(R.target, LINE.stations.length - 1)].name}</span><span>あと${Math.max(0, Math.round(toStop))}m</span><span class="cond">${S.roleOf(R, R.target) === 'nostop' ? '止まれない駅：射出だけ' : S.roleOf(R, R.target) === 'crowd' ? '大混雑駅：止まろう' : R.streak >= 2 ? `連続着地 ${R.streak}駅` : '止まる？飛ばす？'}</span><span class="shock ${sh > 0 ? 'on' : ''}">急ブレーキ ${sh}</span>`;
+    if (!fly.length) line3.textContent = R.pax.some((p) => p.dest === R.target) ? 'このまま急ブレーキしても誰も飛ばない。もっと速く！' : S.roleOf(R, R.target) === 'nostop' ? '止まれない駅。そのまま通過しよう' : '止まって客を乗せよう';
     else line3.textContent = `今 急ブレーキ → ${here.map((p) => KINDS[p.kind].name).join('・') || 'なし'} が飛ぶ` + (wrong.length ? `　⚠ ${wrong.map((p) => KINDS[p.kind].name + '(' + LINE.stations[p.dest].name + ')').join('・')} も飛んでしまう` : '');
     line3.className = wrong.length ? 'warn' : '';
   } else if (R.phase === 'running' && o) {
@@ -915,7 +915,7 @@ function renderHud() {
         const fare = fareOf(R, c);
         // 3行：アイコン／行き先／運賃と耐衝撃。特性は★を長押しで
         if (g) b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : '<span class="flag grp">団体</span>'}<span class="star">★</span><span class="gtop"><span class="ic" style="background:${k.color}">${k.ch}</span><b>${g.name}<small>×${g.size}</small></b></span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}×${g.size}</span><span class="bonus">そろって+${coinHtml(g.size)}</span><span class="tol">🛡${k.tol}</span></span>`;
-        else b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.prio ? '<span class="flag req">優先</span>' : ''}<span class="star">★</span><span class="ic" style="background:${k.color}">${k.ch}</span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
+        else b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.prio ? '<span class="flag req">優先</span>' : ''}<span class="star">★</span><span class="ic" style="background:${k.color}">${k.ch}</span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span>${S.roleOf(R, c.dest) === 'nostop' ? '<span class="shoot">射出のみ</span>' : ''}<span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
         let pressT = 0;
         let long = false;
         b.addEventListener('pointerdown', () => {
@@ -1050,12 +1050,12 @@ function showResult() {
   $('result-title').textContent = clear ? (R.kaisou ? `回送扱い（ノルマ未達）` : `終点 ${LINE.stations[LINE.stations.length - 1].name} 到着！`) : `${LINE.stations[st].name}の手前で運転打ち切り`;
   $('result-reason').textContent = clear
     ? R.kaisou
-      ? `終点には着いたが、届けた客 ${R.delivered}/${LINE.quota}人・後半の駅から ${R.lateDelivered}/${LINE.lateQuota}人。クリアにならない`
+      ? `終点には着いたが、届けた客は ${R.delivered}/${LINE.quota}人。ノルマに届かずクリアにならない`
       : `評価「${R.rank?.name}」 終点で ${R.ahead <= 0 ? `${mmss(-R.ahead)} 早着` : `${mmss(R.ahead)} 遅れ`}`
     : `${R.overReason}。`;
   const rows: [string, string][] = [
     ['進んだ駅', `${clear ? LINE.stations.length : st}/${LINE.stations.length}`],
-    ['届けた客（ノルマ）', `${R.delivered}/${LINE.quota}人・後半 ${R.lateDelivered}/${LINE.lateQuota}人`],
+    ['届けた客（ノルマ）', `${R.delivered}/${LINE.quota}人`],
     ['吹っ飛ばした客', `${R.stats.flew}人`],
     ['最大の衝撃', `${R.stats.maxShock}`],
     ['早着', `${R.stats.early}回`],

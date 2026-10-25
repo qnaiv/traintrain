@@ -7,6 +7,7 @@ import { C30, INK, Iso, hash, shade } from '../iso.ts';
 import { drawPerson, type Facing } from '../people.ts';
 import {
   curveV,
+  roleOf,
   chuteSlack,
   workV,
   obsTag,
@@ -127,6 +128,22 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
     focus: r.phase === 'dwell' ? r.x - (r.cars * 12) / 2 : r.x + 4,
     extra: (iso, put) => {
       for (const o of obs) drawObstacle(iso, put, r, o, labels, hits);
+      // 止まれない駅：ホームに工事の柵
+      for (let i = 1; i < LINE.stations.length; i++) {
+        if (roleOf(r, i) !== 'nostop') continue;
+        const a = POS[i] + PLAT_LO + 1;
+        const b = POS[i] + PLAT_HI - 1;
+        if (!iso.inX(a - 4, b + 4)) continue;
+        put((a + b) / 2, 2.3, () => {
+          for (let x = a; x <= b; x += 3) iso.box(x - 0.12, x + 0.12, 2.2, 2.44, 1.0, 2.1, '#3A3631');
+          iso.box(a, b, 2.2, 2.44, 1.6, 1.95, '#F3D27F');
+          for (let x = a; x < b; x += 2) iso.box(x, x + 1, 2.18, 2.46, 1.6, 1.95, '#1F1B16', { lw: iso.lw * 0.4 });
+        });
+        labels.push(() => {
+          const [sx, sy] = iso.P((a + b) / 2, 3, 3.2);
+          pill(ctx, sx, sy - 6, 'ホーム工事中・止まれない（射出で届けよう）', '#2C47A0', '#FFFDF6', 11);
+        });
+      }
       // 着地マット
       for (let i = 1; i < LINE.stations.length; i++) {
         const m = r.mats[i];
@@ -626,6 +643,23 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
     ctx.textBaseline = 'alphabetic';
     const label = s.name.length > 4 && i !== st ? s.name.slice(0, 3) + '…' : s.name;
     ctx.fillText(label, sx + (i === 0 ? -6 : i === n - 1 ? 6 : 0), y - 1);
+    // 駅の役割：混＝大混雑駅、射＝止まれない駅（射出でしか届けられない）
+    const role = roleOf(r, i);
+    if (role !== 'normal') {
+      const bx = sx + 7;
+      const by = y - 3;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, 13, 13, 4);
+      ctx.fillStyle = role === 'crowd' ? '#E4553A' : '#2C47A0';
+      ctx.fill();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      ctx.fillStyle = '#FFFDF6';
+      ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(role === 'crowd' ? '混' : '射', bx + 6.5, by + 10);
+    }
     // 降りる客の点
     const c = counts[i];
     for (let k = 0; k < Math.min(c, 4); k++) {
@@ -671,11 +705,10 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   // 運ぶ人数のノルマ
   if (!r.tutorial) {
     const ok = r.delivered >= LINE.quota;
-    const okL = r.lateDelivered >= LINE.lateQuota;
     ctx.textAlign = 'left';
     ctx.font = '900 10px "Zen Maru Gothic", sans-serif';
-    ctx.fillStyle = ok && okL ? '#2E8F62' : '#B53E28';
-    ctx.fillText(`ノルマ ${Math.min(r.delivered, LINE.quota)}/${LINE.quota}人・後半 ${Math.min(r.lateDelivered, LINE.lateQuota)}/${LINE.lateQuota}${ok && okL ? ' ✓' : ''}`, x0 - 6, y + 31);
+    ctx.fillStyle = ok ? '#2E8F62' : '#B53E28';
+    ctx.fillText(`ノルマ ${Math.min(r.delivered, LINE.quota)}/${LINE.quota}人${ok ? ' ✓' : ''}　混＝大混雑・射＝止まれない`, x0 - 6, y + 31);
   }
 
 }

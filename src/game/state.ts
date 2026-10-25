@@ -31,14 +31,21 @@ export interface RunLine extends LineDef {
   crowd: Record<number, number>;
   crowdAdd: number;
   groupChance: number;
-  /** 運ぶ人数のノルマ（全体／後半の駅で乗せた客） */
+  /** 運ぶ人数のノルマ */
   quota: number;
-  lateQuota: number;
+  /** 止まれない駅の数 */
+  noStops: number;
   /** 駅ごとの優先客の人数 */
   prio: number[];
 }
-/** 後半の駅（ここ以降で乗せた客が後半ノルマに数えられる） */
-export const LATE_FROM = 3;
+/** 駅の役割（毎回ランダム）：大混雑駅・止まれない駅 */
+export type Role = 'normal' | 'crowd' | 'nostop';
+/** 大混雑駅：候補の追加と優先客の追加 */
+export const CROWD_ROLE = { extra: 3, prio: 2 };
+/** 飛び乗りステップが効く速さ */
+export const HOP_V = 25;
+/** 止まって降ろすとき、1人あたり時計が進む秒数 */
+export const ALIGHT_TIME = 2;
 /** 優先客を置き去りにしたときの信頼の減り（1人あたり） */
 export const PRIO_LOSS = 5;
 const mkSt = (name: string) => ({ name, platformCars: 2, demand: 0 });
@@ -50,7 +57,7 @@ export const LINES: Record<string, RunLine> = {
     stations: ['藤沢', '鵠沼', '江ノ島', '腰越', '鎌倉高校前', '長谷', '鎌倉'].map(mkSt),
     sections: [380, 440, 380, 460, 420, 480],
     scenery: ['town', 'town', 'street', 'coast', 'coast', 'town'],
-    delayLimit: 120,
+    delayLimit: 130,
     planV: 10,
     fareBonus: 0,
     needs: null,
@@ -66,8 +73,8 @@ export const LINES: Record<string, RunLine> = {
     crowd: { 0: 2, 2: 3 },
     crowdAdd: 0,
     groupChance: 0.4,
-    quota: 9,
-    lateQuota: 3,
+    quota: 8,
+    noStops: 1,
     prio: [1, 1, 1, 2, 2, 2],
   },
   ginza: {
@@ -77,7 +84,7 @@ export const LINES: Record<string, RunLine> = {
     stations: ['渋谷', '表参道', '赤坂見附', '銀座', '日本橋', '上野', '浅草'].map(mkSt),
     sections: [460, 520, 480, 420, 560, 500],
     scenery: ['street', 'tunnel', 'tunnel', 'tunnel', 'tunnel', 'tunnel'],
-    delayLimit: 100,
+    delayLimit: 110,
     planV: 11,
     fareBonus: 0,
     needs: 'enoden',
@@ -93,8 +100,8 @@ export const LINES: Record<string, RunLine> = {
     crowd: { 0: 2, 3: 3, 5: 2 },
     crowdAdd: 1,
     groupChance: 0.5,
-    quota: 12,
-    lateQuota: 4,
+    quota: 10,
+    noStops: 2,
     prio: [1, 2, 2, 2, 3, 3],
   },
 };
@@ -121,7 +128,7 @@ export const REVERSE_V = 3.5;
 /** 予定の平均速度 [m/s]（これより速く走れば遅れを取り戻せる） */
 export const PLAN_V = 10;
 /** 1区間ごとに見込む加減速のぶん [秒] */
-export const SECTION_EXTRA = 6;
+export const SECTION_EXTRA = 9;
 export const sectionTime = (k: number) => LINE.sections[k] / LINE.planV + SECTION_EXTRA;
 
 // ---------- 衝撃の式（バランス調整はここだけ） ----------
@@ -309,7 +316,7 @@ export function waveUp(t: number): boolean {
 // ---------- 3択（ランの中だけ） ----------
 export type ItemId = 'jump' | 'saw' | 'airbag' | 'nitro' | 'net' | 'dia';
 export type ModId =
-  | 'belt' | 'belt2' | 'ram' | 'ram2' | 'plow' | 'susp' | 'susp2' | 'susp3' | 'car' | 'deck' | 'roof' | 'roof2' | 'view'
+  | 'hop' | 'belt' | 'belt2' | 'ram' | 'ram2' | 'plow' | 'susp' | 'susp2' | 'susp3' | 'car' | 'deck' | 'roof' | 'roof2' | 'view'
   | 'rocket' | 'motor' | 'mat' | 'mat2' | 'kidlove' | 'chute' | 'chute2' | 'rubber' | 'hbrake' | 'hbrake2' | 'sand' | 'sand2' | 'tilt' | 'magnet';
 export interface Offer {
   id: ItemId | ModId;
@@ -360,6 +367,7 @@ const TREE: M[] = [
   ['roof', '屋根席', '満員', 'Ⅰ', undefined, 4, '屋根に乗れる人数 +1（全車両）。屋根は射出台'],
   ['roof2', '屋根席Ⅱ', '満員', 'Ⅱ', 'roof', 7, '屋根に乗れる人数 さらに+2（全車両）'],
   ['view', '展望デッキ', '満員', '分岐', 'roof', 6, '屋根から届けた客の運賃 +1'],
+  ['hop', '飛び乗りステップ', '満員', 'Ⅲ', 'roof2', 9, '止まれる駅を25km/h以下で通過すると、そこの優先客が空席に飛び乗ってくる（4駅目からお店に出る）'],
   ['car', '増結', '満員', 'Ⅰ', undefined, 5, '車両を1両つなぐ。定員+5（何両でも、買うたび¢4高くなる）。そのぶん加速が少し鈍る'],
   ['deck', '二階建て', '満員', '分岐', 'car', 10, '全車両を二階建てに。定員+両数×6。2階は耐衝撃−10（値段は両数で上がる）'],
 ];
@@ -531,7 +539,7 @@ const LO_SYNERGY: Record<string, string[]> = {
   debt: ['deck', 'belt'],
   cargo: ['roof'],
   packed: ['belt'],
-  bullet: ['mat', 'chute'],
+  bullet: ['mat', 'chute', 'hop'],
   rocketd: ['chute', 'mat'],
   vipcar: ['airbag', 'belt', 'chute', 'net'],
 };
@@ -792,7 +800,10 @@ export interface Run {
   groups: Record<number, GroupState>;
   /** 届けた人数（全体・後半の駅で乗せた客） */
   delivered: number;
-  lateDelivered: number;
+  /** 駅の役割 */
+  roles: Role[];
+  /** 飛び乗りステップで乗った人数（駅ごと） */
+  hopped: Record<number, number>;
   /** ノルマ未達で終点に着いた（回送扱い） */
   kaisou: boolean;
   /** 運行記録（結果画面で見る） */
@@ -839,7 +850,7 @@ function genObstacles(sec: number): Obstacle[] {
 function genCandidates(r: Run, st: number): Pax[] {
   const out: Pax[] = [];
   // 先へ進むほど混む。名所・ターミナルはさらに混む
-  const crowd = Math.min(CROWD.max, CROWD.base + Math.round(st * CROWD.perSt) + (LINE.crowd[st] ?? 0) + LINE.crowdAdd);
+  const crowd = Math.min(CROWD.max + (roleOf(r, st) === 'crowd' ? 2 : 0), CROWD.base + Math.round(st * CROWD.perSt) + (LINE.crowd[st] ?? 0) + LINE.crowdAdd + (roleOf(r, st) === 'crowd' ? CROWD_ROLE.extra : 0));
   const n = r.lo === 'bullet' ? 4 : r.lo === 'trip' ? crowd + 2 : crowd;
   const w = LINE.weights;
   let bride = false;
@@ -855,7 +866,10 @@ function genCandidates(r: Run, st: number): Pax[] {
     if (r.lo === 'trip' && i >= n - 2) kind = 'kid';
     if (kind === 'bride') bride = true;
     const reach = Math.min(3, N_ST - 1 - st);
-    let dest = st + 1 + Math.floor(rnd() * reach);
+    // 止まれない駅行きは少し多め（×1.5）
+    const dopts: number[] = [];
+    for (let d = st + 1; d <= st + reach; d++) dopts.push(...(roleOf(r, d) === 'nostop' ? [d, d, d] : [d, d]));
+    let dest = pick(dopts);
     // 観光客は名所の駅に行きたがる（重み×2）
     if (kind === 'tour') {
       const opts: number[] = [];
@@ -865,19 +879,22 @@ function genCandidates(r: Run, st: number): Pax[] {
     out.push({ id: r.nextId++, kind, look: randomLook(rnd), from: st, dest, spot: -1 });
   }
   // 優先客：VIPがいれば必ず優先。残りは力士以外からランダム
-  let np = Math.max(0, (LINE.prio[st] ?? 0) - (r.lo === 'bullet' ? 1 : 0));
+  let np = prioCount(r, st);
   for (const c of out) if (c.kind === 'vip' && np > 0) {
     c.prio = true;
     np--;
   }
   const pool = out.filter((c) => !c.prio && c.kind !== 'sumo');
   while (np-- > 0 && pool.length) pool.splice(Math.floor(rnd() * pool.length), 1)[0].prio = true;
+  // 優先客の行き先は近く（次の駅か、その次）。席が優先客で埋まり続けないように
+  for (const c of out) if (c.prio && c.kind !== 'vip') c.dest = prioDest(r, st);
   // 団体客（全員まとめて乗る。そろって届けるとボーナス）
   if (st >= 1 && N_ST - 1 - st >= 2 && r.lo !== 'bullet' && rnd() < LINE.groupChance) {
     // 遠足の引率なら遠足が出やすい
     const g = r.lo === 'trip' && rnd() < 0.4 ? GROUPS[0] : pick(GROUPS);
     const gid = r.nextId++;
-    const dest = st + 1 + Math.floor(rnd() * 2);
+    const gd = [st + 1, st + 2].filter((d) => d <= N_ST - 1 && roleOf(r, d) !== 'nostop');
+    const dest = gd.length ? pick(gd) : st + 1;
     r.groups[gid] = { name: g.name, size: g.size, dest, done: 0, lost: false };
     for (let i = 0; i < g.size; i++) out.push({ id: r.nextId++, kind: g.kind, look: randomLook(rnd), from: st, dest, spot: -1, group: gid });
   }
@@ -887,7 +904,7 @@ function genCandidates(r: Run, st: number): Pax[] {
 export const GROUP_BONUS = 2;
 /** ノルマ達成か */
 export function quotaMet(r: Run): boolean {
-  return r.tutorial || (r.delivered >= LINE.quota && r.lateDelivered >= LINE.lateQuota);
+  return r.tutorial || r.delivered >= LINE.quota;
 }
 /** 優先客を置き去りにした */
 function prioLeft(r: Run, n: number, where: string, vip = false) {
@@ -900,7 +917,6 @@ function prioLeft(r: Run, n: number, where: string, vip = false) {
 /** 団体の1人を届けた／失った */
 function groupDelivered(r: Run, p: Pax, x: number) {
   r.delivered++;
-  if (p.from >= LATE_FROM) r.lateDelivered++;
   const g = p.group != null ? r.groups[p.group] : null;
   if (!g) return;
   g.done++;
@@ -984,7 +1000,8 @@ export function newRun(meta: Meta, tutorial = false): Run {
     groups: {},
     log: [],
     delivered: 0,
-    lateDelivered: 0,
+    roles: [],
+    hopped: {},
     kaisou: false,
     cutins: [],
     launchSeq: 0,
@@ -1002,11 +1019,47 @@ export function newRun(meta: Meta, tutorial = false): Run {
     r.schedule.push(t);
   });
   applyLoadout(r);
+  if (!tutorial) assignRoles(r);
   r.candidates = genCandidates(r, 0);
   r.rerolls = 0;
   r.offer = rollShop(r);
   if (tutorial) setupTutorial(r);
   return r;
+}
+/** 駅の役割を決める：後半の1駅が大混雑駅、ほかの途中駅から止まれない駅 */
+function assignRoles(r: Run) {
+  r.roles = LINE.stations.map(() => 'normal' as Role);
+  const late: number[] = [];
+  for (let i = 3; i <= N_ST - 2; i++) late.push(i);
+  const crowd = pick(late);
+  r.roles[crowd] = 'crowd';
+  // 止まれない駅：江ノ電は2駅目から（1駅目は初見に厳しい）。2つ並ばない
+  const from = LINE.id === 'enoden' ? 2 : 1;
+  for (let k = 0; k < LINE.noStops; k++) {
+    const mids: number[] = [];
+    for (let i = from; i <= N_ST - 2; i++) if (r.roles[i] === 'normal' && r.roles[i - 1] !== 'nostop' && r.roles[i + 1] !== 'nostop') mids.push(i);
+    if (!mids.length) break;
+    r.roles[pick(mids)] = 'nostop';
+  }
+}
+export const roleOf = (r: Run, st: number): Role => r.roles[st] ?? 'normal';
+/** 優先客の行き先：次かその次の、止まれる駅（7:3） */
+function prioDest(r: Run, st: number): number {
+  const ok = [st + 1, st + 2].filter((d) => d <= N_ST - 1 && roleOf(r, d) !== 'nostop');
+  if (!ok.length) return Math.min(N_ST - 1, st + 1);
+  return ok.length === 2 && rnd() >= 0.7 ? ok[1] : ok[0];
+}
+/** 置き去りの罰を受ける人数（乗せられたはずの枠まで：空席＋優先でない客の席） */
+function prioPenaltyCount(r: Run, left: number): number {
+  const free = Math.max(0, r.cap - seatsUsed(r));
+  const nonPrio = r.pax.filter((p) => !p.prio).reduce((a, p) => a + KINDS[p.kind].size, 0);
+  return Math.min(left, free + nonPrio);
+}
+/** その駅の優先客の人数 */
+export function prioCount(r: Run, st: number): number {
+  const role = roleOf(r, st);
+  if (role === 'nostop' || st >= N_ST - 1) return 0;
+  return Math.max(0, (LINE.prio[st] ?? 0) + (role === 'crowd' ? CROWD_ROLE.prio : 0) - (r.lo === 'bullet' ? 1 : 0));
 }
 /** 研修運転：最初の区間は倒木1本だけ、鵠沼行きの子どもが待っている */
 function setupTutorial(r: Run) {
@@ -1038,6 +1091,8 @@ function applyLoadout(r: Run) {
 export function fareOf(r: Run, p: Pax | { kind: Kind }, car = 0): number {
   let f = LINE.fares[p.kind] ?? KINDS[p.kind].fare;
   if (p.kind === 'kid' && r.lo === 'trip') f += 1;
+  // 止まれない駅行きは射出でしか届かないぶん +¢1
+  if ('dest' in p && roleOf(r, p.dest) === 'nostop') f += 1;
   if (r.lo === 'cargo' && car === 1) f = Math.max(1, Math.floor(f / 2));
   return f;
 }
@@ -1517,8 +1572,9 @@ export function depart(r: Run) {
     const left = r.candidates.filter((c) => !r.picked.has(c.id)).reduce((a, c) => a + fareOf(r, c), 0);
     if (left > 0) toast(r, `満員！ 乗せきれなかった客 ¢${left} ぶん`, '');
   }
+  // 置き去りの罰は「乗せられたはずの人数」まで：空席＋優先客でない乗客の数
   const leftPrio = r.candidates.filter((c) => c.prio && !r.picked.has(c.id));
-  if (!r.tutorial) prioLeft(r, leftPrio.length, LINE.stations[r.target].name, leftPrio.some((c) => c.kind === 'vip'));
+  if (!r.tutorial) prioLeft(r, prioPenaltyCount(r, leftPrio.length), LINE.stations[r.target].name, leftPrio.some((c) => c.kind === 'vip'));
   r.offer = null;
   if (r.picked.size) logIt(r, `${LINE.stations[r.target].name}で ${[...r.pax].filter((p) => r.picked.has(p.id)).map((p) => KINDS[p.kind].name).join('・')} が乗車`, true);
   r.candidates = [];
@@ -1560,6 +1616,7 @@ export function modEligible(r: Run, o: Offer): boolean {
   const id = o.id as ModId;
   if (!REPEAT_MODS.includes(id) && r.mods.has(id)) return false;
   if (id === 'deck') return r.cars >= 2;
+  if (id === 'hop' && r.target < 3) return false;
   if (o.req && !r.mods.has(o.req)) return false;
   // 効き目がないものは出さない
   if (id === 'rubber' && r.lo === 'rails') return false;
@@ -1654,6 +1711,8 @@ function arrive(r: Run) {
     r.pax = r.pax.filter((q) => q !== p);
   }
   r.money += earned;
+  // 止まって降ろすと時間がかかる
+  if (off.length && st < N_ST - 1) r.clock += ALIGHT_TIME * off.length;
   if (off.length) logIt(r, `${LINE.stations[st].name}で ${off.join('・')} が降車（¢${earned}）`, true);
   if (earned) toast(r, `運賃 +¢${earned}`, 'good');
   if (st >= N_ST - 1) {
@@ -1965,7 +2024,25 @@ function driving(r: Run, dt: number) {
   }
   // 駅
   const stop = POS[st];
-  if (!r.reverse && r.v < 0.05 && r.notch <= 4 && r.x >= stop + STOP_LO && r.x <= stop + STOP_HI) arrive(r);
+  // 飛び乗りステップ：ゆっくり通過すると優先客が飛び乗ってくる
+  if (r.mods.has('hop') && st < N_ST - 1 && roleOf(r, st) !== 'nostop' && r.hopped[st] == null && x0 < stop + STOP_HI && r.x >= stop + STOP_HI && kmh(r.v) <= HOP_V && r.v > 0.5) {
+    const ps = genCandidates(r, st).filter((c) => c.prio && c.kind !== 'sumo');
+    let n = 0;
+    for (const c of ps) {
+      if (seatsUsed(r) + KINDS[c.kind].size > r.cap) break;
+      const sp = fillSpot(r);
+      if (sp < 0) break;
+      c.spot = sp;
+      r.pax.push(c);
+      n++;
+    }
+    r.hopped[st] = n;
+    if (n) {
+      toast(r, `${LINE.stations[st].name}の優先客${n}人が飛び乗った！`, 'good');
+      logIt(r, `${LINE.stations[st].name}を通過しながら優先客${n}人が飛び乗った`, true);
+    }
+  }
+  if (!r.reverse && r.v < 0.05 && r.notch <= 4 && r.x >= stop + STOP_LO && r.x <= stop + STOP_HI && roleOf(r, st) !== 'nostop') arrive(r);
   else if (r.x > stop + OVERRUN_MAX) {
     const missed = r.pax.filter((p) => p.dest === st);
     for (const p of missed) p.dest = Math.min(N_ST - 1, st + 1);
@@ -1974,8 +2051,8 @@ function driving(r: Run, dt: number) {
       toast(r, `${LINE.stations[st].name}を通過。${missed.length}人が乗り過ごし`, 'bad');
       logIt(r, `${LINE.stations[st].name}を通過：${missed.map((q) => KINDS[q.kind].name).join('・')}が乗り過ごし`, false);
     } else toast(r, `${LINE.stations[st].name}を射出で通過！`, 'good');
-    if (st < N_ST - 1 && !r.tutorial) prioLeft(r, Math.max(0, (LINE.prio[st] ?? 0) - (r.lo === 'bullet' ? 1 : 0)), `${LINE.stations[st].name}（通過）`);
-    if (r.lo === 'bullet' && st < N_ST - 1) {
+    if (!r.tutorial) prioLeft(r, prioPenaltyCount(r, Math.max(0, prioCount(r, st) - (r.hopped[st] ?? 0))), `${LINE.stations[st].name}（通過）`);
+    if (r.lo === 'bullet' && st < N_ST - 1 && roleOf(r, st) !== 'nostop') {
       r.money += 2;
       toast(r, '弾丸特急ボーナス +¢2', 'good');
     }
