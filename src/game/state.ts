@@ -31,7 +31,16 @@ export interface RunLine extends LineDef {
   crowd: Record<number, number>;
   crowdAdd: number;
   groupChance: number;
+  /** 運ぶ人数のノルマ（全体／後半の駅で乗せた客） */
+  quota: number;
+  lateQuota: number;
+  /** 駅ごとの優先客の人数 */
+  prio: number[];
 }
+/** 後半の駅（ここ以降で乗せた客が後半ノルマに数えられる） */
+export const LATE_FROM = 3;
+/** 優先客を置き去りにしたときの信頼の減り（1人あたり） */
+export const PRIO_LOSS = 5;
 const mkSt = (name: string) => ({ name, platformCars: 2, demand: 0 });
 export const LINES: Record<string, RunLine> = {
   enoden: {
@@ -50,13 +59,16 @@ export const LINES: Record<string, RunLine> = {
     cars: null,
     fares: {},
     carry: 1,
-    earlyPer: 10,
+    earlyPer: 15,
     poleAdd: 0,
     weights: { old: 1, kid: 1, sal: 2, stu: 1, sumo: 1, vip: 0, bride: 0.3, carp: 0.5, tour: 0.6 },
     sights: [2, 6],
     crowd: { 0: 2, 2: 3 },
     crowdAdd: 0,
     groupChance: 0.4,
+    quota: 9,
+    lateQuota: 3,
+    prio: [1, 1, 1, 2, 2, 2],
   },
   ginza: {
     id: 'ginza',
@@ -74,13 +86,16 @@ export const LINES: Record<string, RunLine> = {
     cars: ['#F3B81C', '#F39800', '#F3B81C', '#E9B23E'],
     fares: { sal: 3 },
     carry: 1.2,
-    earlyPer: 8,
+    earlyPer: 12,
     poleAdd: 4,
     weights: { old: 1, kid: 0.5, sal: 3, stu: 1, sumo: 0.5, vip: 0, bride: 0.4, carp: 0.6, tour: 1.2 },
     sights: [3, 6],
     crowd: { 0: 2, 3: 3, 5: 2 },
     crowdAdd: 1,
     groupChance: 0.5,
+    quota: 12,
+    lateQuota: 4,
+    prio: [1, 2, 2, 2, 3, 3],
   },
 };
 export let LINE: RunLine = LINES.enoden;
@@ -172,7 +187,7 @@ export const KINDS: Record<Kind, KindDef> = {
     flavor: ['自分の到着を「お越し」と呼ぶよう秘書に言ってある。', '電車に乗るのは人生で2回目。1回目は買収の下見。', '着地の瞬間だけは、なぜかいつも笑顔。'],
   },
   bride: {
-    name: '花嫁', ch: '嫁', tol: 20, fare: 3, size: 2, note: '乗っている間、早着ボーナス×2。遅れると運賃半分', color: '#FFFFFF',
+    name: '花嫁', ch: '嫁', tol: 20, fare: 3, size: 2, note: '乗っている間、早着ボーナス¢2。遅れると運賃半分', color: '#FFFFFF',
     flavor: ['式場に早く着くほど機嫌がいい。ブーケはいつでも投げられる。', 'ドレスの裾で座席が2つ埋まる。本人は気にしていない。', '「人生最高の日」に電車から射出されるとは聞いていない。'],
   },
   carp: {
@@ -194,6 +209,8 @@ export interface Pax {
   spot: number; // 車内の位置。-1 はホーム
   /** 団体客の組（全員そろって乗る） */
   group?: number;
+  /** 優先客（乗せずに発車・通過すると信頼が減る） */
+  prio?: boolean;
 }
 /** 団体客の種類 */
 export const GROUPS: { id: string; name: string; kind: Kind; size: number }[] = [
@@ -320,9 +337,9 @@ type M = [ModId, string, Tag, Tier, ModId | undefined, number, string];
 const TREE: M[] = [
   ['hbrake', '強力ブレーキ', '射出', 'Ⅰ', undefined, 3, '非常ブレーキの射出 ×1.15。車内の客も少し飛びやすい'],
   ['hbrake2', '強力ブレーキⅡ', '射出', 'Ⅱ', 'hbrake', 6, '非常ブレーキの射出 ×1.3'],
-  ['mat', '着地マット', '射出', 'Ⅰ', undefined, 3, '各駅の×2マットの幅 5 → 7m'],
-  ['mat2', '着地マットⅡ', '射出', 'Ⅱ', 'mat', 6, '×2マットの幅 → 9m'],
-  ['magnet', '磁石マット', '射出', '分岐', 'mat', 6, '×2マットに吸い寄せる。PERFECTの判定 両側+2m'],
+  ['mat', '着地マット', '射出', 'Ⅰ', undefined, 3, '各駅の◎マットの幅 5 → 7m'],
+  ['mat2', '着地マットⅡ', '射出', 'Ⅱ', 'mat', 6, '◎マットの幅 → 9m'],
+  ['magnet', '磁石マット', '射出', '分岐', 'mat', 6, '◎マットに吸い寄せる。PERFECTの判定 両側+2m'],
   ['kidlove', '子ども好き', '射出', '分岐', 'mat', 4, '子どもがPERFECT着地すると運賃がさらに×2'],
   ['chute', 'パラシュート傘', '射出', 'Ⅰ', undefined, 3, 'ホームから2mまでのはみ出しなら届く'],
   ['chute2', 'パラシュート傘Ⅱ', '射出', 'Ⅱ', 'chute', 5, '4mまでのはみ出しなら届く'],
@@ -398,7 +415,7 @@ export const LOADOUTS: Loadout[] = [
   { id: 'rails', name: '手すり撤去', up: '屋根の客がよく飛ぶ（耐衝撃 −25）。屋根からの射出は飛距離+15%', down: '倒木やカーブでも屋根の客が飛びやすい', cost: 0 },
   { id: 'deadhead', name: '回送明け', up: '所持金 +5 で出発', down: '遅れの上限 −20秒', cost: 0 },
   { id: 'trip', name: '遠足の引率', up: '毎駅 子どもが2人多い。子どもの運賃 +1', down: '車内の客の耐衝撃 −5（騒がしい）', cost: 6 },
-  { id: 'bigmat', name: '巨大マット', up: '×2マットの幅 ×1.8', down: '連続着地のボーナスなし', cost: 6 },
+  { id: 'bigmat', name: '巨大マット', up: '◎マットの幅 ×1.8', down: '連続着地のボーナスなし', cost: 6 },
   { id: 'sumo', name: '力士部屋', up: '毎駅 力士が1人いる。力士の隣は耐衝撃 +30', down: '定員 −1', cost: 8 },
   { id: 'debt', name: '借金スタート', up: '所持金 10 で出発', down: '終点で12返済。返せなければ持ち帰り0', cost: 8 },
   { id: 'cargo', name: '二両目は貨物室', up: '2両で出発。2両目の客は何があっても飛ばない', down: '2両目の客は運賃半分。2両目に屋根席なし', cost: 10 },
@@ -447,11 +464,11 @@ export const COMBOS: ComboDef[] = [
   { id: 'cannon', name: '人間大砲', parts: ['roof', 'jump'], cond: '屋根席の拡張 ＋ ジャンプ台（駅の手前120m以内でジャンプ）', eff: '屋根の客が空中から射出される・飛距離×1.5', tags: ['射出'] },
   { id: 'retro', name: '逆噴射射出', parts: ['rocket', 'brake'], cond: 'ロケット ＋ 急ブレーキ射出', eff: '飛距離×1.5', tags: ['射出', '突破'] },
   { id: 'bumper', name: '力士バンパー', parts: ['ram', 'sumo'], cond: '衝角 ＋ 力士が乗っている状態で倒木を突き破る', eff: '倒木の衝撃0・突破ボーナス2倍', tags: ['突破', '守り'] },
-  { id: 'wall', name: '鉄壁の選択射出', parts: ['belt', 'susp'], cond: '50km/h以上の射出で、屋根の客だけが2人以上飛ぶ', eff: '飛んだ客1人につき +¢1', tags: ['守り', '射出'] },
-  { id: 'upper', name: '二階席射出', parts: ['deck', 'roof'], cond: '二階建て ＋ 屋根席。2階と屋根の客が同じ射出で着地成功', eff: '+¢2', tags: ['満員', '射出'] },
-  { id: 'salvo', name: '一斉着地', parts: ['many', 'many'], cond: '1回の射出で3人以上がPERFECT', eff: '+¢3', tags: ['射出'] },
+  { id: 'wall', name: '鉄壁の選択射出', parts: ['belt', 'susp'], cond: '50km/h以上の射出で、屋根の客だけが2人以上飛ぶ', eff: '飛んだ客1人につき +¢1（最大¢3）', tags: ['守り', '射出'] },
+  { id: 'upper', name: '二階席射出', parts: ['deck', 'roof'], cond: '二階建て ＋ 屋根席。2階と屋根の客が同じ射出で着地成功', eff: '+¢1', tags: ['満員', '射出'] },
+  { id: 'salvo', name: '一斉着地', parts: ['many', 'many'], cond: '1回の射出で3人以上がPERFECT', eff: '+¢2', tags: ['射出'] },
   { id: 'sling', name: 'ゴム鉄砲', parts: ['rubber', 'hbrake'], cond: 'ゴムの手すり ＋ 強力ブレーキで、屋根の客を射出', eff: '屋根の客の飛距離×1.3', tags: ['射出'] },
-  { id: 'tour', name: '観光ツアー', parts: ['tour', 'many'], cond: '1回の射出で観光客3人がPERFECT', eff: '+¢5（一斉着地のかわり）', tags: ['射出'] },
+  { id: 'tour', name: '観光ツアー', parts: ['tour', 'many'], cond: '1回の射出で観光客3人がPERFECT', eff: '+¢3（一斉着地のかわり）', tags: ['射出'] },
 ];
 export function comboDef(id: ComboId): ComboDef {
   return COMBOS.find((c) => c.id === id)!;
@@ -773,6 +790,11 @@ export interface Run {
   net: boolean;
   /** 団体客 */
   groups: Record<number, GroupState>;
+  /** 届けた人数（全体・後半の駅で乗せた客） */
+  delivered: number;
+  lateDelivered: number;
+  /** ノルマ未達で終点に着いた（回送扱い） */
+  kaisou: boolean;
   /** 運行記録（結果画面で見る） */
   log: { st: number; text: string; good: boolean }[];
   stuck: number; // 障害で止められている残り時間
@@ -842,6 +864,14 @@ function genCandidates(r: Run, st: number): Pax[] {
     }
     out.push({ id: r.nextId++, kind, look: randomLook(rnd), from: st, dest, spot: -1 });
   }
+  // 優先客：VIPがいれば必ず優先。残りは力士以外からランダム
+  let np = Math.max(0, (LINE.prio[st] ?? 0) - (r.lo === 'bullet' ? 1 : 0));
+  for (const c of out) if (c.kind === 'vip' && np > 0) {
+    c.prio = true;
+    np--;
+  }
+  const pool = out.filter((c) => !c.prio && c.kind !== 'sumo');
+  while (np-- > 0 && pool.length) pool.splice(Math.floor(rnd() * pool.length), 1)[0].prio = true;
   // 団体客（全員まとめて乗る。そろって届けるとボーナス）
   if (st >= 1 && N_ST - 1 - st >= 2 && r.lo !== 'bullet' && rnd() < LINE.groupChance) {
     // 遠足の引率なら遠足が出やすい
@@ -853,15 +883,31 @@ function genCandidates(r: Run, st: number): Pax[] {
   }
   return out;
 }
+/** 団体をそろって届けたボーナス */
+export const GROUP_BONUS = 2;
+/** ノルマ達成か */
+export function quotaMet(r: Run): boolean {
+  return r.tutorial || (r.delivered >= LINE.quota && r.lateDelivered >= LINE.lateQuota);
+}
+/** 優先客を置き去りにした */
+function prioLeft(r: Run, n: number, where: string, vip = false) {
+  if (n <= 0) return;
+  const loss = n * PRIO_LOSS + (vip && r.lo === 'vipcar' ? 5 : 0);
+  r.trust -= loss;
+  toast(r, `${where}で優先客${n}人を置き去り（信頼−${loss}）`, 'bad');
+  logIt(r, `${where}で優先客${n}人を置き去りにした（信頼−${loss}）`, false);
+}
 /** 団体の1人を届けた／失った */
 function groupDelivered(r: Run, p: Pax, x: number) {
+  r.delivered++;
+  if (p.from >= LATE_FROM) r.lateDelivered++;
   const g = p.group != null ? r.groups[p.group] : null;
   if (!g) return;
   g.done++;
   if (g.done === g.size && !g.lost) {
-    r.money += g.size;
-    r.pops.push({ text: `${g.name} 全員到着！ +¢${g.size}`, x, t: r.time, good: true });
-    toast(r, `${g.name}の${g.size}人をそろって届けた +¢${g.size}`, 'good');
+    r.money += GROUP_BONUS;
+    r.pops.push({ text: `${g.name} 全員到着！ +¢${GROUP_BONUS}`, x, t: r.time, good: true });
+    toast(r, `${g.name}の${g.size}人をそろって届けた +¢${GROUP_BONUS}`, 'good');
   }
 }
 function groupLost(r: Run, p: Pax) {
@@ -937,6 +983,9 @@ export function newRun(meta: Meta, tutorial = false): Run {
     net: false,
     groups: {},
     log: [],
+    delivered: 0,
+    lateDelivered: 0,
+    kaisou: false,
     cutins: [],
     launchSeq: 0,
     launchLog: {},
@@ -1170,8 +1219,9 @@ function applyShock(r: Run, value: number, label: string, boost = 1, launch = fa
     if (r.mods.has('rocket')) triggerCombo(r, 'retro');
     // 鉄壁：速い射出で屋根の客だけが2人以上飛び、車内の客は全員無事
     if (kmh(r.v) >= 50 && decks.length >= 2 && decks.every((d) => d === 2) && safe > 0) {
-      r.money += decks.length;
-      triggerCombo(r, 'wall', `+¢${decks.length}`);
+      const add = Math.min(3, decks.length);
+      r.money += add;
+      triggerCombo(r, 'wall', `+¢${add}`);
     }
   }
 }
@@ -1226,13 +1276,14 @@ function judgeLanding(r: Run, f: Flier) {
     if (perfect) {
       f.result = 'perfect';
       r.perfectHere++;
-      if (p.kind !== 'vip') fare *= 2;
-      if (r.lo !== 'bigmat') fare += r.streak;
+      if (p.kind !== 'vip') fare += Math.max(1, Math.floor(fare / 2));
+      // 連続着地は3駅目から +1
+      if (r.lo !== 'bigmat' && r.streak >= 3) fare += 1;
       if (p.kind === 'kid' && r.mods.has('kidlove')) fare *= 2;
       if (p.kind === 'tour' && f.deck === 2) fare += 1;
       if (f.deck === 2 && r.mods.has('view')) fare += 1;
       r.stats.perfect++;
-      r.pops.push({ text: `PERFECT ¢${fare}${r.streak && r.lo !== 'bigmat' ? `（連続+${r.streak}）` : ''}`, x: f.landX, t: r.time, good: true });
+      r.pops.push({ text: `PERFECT ¢${fare}${r.streak >= 3 && r.lo !== 'bigmat' ? '（連続+1）' : ''}`, x: f.landX, t: r.time, good: true });
     } else {
       f.result = 'good';
       if (p.kind === 'bride' && r.ahead > 0) fare = Math.ceil(fare / 2);
@@ -1253,20 +1304,20 @@ function judgeLanding(r: Run, f: Flier) {
       // 観光ツアー：一斉着地のかわりに +¢5（先に一斉着地が出ていれば差額）
       if (log.tours >= 3 && !log.done.has('tour')) {
         log.done.add('tour');
-        const add = log.done.has('salvo') ? 2 : 5;
+        const add = log.done.has('salvo') ? 1 : 3;
         log.done.add('salvo');
         r.money += add;
         triggerCombo(r, 'tour', `+¢${add}`);
       }
       if (log.perfect >= 3 && !log.done.has('salvo')) {
         log.done.add('salvo');
-        r.money += 3;
-        triggerCombo(r, 'salvo', '+¢3');
+        r.money += 2;
+        triggerCombo(r, 'salvo', '+¢2');
       }
       if (log.decks.has(1) && log.decks.has(2) && !log.done.has('upper')) {
         log.done.add('upper');
-        r.money += 2;
-        triggerCombo(r, 'upper', '+¢2');
+        r.money += 1;
+        triggerCombo(r, 'upper', '+¢1');
       }
     }
     return;
@@ -1466,6 +1517,8 @@ export function depart(r: Run) {
     const left = r.candidates.filter((c) => !r.picked.has(c.id)).reduce((a, c) => a + fareOf(r, c), 0);
     if (left > 0) toast(r, `満員！ 乗せきれなかった客 ¢${left} ぶん`, '');
   }
+  const leftPrio = r.candidates.filter((c) => c.prio && !r.picked.has(c.id));
+  if (!r.tutorial) prioLeft(r, leftPrio.length, LINE.stations[r.target].name, leftPrio.some((c) => c.kind === 'vip'));
   r.offer = null;
   if (r.picked.size) logIt(r, `${LINE.stations[r.target].name}で ${[...r.pax].filter((p) => r.picked.has(p.id)).map((p) => KINDS[p.kind].name).join('・')} が乗車`, true);
   r.candidates = [];
@@ -1557,13 +1610,13 @@ function rollShop(r: Run): ShopCard[] {
 /** 持ち帰れるコイン：クリアなら（稼いだ額÷8＋残金÷3）×ダイヤ評価×路線、打ち切りなら稼いだ額÷12 */
 export function carryHome(r: Run): number {
   const earned = earnedOf(r);
-  if (r.phase !== 'clear') return Math.floor(earned / 12);
+  if (r.phase !== 'clear' || r.kaisou) return Math.floor(earned / 12);
   let left = r.money;
   if (r.lo === 'debt') {
     if (left < 12) return 0;
     left -= 12;
   }
-  return Math.max(0, Math.floor((r.rank?.mult ?? 1) * LINE.carry * (earned / 8 + left / 3)));
+  return Math.max(0, Math.floor((r.rank?.mult ?? 1) * LINE.carry * (earned / 6 + left / 3)));
 }
 /** このランで稼いだコイン（使った分も含む） */
 export function earnedOf(r: Run): number {
@@ -1921,6 +1974,7 @@ function driving(r: Run, dt: number) {
       toast(r, `${LINE.stations[st].name}を通過。${missed.length}人が乗り過ごし`, 'bad');
       logIt(r, `${LINE.stations[st].name}を通過：${missed.map((q) => KINDS[q.kind].name).join('・')}が乗り過ごし`, false);
     } else toast(r, `${LINE.stations[st].name}を射出で通過！`, 'good');
+    if (st < N_ST - 1 && !r.tutorial) prioLeft(r, Math.max(0, (LINE.prio[st] ?? 0) - (r.lo === 'bullet' ? 1 : 0)), `${LINE.stations[st].name}（通過）`);
     if (r.lo === 'bullet' && st < N_ST - 1) {
       r.money += 2;
       toast(r, '弾丸特急ボーナス +¢2', 'good');
@@ -2057,6 +2111,10 @@ export function moveToLevel(r: Run, id: number, car: number, deck: number): bool
 
 /** 路線をクリアした記録（次の路線の解放に使う） */
 function markCleared(r: Run) {
+  if (!quotaMet(r)) {
+    r.kaisou = true;
+    return;
+  }
   if (r.tutorial || r.demo) return;
   r.meta.cleared = r.meta.cleared ?? [];
   if (!r.meta.cleared.includes(LINE.id)) r.meta.cleared.push(LINE.id);
@@ -2077,9 +2135,9 @@ function stationDone(r: Run, diff: number) {
   r.perfectHere = 0;
   r.missHere = 0;
   if (diff < 0) {
-    let bonus = Math.floor(-diff / LINE.earlyPer);
-    // 花嫁が乗っていると早着ボーナス×2（上乗せは1駅¢3まで）
-    if (bonus > 0 && r.pax.some((p) => p.kind === 'bride')) bonus += Math.min(3, bonus);
+    // 早着ボーナスは1駅¢1まで（花嫁が乗っていれば¢2）
+    let bonus = Math.min(1, Math.floor(-diff / LINE.earlyPer));
+    if (bonus > 0 && r.pax.some((p) => p.kind === 'bride')) bonus = 2;
     r.money += bonus;
     r.earlyBonus += bonus;
     r.stats.early++;

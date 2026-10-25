@@ -911,11 +911,11 @@ function renderHud() {
         const b = document.createElement('button');
         b.type = 'button';
         b.dataset.id = String(c.id);
-        b.className = 'cand' + (g ? ' grp' : '') + (sel ? ' sel' : '') + (c.kind === 'vip' ? ' req' : '') + (risky ? ' risky' : '');
+        b.className = 'cand' + (g ? ' grp' : '') + (sel ? ' sel' : '') + (c.prio ? ' req' : '') + (risky ? ' risky' : '');
         const fare = fareOf(R, c);
         // 3行：アイコン／行き先／運賃と耐衝撃。特性は★を長押しで
         if (g) b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : '<span class="flag grp">団体</span>'}<span class="star">★</span><span class="gtop"><span class="ic" style="background:${k.color}">${k.ch}</span><b>${g.name}<small>×${g.size}</small></b></span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}×${g.size}</span><span class="bonus">そろって+${coinHtml(g.size)}</span><span class="tol">🛡${k.tol}</span></span>`;
-        else b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.kind === 'vip' ? '<span class="flag req">依頼</span>' : ''}<span class="star">★</span><span class="ic" style="background:${k.color}">${k.ch}</span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
+        else b.innerHTML = `${sel ? '<span class="flag">乗せる</span>' : c.prio ? '<span class="flag req">優先</span>' : ''}<span class="star">★</span><span class="ic" style="background:${k.color}">${k.ch}</span><span class="dest"><i style="background:${DEST_COLORS[c.dest]}"></i>${LINE.stations[c.dest].name}</span><span class="nums"><span>${coinHtml(fare)}</span><span class="tol">🛡${k.tol}</span></span>`;
         let pressT = 0;
         let long = false;
         b.addEventListener('pointerdown', () => {
@@ -926,7 +926,7 @@ function renderHud() {
             const bb = b.getBoundingClientRect();
             tip.innerHTML = g
               ? `<b>団体：${g.name}（${k.name}${g.size}人）</b><br>${g.size}人まとめて乗る。全員を${LINE.stations[g.dest].name}にそろって届けると ${coinHtml(g.size)}。1人でも落とすとボーナスなし`
-              : `<b>${k.name}${k.size > 1 ? `（席${k.size}つ）` : ''}</b><br>${coinText(k.note)}`;
+              : `<b>${k.name}${k.size > 1 ? `（席${k.size}つ）` : ''}${c.prio ? '・優先客' : ''}</b><br>${coinText(k.note)}${c.prio ? `<br><span style="color:#B53E28">乗せずに発車すると信頼−${S.PRIO_LOSS}</span>` : ''}`;
             tip.hidden = false;
             tip.style.left = `${Math.max(8, Math.min(window.innerWidth - 230, bb.left))}px`;
             tip.style.top = `${bb.top - tip.offsetHeight - 8}px`;
@@ -1047,11 +1047,15 @@ function showResult() {
   meta.runs += 1;
   meta.best = Math.max(meta.best, total);
   saveMeta(meta);
-  $('result-title').textContent = clear ? `終点 ${LINE.stations[LINE.stations.length - 1].name} 到着！` : `${LINE.stations[st].name}の手前で運転打ち切り`;
-  $('result-reason').textContent = clear ? `評価「${R.rank?.name}」 終点で ${R.ahead <= 0 ? `${mmss(-R.ahead)} 早着` : `${mmss(R.ahead)} 遅れ`}` : `${R.overReason}。`;
+  $('result-title').textContent = clear ? (R.kaisou ? `回送扱い（ノルマ未達）` : `終点 ${LINE.stations[LINE.stations.length - 1].name} 到着！`) : `${LINE.stations[st].name}の手前で運転打ち切り`;
+  $('result-reason').textContent = clear
+    ? R.kaisou
+      ? `終点には着いたが、届けた客 ${R.delivered}/${LINE.quota}人・後半の駅から ${R.lateDelivered}/${LINE.lateQuota}人。クリアにならない`
+      : `評価「${R.rank?.name}」 終点で ${R.ahead <= 0 ? `${mmss(-R.ahead)} 早着` : `${mmss(R.ahead)} 遅れ`}`
+    : `${R.overReason}。`;
   const rows: [string, string][] = [
     ['進んだ駅', `${clear ? LINE.stations.length : st}/${LINE.stations.length}`],
-    ['運んだ客', `${R.stats.carried}人`],
+    ['届けた客（ノルマ）', `${R.delivered}/${LINE.quota}人・後半 ${R.lateDelivered}/${LINE.lateQuota}人`],
     ['吹っ飛ばした客', `${R.stats.flew}人`],
     ['最大の衝撃', `${R.stats.maxShock}`],
     ['早着', `${R.stats.early}回`],
@@ -1069,7 +1073,7 @@ function showResult() {
     ['残り', coinHtml(R.money)],
   ];
   if (clear && R.lo === 'debt') money.push(['借金の返済', R.money >= 12 ? `−${coinHtml(12)}` : '返せない…持ち帰り0']);
-  money.push([clear ? `持ち帰り＝（稼ぎ÷8＋残り÷3）×${mult}（${R.rank?.name}）${LINE.carry !== 1 ? `×${LINE.carry}（${LINE.short}）` : ''}` : '運転打ち切り：稼ぎ÷12', '']);
+  money.push([clear && !R.kaisou ? `持ち帰り＝（稼ぎ÷6＋残り÷3）×${mult}（${R.rank?.name}）${LINE.carry !== 1 ? `×${LINE.carry}（${LINE.short}）` : ''}` : `${R.kaisou ? '回送扱い' : '運転打ち切り'}：稼ぎ÷12`, '']);
   $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">持ち帰り</dt><dd class="sum">${coinHtml(total)}</dd>`;
   $('result-bank').innerHTML = `貯金 ${coinHtml(meta.bank)}`;
   // 運行記録：区間ごとに

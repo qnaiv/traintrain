@@ -1,5 +1,5 @@
 // 見習い車掌：研修運転の案内と、初めて出会ったときだけのヒント
-import { KINDS, LINE, POS, kmh, nextObstacle, saveMeta, treeNeed, type Meta, type Run } from './state.ts';
+import { KINDS, LINE, POS, kmh, nextObstacle, saveMeta, treeNeed, PRIO_LOSS, type Meta, type Run } from './state.ts';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -229,13 +229,13 @@ function tutorial(r: Run, meta: Meta): Say | null {
         return fail(r, `射出しないまま<b class="hl">鵠沼を通り過ぎた</b>。乗り過ごした客は次の駅まで連れて行かれて、<b>信頼が減る</b>。駅の手前でレバーを<b>非常</b>へ！`, cpLaunch ?? cpTree, 5);
       }
       if (!kidAboard && r.phase === 'dwell') {
-        return fail(r, `止まって降ろすのもアリ。でも研修では<b class="hl">射出</b>を覚えよう。射出なら止まらずに届けられて、×2マットなら運賃2倍`, cpLaunch ?? cpTree, 5);
+        return fail(r, `止まって降ろすのもアリ。でも研修では<b class="hl">射出</b>を覚えよう。射出なら止まらずに届けられて、◎マットなら運賃アップ`, cpLaunch ?? cpTree, 5);
       }
       if (toSt < 110 && toSt > -10 && r.phase === 'running') {
         r.slow = 0.4;
         return {
           id: 'launch',
-          text: `鵠沼が近い。屋根の子どもから<b>点線</b>が伸びているのが、今急ブレーキしたときの飛び先。点線の先が<b class="ok">緑の丸（×2マット）</b>に重なった瞬間に、レバーを左端の<b class="hl">「非常」</b>へ入れると射出！ 時間はゆっくりになっている`,
+          text: `鵠沼が近い。屋根の子どもから<b>点線</b>が伸びているのが、今急ブレーキしたときの飛び先。点線の先が<b class="ok">緑の丸（◎マット）</b>に重なった瞬間に、レバーを左端の<b class="hl">「非常」</b>へ入れると射出！ 時間はゆっくりになっている`,
           short: `点線の先が<b class="ok">緑の丸</b>に重なったらレバーを<b class="hl">非常</b>へ！${tries ? '（速さで届く先が変わる）' : ''}`,
           target: '#lever',
           step: '研修 5/5 ・ スロー',
@@ -249,8 +249,8 @@ function tutorial(r: Run, meta: Meta): Say | null {
       r.paused = true;
       return {
         text: perfect
-          ? '<b class="ok">PERFECT！</b> ×2マットに着地で運賃2倍。駅ごとに続けて決めると上乗せされる。<br>ちなみに<b>外すと田んぼにポチャン</b>で、信頼が減る'
-          : '<b class="ok">GOOD！</b> ホームに届いた。真ん中の<b>×2マット</b>に落とせば運賃2倍。<br>ちなみに<b>外すと田んぼにポチャン</b>で、信頼が減る',
+          ? '<b class="ok">PERFECT！</b> ◎マットに着地で運賃アップ。駅ごとに続けて決めると上乗せされる。<br>ちなみに<b>外すと田んぼにポチャン</b>で、信頼が減る'
+          : '<b class="ok">GOOD！</b> ホームに届いた。真ん中の<b>◎マット</b>に落とせば運賃アップ。<br>ちなみに<b>外すと田んぼにポチャン</b>で、信頼が減る',
         step: '研修',
         tut: true,
         buttons: [
@@ -304,6 +304,8 @@ function tip(r: Run, meta: Meta, shopOpen: boolean, _now: number): Say | null {
   };
   const seen = (id: string) => meta.tips.includes(id);
   if (shopOpen && !seen('shop')) return fire('shop', '<b>駅のお店</b>：お金が続くかぎり何枚でも買える。<b class="ok">◎</b>は持ち物と組むとコンボになる印', true);
+  if (r.phase === 'dwell' && !r.tutorial && r.candidates.some((c) => c.prio) && !seen('prio'))
+    return fire('prio', `<b>優先客</b>：「優先」の札の客は、乗せずに発車したり駅を通過したりすると<b class="hl">信頼−${PRIO_LOSS}</b>。終点までに<b>ノルマの人数</b>を届けないとクリアにならない（上の路線バーの左下に表示）`);
   if (r.phase !== 'running') return null;
   const o = nextObstacle(r);
   if (o && o.x - r.x < 130) {

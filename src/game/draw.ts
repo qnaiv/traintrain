@@ -134,7 +134,7 @@ export function drawOutside(ctx: CanvasRenderingContext2D, r: Run, w: number, to
         if (!iso.inX(m.x - mw, m.x + mw)) continue;
         put(m.x, 3.7, () => {
           iso.box(m.x - mw / 2, m.x + mw / 2, 2.6, 4.9, 1.05, 1.28, i === r.target ? '#E4553A' : '#F08E78', { top: i === r.target ? '#F2C94C' : '#F3D27F' });
-          iso.label(m.x, 3.75, 1.35, '×2', 13, INK);
+          iso.label(m.x, 3.75, 1.35, '◎', 13, INK);
         });
       }
       // ゴースト列車（ダイヤどおりの位置）
@@ -668,6 +668,15 @@ export function drawBar(ctx: CanvasRenderingContext2D, r: Run, w: number, y: num
   ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
   ctx.textAlign = 'right';
   ctx.fillText('タップで路線図・ダイヤ', x1 + 6, y + 31);
+  // 運ぶ人数のノルマ
+  if (!r.tutorial) {
+    const ok = r.delivered >= LINE.quota;
+    const okL = r.lateDelivered >= LINE.lateQuota;
+    ctx.textAlign = 'left';
+    ctx.font = '900 10px "Zen Maru Gothic", sans-serif';
+    ctx.fillStyle = ok && okL ? '#2E8F62' : '#B53E28';
+    ctx.fillText(`ノルマ ${Math.min(r.delivered, LINE.quota)}/${LINE.quota}人・後半 ${Math.min(r.lateDelivered, LINE.lateQuota)}/${LINE.lateQuota}${ok && okL ? ' ✓' : ''}`, x0 - 6, y + 31);
+  }
 
 }
 
