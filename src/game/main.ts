@@ -1068,10 +1068,22 @@ function showResult() {
     ['お店で使った', `−${coinHtml(R.spent)}`],
     ['残り', coinHtml(R.money)],
   ];
-  if (clear && R.lo === 'debt') money.push(['借金の返済', R.money >= 15 ? `−${coinHtml(15)}` : '返せない…持ち帰り0']);
-  money.push([clear ? `持ち帰り＝（稼ぎ÷2＋残り÷4）×${mult}（${R.rank?.name}）` : '運転打ち切り：稼ぎ÷4', '']);
+  if (clear && R.lo === 'debt') money.push(['借金の返済', R.money >= 12 ? `−${coinHtml(12)}` : '返せない…持ち帰り0']);
+  money.push([clear ? `持ち帰り＝（稼ぎ÷8＋残り÷3）×${mult}（${R.rank?.name}）${LINE.carry !== 1 ? `×${LINE.carry}（${LINE.short}）` : ''}` : '運転打ち切り：稼ぎ÷12', '']);
   $('result-money').innerHTML = money.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + `<dt class="sum">持ち帰り</dt><dd class="sum">${coinHtml(total)}</dd>`;
   $('result-bank').innerHTML = `貯金 ${coinHtml(meta.bank)}`;
+  // 運行記録：区間ごとに
+  let lastSt = -1;
+  let logHtml = '';
+  for (const e of R.log) {
+    if (e.st !== lastSt) {
+      lastSt = e.st;
+      logHtml += `<li class="st">${e.st === 0 ? `${LINE.stations[0].name}（始発）` : `${LINE.stations[e.st - 1].name} → ${LINE.stations[e.st].name}`}</li>`;
+    }
+    logHtml += `<li class="${e.good ? 'good' : 'bad'}">${coinText(e.text)}</li>`;
+  }
+  $('result-log-list').innerHTML = logHtml || '<li class="st">記録なし</li>';
+  ($('result-log') as HTMLDetailsElement).open = false;
   $('result').hidden = false;
 }
 

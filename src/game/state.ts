@@ -773,6 +773,8 @@ export interface Run {
   net: boolean;
   /** 団体客 */
   groups: Record<number, GroupState>;
+  /** 運行記録（結果画面で見る） */
+  log: { st: number; text: string; good: boolean }[];
   stuck: number; // 障害で止められている残り時間
   reverse: boolean; // バック中（ボタンを押している間）
   overReason: string;
@@ -934,6 +936,7 @@ export function newRun(meta: Meta, tutorial = false): Run {
     cannonArm: false,
     net: false,
     groups: {},
+    log: [],
     cutins: [],
     launchSeq: 0,
     launchLog: {},
@@ -1001,6 +1004,11 @@ export function slingReady(r: Run): boolean {
   return r.mods.has('rubber') && r.mods.has('hbrake');
 }
 
+/** 運行記録に1行（区間＝今向かっている駅） */
+function logIt(r: Run, text: string, good: boolean) {
+  if (r.demo) return;
+  r.log.push({ st: r.target, text, good });
+}
 export function toast(r: Run, text: string, kind = '') {
   r.toasts.push({ text, kind, t: r.time });
   if (r.toasts.length > 3) r.toasts.shift();
@@ -1152,6 +1160,7 @@ function applyShock(r: Run, value: number, label: string, boost = 1, launch = fa
     } else safe++;
   }
   r.shocks.push({ value, t: r.time, flew, safe, label });
+  if (flew.length) logIt(r, launch ? `${label}：${flew.join('・')}を射出` : `${label}：${flew.join('・')}が吹っ飛んだ`, launch);
   if (net && flew.length) {
     r.net = false;
     toast(r, '着地ネットを広げた！', 'good');
@@ -1234,6 +1243,7 @@ function judgeLanding(r: Run, f: Flier) {
     }
     r.money += fare;
     r.stats.carried++;
+    logIt(r, `${k.name}を${LINE.stations[at].name}へ届けた（${f.result === 'perfect' ? 'PERFECT' : 'GOOD'} ¢${fare}）`, true);
     groupDelivered(r, p, f.landX);
     const log = f.launch ? r.launchLog[f.launch] : null;
     if (log) {
@@ -1267,12 +1277,14 @@ function judgeLanding(r: Run, f: Flier) {
     r.trust -= p.kind === 'vip' && r.lo === 'vipcar' ? 50 : 10;
     r.missHere++;
     r.pops.push({ text: `${LINE.stations[at].name}に着地…${LINE.stations[p.dest].name}行きなのに`, x: f.landX, t: r.time, good: false });
+    logIt(r, `${k.name}（${LINE.stations[p.dest].name}行き）が${LINE.stations[at].name}に着地してしまった`, false);
     return;
   }
   f.result = 'miss';
   r.trust -= p.kind === 'vip' && r.lo === 'vipcar' ? 50 : big ? 18 : 12;
   r.missHere++;
   r.pops.push({ text: `${k.name}が${LINE.scenery[Math.max(0, Math.min(LINE.sections.length - 1, POS.findIndex((pos) => pos > f.landX) - 1))] === 'coast' ? '海' : LINE.scenery.includes('tunnel') ? '線路わき' : '田んぼ'}にポチャン`, x: f.landX, t: r.time, good: false });
+  logIt(r, `${k.name}（${LINE.stations[p.dest].name}行き）がホームに届かず落ちた`, false);
 }
 export function matWidth(r: Run): number {
   const w = r.mods.has('mat2') ? 9 : r.mods.has('mat') ? 7 : 5;
@@ -1455,6 +1467,7 @@ export function depart(r: Run) {
     if (left > 0) toast(r, `満員！ 乗せきれなかった客 ¢${left} ぶん`, '');
   }
   r.offer = null;
+  if (r.picked.size) logIt(r, `${LINE.stations[r.target].name}で ${[...r.pax].filter((p) => r.picked.has(p.id)).map((p) => KINDS[p.kind].name).join('・')} が乗車`, true);
   r.candidates = [];
   r.picked.clear();
   r.phase = 'running';
@@ -1572,6 +1585,7 @@ function arrive(r: Run) {
 
   // 降車
   let earned = 0;
+  const off: string[] = [];
   for (const p of [...r.pax]) {
     if (p.dest !== st) continue;
     let fare = fareOf(r, p, r.spots[p.spot]?.car ?? 0);
@@ -1582,10 +1596,12 @@ function arrive(r: Run) {
     if (p.kind === 'old') r.trust = Math.min(100, r.trust + 5);
     earned += fare;
     r.stats.carried++;
+    off.push(KINDS[p.kind].name);
     groupDelivered(r, p, POS[st]);
     r.pax = r.pax.filter((q) => q !== p);
   }
   r.money += earned;
+  if (off.length) logIt(r, `${LINE.stations[st].name}で ${off.join('・')} が降車（¢${earned}）`, true);
   if (earned) toast(r, `運賃 +¢${earned}`, 'good');
   if (st >= N_ST - 1) {
     r.phase = 'clear';
@@ -1903,6 +1919,7 @@ function driving(r: Run, dt: number) {
     if (missed.length) {
       r.trust -= 5 * missed.length;
       toast(r, `${LINE.stations[st].name}を通過。${missed.length}人が乗り過ごし`, 'bad');
+      logIt(r, `${LINE.stations[st].name}を通過：${missed.map((q) => KINDS[q.kind].name).join('・')}が乗り過ごし`, false);
     } else toast(r, `${LINE.stations[st].name}を射出で通過！`, 'good');
     if (r.lo === 'bullet' && st < N_ST - 1) {
       r.money += 2;
@@ -1962,6 +1979,7 @@ export function eject(r: Run, id: number) {
     launchPax(r, p);
     r.fliers[r.fliers.length - 1].judged = true; // 降ろしただけ（判定しない）
     toast(r, `${KINDS[p.kind].name}を窓から降ろした（信頼−${loss}）`, 'bad');
+    logIt(r, `${KINDS[p.kind].name}を窓から降ろした`, false);
   } else toast(r, `${KINDS[p.kind].name}に途中で降りてもらった（信頼−${loss}）`, 'bad');
 }
 

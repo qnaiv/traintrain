@@ -12,7 +12,7 @@
     <style>
       :root { --paper:#f5efe3; --card:#fffdf6; --ink:#1f1b16; --sub:#5a5045; --tomato:#e4553a; --mint:#6fc3a0; --mustard:#e9b23e; --dela:'Dela Gothic One', sans-serif; }
       * { box-sizing: border-box; }
-      html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: 'Zen Maru Gothic', sans-serif; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
+      html, body { margin: 0; height: 100%; overflow-x: hidden; max-width: 100vw; background: var(--paper); color: var(--ink); font-family: 'Zen Maru Gothic', sans-serif; overscroll-behavior: none; -webkit-user-select: none; user-select: none; }
       button { font-family: inherit; color: var(--ink); cursor: pointer; }
       .num, .dela { font-family: var(--dela); font-weight: 400; font-variant-numeric: tabular-nums; }
       #app { position: relative; display: flex; flex-direction: column; height: 100dvh; max-width: 760px; margin: 0 auto; background: var(--paper); }
@@ -245,9 +245,16 @@
       .m-sec .now { padding: 0 8px; border: 1.5px solid var(--ink); border-radius: 999px; background: var(--mint); font-size: 10.5px; font-weight: 900; }
 
       /* モーダル */
-      .modal { position: fixed; inset: 0; background: rgba(31,27,22,0.5); display: grid; place-items: center; padding: 14px; z-index: 20; }
+      .rlog { border: 2px solid var(--ink); border-radius: 12px; background: #FBF8F1; }
+      .rlog summary { padding: 8px 12px; font-size: 13px; font-weight: 900; cursor: pointer; }
+      .rlog ol { list-style: none; margin: 0; padding: 0 12px 10px; display: flex; flex-direction: column; gap: 3px; max-height: 40vh; overflow-y: auto; }
+      .rlog li { font-size: 12px; font-weight: 700; line-height: 1.45; padding-left: 16px; position: relative; }
+      .rlog li::before { content: '●'; position: absolute; left: 0; font-size: 9px; top: 3px; }
+      .rlog li.good::before { color: #2E8F62; } .rlog li.bad::before { color: #B53E28; } .rlog li.bad { color: #8A2E1C; }
+      .rlog li.st { padding: 6px 0 0; font-weight: 900; color: var(--sub); } .rlog li.st::before { content: none; }
+      .modal { position: fixed; inset: 0; background: rgba(31,27,22,0.5); display: grid; grid-template-columns: minmax(0, 1fr); place-items: center; padding: 14px; z-index: 20; box-sizing: border-box; }
       .modal[hidden] { display: none; }
-      .box { width: min(440px, 100%); max-height: 100%; overflow: auto; background: var(--card); border: 2.5px solid var(--ink); border-radius: 16px; padding: 16px; box-shadow: 0 6px 0 var(--ink); display: flex; flex-direction: column; gap: 10px; }
+      .box { box-sizing: border-box; min-width: 0; width: min(440px, 100%); max-height: 100%; overflow: auto; background: var(--card); border: 2.5px solid var(--ink); border-radius: 16px; padding: 16px; box-shadow: 0 6px 0 var(--ink); display: flex; flex-direction: column; gap: 10px; }
       .box h3 { margin: 0; font-family: var(--dela); font-weight: 400; font-size: 21px; line-height: 1.3; }
       .box p { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--sub); }
       #offer-cards { display: flex; flex-direction: column; gap: 8px; }
@@ -362,7 +369,7 @@
       .shop-head { display: flex; align-items: center; justify-content: space-between; }
       #shop-money { font-family: var(--dela); font-size: 17px; }
       .shop-row { display: flex; gap: 8px; margin-top: 10px; }
-      .shop-row .btn { flex: 1; white-space: nowrap; padding-left: 6px; padding-right: 6px; }
+      .shop-row .btn { flex: 1; min-width: 0; white-space: normal; line-height: 1.15; padding-left: 6px; padding-right: 6px; font-size: 14px; }
       .shop-row #btn-shop-tree { flex: none; width: 58px; }
       .shop-row #btn-shop-close { flex: 1.4; }
       #btn-reroll:disabled { opacity: .45; }
@@ -587,6 +594,7 @@
         <p id="result-reason"></p>
         <dl id="result-stats"></dl>
         <dl id="result-money"></dl>
+        <details id="result-log" class="rlog"><summary>運行記録（誰をどこへ・誰が落ちたか）</summary><ol id="result-log-list"></ol></details>
         <p id="result-bank"></p>
         <button id="btn-hub" class="btn primary" type="button">車両基地へ</button>
         <button id="btn-again" class="btn secondary" type="button">もう一度走る</button>
