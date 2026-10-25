@@ -1399,7 +1399,7 @@ $('fc-side').addEventListener('pointerdown', (e) => {
 });
 
 // ---------- 射出のスロー ----------
-const SLOWMO = 0.4;
+const SLOWMO = 1; // スローはなし（テンポ優先）。カメラの寄りと追従だけ残す
 let slowT = 0;
 let slowLaunches = 0;
 let camOff = 4;
@@ -1415,7 +1415,7 @@ function frame(now: number) {
   const dt = Math.min(0.05, (now - last) / 1000) * SPEED;
   last = now;
   if (screen === 'run') {
-    // 射出のスローモーション：客が飛んでいる間はゆっくり、カメラも客を追う
+    // 射出：客が飛んでいる間はカメラが寄って客を追う（時間はゆっくりにしない）
     if (R.stats.launches !== slowLaunches) {
       if (R.stats.launches > slowLaunches && R.fliers.some((f) => !f.judged && f.launch)) slowT = 3.5;
       slowLaunches = R.stats.launches;

@@ -231,7 +231,6 @@ function tutorial(r: Run, meta: Meta, shopOpen = false): Say | null {
       if (!cpLaunch && kidAboard && toSt < 150 && r.phase === 'running') cpLaunch = snap(r);
       if (kidFlier) {
         if (!kidFlier.judged) {
-          if (r.time - kidFlier.t < kidFlier.tLand) r.slow = 0.4;
           return { text: '飛んだ！ 着地を見守ろう…', step: '研修 5/8', tut: true };
         }
         if (kidFlier.result === 'perfect' || kidFlier.result === 'good') {
