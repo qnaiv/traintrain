@@ -1031,3 +1031,312 @@ function coinLabel(ctx: CanvasRenderingContext2D, iso: Iso, x: number, z: number
     void i;
   });
 }
+
+// ---------- 下のパネル：横から見た図（電車・乗客の耐衝撃・次の障害か駅） ----------
+const KIND_BG: Record<string, string> = {};
+/** 横から見た図を描く。戻り値はタップできる障害の範囲 */
+export function drawSide(ctx: CanvasRenderingContext2D, r: Run, w: number, h: number, shock: number): { ob: Obstacle; x: number; y: number; rad: number } | null {
+  for (const k of Object.keys(KINDS)) KIND_BG[k] = KINDS[k as keyof typeof KINDS].color;
+  ctx.clearRect(0, 0, w, h);
+  const gy = h - 12; // 地面の高さ
+  // 地面とレール
+  ctx.fillStyle = '#E7E0D2';
+  ctx.fillRect(0, gy, w, h - gy);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(0, gy);
+  ctx.lineTo(w, gy);
+  ctx.stroke();
+  ctx.fillStyle = '#B9B0A2';
+  for (let x = (-(r.x * 6) % 14) - 14; x < w; x += 14) ctx.fillRect(x, gy + 1, 7, 3);
+
+  // 何を見せるか：走行中は次の障害（駅より手前なら）か駅、停車中は次の区間の最初の障害
+  const st = Math.min(r.target, LINE.stations.length - 1);
+  const o = nextObstacle(r);
+  const stopX = POS[st];
+  const running = r.phase === 'running';
+  const showStation = running && (!o || o.x > stopX);
+  const aheadX = running ? (showStation ? stopX : o!.x) : o ? o.x : stopX;
+  const dist = running ? aheadX - r.x : o ? o.x - r.x : 0;
+  // 横の縮尺：電車の先頭から前方 range m を右側に収める
+  const trainW = Math.min(w * 0.36, 130);
+  const tx0 = 8;
+  const tx1 = tx0 + trainW;
+  const range = Math.max(60, Math.min(160, dist + 30));
+  const mx = (x: number) => tx1 + ((x - r.x) / range) * (w - tx1 - 16);
+
+  // 電車（側面）
+  const ty = gy - 36 - Math.min(14, r.z * 4);
+  ctx.fillStyle = carColor(0);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(tx0, ty, trainW, 31, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#CFE6EE';
+  ctx.beginPath();
+  ctx.roundRect(tx1 - 9, ty + 5, 6, 11, 2);
+  ctx.fill();
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  for (const wx of [tx0 + 16, tx0 + 30, tx1 - 30, tx1 - 16]) {
+    ctx.beginPath();
+    ctx.arc(wx, ty + 34, 4.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#3A3631';
+    ctx.fill();
+    ctx.stroke();
+  }
+  if (r.cars > 1) {
+    ctx.fillStyle = INK;
+    ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`+${r.cars - 1}両`, tx0 + 2, ty - (r.pax.some((p) => r.spots[p.spot]?.deck === 2) ? 26 : 4));
+  }
+  // 乗客：車内は窓に、屋根は上に。耐衝撃の札。飛ぶ客は赤
+  const inner = r.pax.filter((p) => (r.spots[p.spot]?.deck ?? 0) < 2).sort((a, b) => effTol(r, a) - effTol(r, b));
+  const roof = r.pax.filter((p) => r.spots[p.spot]?.deck === 2).sort((a, b) => effTol(r, a) - effTol(r, b));
+  const face = (p: Pax, x: number, y: number) => {
+    const tol = effTol(r, p);
+    const fly = shock > tol && !r.airbag;
+    ctx.beginPath();
+    ctx.arc(x, y, 7.5, 0, Math.PI * 2);
+    ctx.fillStyle = KIND_BG[p.kind] ?? '#FFFDF6';
+    ctx.fill();
+    ctx.strokeStyle = fly ? '#E4553A' : INK;
+    ctx.lineWidth = fly ? 2.4 : 1.4;
+    ctx.stroke();
+    ctx.fillStyle = INK;
+    ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(KINDS[p.kind].ch, x, y + 3.2);
+    ctx.beginPath();
+    ctx.roundRect(x - 9, y + 8, 18, 9.5, 4.5);
+    ctx.fillStyle = fly ? '#E4553A' : '#FFFDF6';
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    ctx.fillStyle = fly ? '#FFFDF6' : INK;
+    ctx.font = '900 7.5px "Zen Maru Gothic", sans-serif';
+    ctx.fillText(String(Math.min(999, tol)), x, y + 15.5);
+  };
+  const per = Math.max(1, Math.floor((trainW - 18) / 20));
+  inner.slice(0, per).forEach((p, i) => face(p, tx0 + 13 + i * 20, ty + 11));
+  if (inner.length > per) {
+    ctx.fillStyle = INK;
+    ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+    ctx.fillText(`+${inner.length - per}`, tx1 - 12, ty + 25);
+  }
+  roof.slice(0, per).forEach((p, i) => face(p, tx0 + 16 + i * 22, ty - 19));
+  if (!r.pax.length) {
+    ctx.fillStyle = '#FFFDF6';
+    ctx.font = '900 9.5px "Zen Maru Gothic", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('空っぽ', (tx0 + tx1) / 2, ty + 17);
+  }
+
+  let tap: { ob: Obstacle; x: number; y: number; rad: number } | null = null;
+  const label = (x: number, y: number, text: string, bg: string, fg = INK) => {
+    ctx.font = '900 9.5px "Zen Maru Gothic", sans-serif';
+    const tw = ctx.measureText(text).width + 12;
+    const lx = Math.max(tx1 + 4 + tw / 2, Math.min(w - tw / 2 - 2, x));
+    ctx.beginPath();
+    ctx.roundRect(lx - tw / 2, y - 8, tw, 15, 7.5);
+    ctx.fillStyle = bg;
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    ctx.fillStyle = fg;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, lx, y + 3.5);
+  };
+  // 距離の点線
+  const ax = Math.min(w - 20, mx(aheadX));
+  if (dist > 3) {
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(tx1 + 6, gy - 18);
+    ctx.lineTo(ax - 18, gy - 18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = INK;
+    ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`あと${Math.round(dist)}m`, (tx1 + ax) / 2, gy - 22);
+  }
+
+  if (showStation || (!o && r.phase === 'dwell')) {
+    // ホーム・◎マット・駅名標
+    const pa = mx(stopX + PLAT_LO);
+    const pb = mx(stopX + PLAT_HI);
+    const nostop = roleOf(r, st) === 'nostop';
+    ctx.fillStyle = nostop ? '#D9D2C4' : '#E9DCC0';
+    ctx.fillRect(pa, gy - 13, pb - pa, 13);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(pa, gy - 13, pb - pa, 13);
+    const m = r.mats[st];
+    const mw = matWidth(r);
+    if (m && !nostop) {
+      ctx.fillStyle = '#F2C94C';
+      ctx.fillRect(mx(m.x - mw / 2), gy - 17, mx(m.x + mw / 2) - mx(m.x - mw / 2), 4);
+      ctx.strokeRect(mx(m.x - mw / 2), gy - 17, mx(m.x + mw / 2) - mx(m.x - mw / 2), 4);
+    }
+    if (nostop) {
+      for (let x = pa + 4; x < pb; x += 8) {
+        ctx.fillStyle = (x / 8) % 2 < 1 ? '#F3D27F' : INK;
+        ctx.fillRect(x, gy - 22, 6, 4);
+      }
+    }
+    const sx = Math.min(w - 26, pb - 4);
+    ctx.fillStyle = '#3A3631';
+    ctx.fillRect(sx, gy - 40, 2.5, 27);
+    label(sx, gy - 44, LINE.stations[st].name, nostop ? '#2C47A0' : '#FFFDF6', nostop ? '#FFFDF6' : INK);
+    // 今「非常」なら、の飛び先
+    if (running && r.v > 2) {
+      const sh = brakeShock(r);
+      for (const p of r.pax) {
+        if (sh <= effTol(r, p, true)) continue;
+        const z = spotZ(r, p.spot);
+        const f = flight(r.v, z, p.kind, launchBoost(r, p, launchBase(r)));
+        const land = spotWorldX(r, p.spot) + f.dist;
+        const deck = r.spots[p.spot]?.deck ?? 0;
+        const fx0 = deck === 2 ? tx0 + 16 + roof.indexOf(p) * 22 : tx0 + 13 + inner.indexOf(p) * 20;
+        const fy0 = deck === 2 ? ty - 21 : ty + 6;
+        const fx1 = mx(land);
+        const onPlat = land >= stopX + PLAT_LO - 0.5 && land <= stopX + PLAT_HI;
+        const good = onPlat && p.dest === st;
+        const perfect = good && m && Math.abs(land - m.x) <= mw / 2;
+        ctx.fillStyle = perfect ? '#2E6B53' : good ? '#8A5D00' : '#B53E28';
+        for (let i = 1; i < 14; i++) {
+          const t = i / 14;
+          const x = fx0 + (fx1 - fx0) * t;
+          const y = fy0 + (gy - 16 - fy0) * t - 26 * 4 * t * (1 - t);
+          if (x > w) break;
+          ctx.beginPath();
+          ctx.arc(x, y, 1.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (fx1 < w - 4) {
+          ctx.beginPath();
+          ctx.ellipse(fx1, gy - 15, 6, 2.6, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  } else if (o) {
+    // 障害
+    const ox = Math.min(w - 26, mx(o.x));
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = INK;
+    if (o.kind === 'tree') {
+      const rub = LINE.scenery.includes('tunnel');
+      ctx.save();
+      ctx.translate(ox, gy - 6);
+      ctx.rotate(-0.12);
+      ctx.fillStyle = rub ? '#A9A196' : '#8E6640';
+      ctx.fillRect(-20, -4, 40, 8);
+      ctx.strokeRect(-20, -4, 40, 8);
+      ctx.restore();
+      if (!rub) {
+        ctx.fillStyle = '#6FC3A0';
+        ctx.beginPath();
+        ctx.arc(ox + 16, gy - 16, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      label(ox, gy - 44, `${treeNeed(r)}km/h↑で突き破る`, '#E9B23E');
+    } else if (o.kind === 'pole' || o.kind === 'deer' || o.kind === 'work') {
+      if (o.kind === 'pole') {
+        ctx.save();
+        ctx.translate(ox - 10, gy);
+        ctx.rotate(-1.1);
+        ctx.fillStyle = '#9A8064';
+        ctx.fillRect(0, -3, 46, 6);
+        ctx.strokeRect(0, -3, 46, 6);
+        ctx.restore();
+      } else if (o.kind === 'deer') {
+        for (const dx of [-8, 6]) {
+          ctx.fillStyle = '#B07A4A';
+          ctx.beginPath();
+          ctx.roundRect(ox + dx - 7, gy - 16, 14, 8, 3);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillRect(ox + dx - 5, gy - 9, 2, 9);
+          ctx.fillRect(ox + dx + 3, gy - 9, 2, 9);
+          ctx.beginPath();
+          ctx.arc(ox + dx + 8, gy - 19, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      } else {
+        for (const dx of [-10, 6]) {
+          ctx.fillStyle = '#F39800';
+          ctx.fillRect(ox + dx - 3, gy - 18, 7, 11);
+          ctx.strokeRect(ox + dx - 3, gy - 18, 7, 11);
+          ctx.fillStyle = '#3A3631';
+          ctx.fillRect(ox + dx - 2, gy - 7, 5, 7);
+          ctx.fillStyle = '#F3D27F';
+          ctx.beginPath();
+          ctx.arc(ox + dx + 0.5, gy - 21, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+      if (o.state === 'wait' && (o.kind !== 'work' || o.taps > 0)) {
+        const pulse = 1 + Math.sin(r.time * 10) * 0.06;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.arc(ox, gy - 12, 19 * pulse, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(228,85,58,0.12)';
+        ctx.fill();
+        ctx.strokeStyle = '#E4553A';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        tap = { ob: o, x: ox, y: gy - 12, rad: 26 };
+        const t = o.kind === 'pole' ? `ここを連打！ ${o.need - o.taps}/${o.need}` : o.kind === 'deer' ? 'タップで警笛！' : `タップで警笛 あと${o.taps}回`;
+        label(ox, gy - 44, t, '#E4553A', '#FFFDF6');
+      }
+    } else if (o.kind === 'curve') {
+      ctx.beginPath();
+      ctx.arc(ox, gy - 26, 10, 0, Math.PI * 2);
+      ctx.fillStyle = '#FFFDF6';
+      ctx.fill();
+      ctx.strokeStyle = '#E4553A';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.fillStyle = '#3A3631';
+      ctx.fillRect(ox - 1, gy - 16, 2, 16);
+      ctx.fillStyle = INK;
+      ctx.font = '900 9px "Zen Maru Gothic", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(String(curveV(r)), ox, gy - 23);
+      label(ox, gy - 46, `${curveV(r)}km/hを超えると脱輪`, '#FFFDF6');
+    } else if (o.kind === 'wave' || o.kind === 'flood') {
+      const up = o.kind === 'flood' || waveUp(r.time);
+      ctx.fillStyle = 'rgba(91,184,201,0.7)';
+      const ww = Math.max(24, mx(o.x + o.len) - mx(o.x));
+      ctx.fillRect(ox, gy - (up ? (o.kind === 'flood' ? 6 : 22) : 4), Math.min(ww, w - ox), up ? (o.kind === 'flood' ? 6 : 22) : 4);
+      label(ox, gy - 44, o.kind === 'flood' ? `${FLOOD_V}km/h以下でそろそろと` : up ? '波が来ている！' : '今のうちに通れ', '#CFE6EE');
+    } else if (o.kind === 'slope') {
+      const up = (o.dir ?? 1) > 0;
+      const ww = Math.max(30, Math.min(w - ox, mx(o.x + o.len) - mx(o.x)));
+      ctx.fillStyle = up ? 'rgba(228,85,58,0.35)' : 'rgba(91,184,201,0.4)';
+      ctx.beginPath();
+      ctx.moveTo(ox, gy);
+      ctx.lineTo(ox + ww, gy - (up ? 14 : 0));
+      ctx.lineTo(ox + ww, gy);
+      ctx.lineTo(ox, gy - (up ? 0 : 14));
+      ctx.closePath();
+      ctx.fill();
+      label(ox, gy - 44, up ? '上り坂：速さが落ちる' : '下り坂：勝手に速くなる', '#FFFDF6');
+    }
+  }
+  return tap;
+}

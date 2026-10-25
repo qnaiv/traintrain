@@ -117,18 +117,8 @@
       #fc-1 .cond { color: var(--sub); overflow: hidden; text-overflow: ellipsis; }
       #fc-1 .shock { margin-left: auto; font-family: var(--dela); font-size: 17px; }
       #fc-1 .shock.on { color: var(--tomato); }
-      #fc-scale { position: relative; height: 46px; margin: 0 14px; }
-      #fc-scale .axis { position: absolute; left: 0; right: 0; top: 22px; height: 2px; background: rgba(31,27,22,0.2); }
-      #fc-scale .line { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1.5px; background: var(--tomato); border-radius: 2px; }
-      #fc-scale .line.jolt { background: var(--mustard); border: 1px solid var(--ink); }
-      #fc-scale .line.jolt span { color: #8a5d00; left: auto; right: 5px; }
-      #fc-scale .line span { position: absolute; top: -2px; left: 5px; font-family: var(--dela); font-size: 11px; color: var(--tomato); }
-      #fc-scale .face { position: absolute; width: 26px; margin-left: -13px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
-      #fc-scale .face b { width: 22px; height: 22px; border: 2px solid var(--ink); border-radius: 50%; background: var(--mint); display: grid; place-items: center; font-size: 11px; }
-      #fc-scale .face small { font-size: 9px; font-weight: 900; margin-top: 1px; }
-      #fc-scale .face.fly b { background: var(--tomato); color: #fffdf6; animation: shiver 0.12s infinite; }
+      #fc-side { display: block; width: 100%; height: 80px; margin: 0; touch-action: none; }
       @keyframes shiver { 50% { transform: translateX(1px); } }
-      #fc-scale .empty { position: absolute; left: 0; top: 0; text-align: left; font-size: 11px; font-weight: 700; color: var(--sub); }
       #fc-bottom { display: flex; align-items: center; gap: 8px; min-height: 16px; }
       #fc-3 { font-size: 11.5px; font-weight: 900; color: #2e6b53; }
       #fc-3.warn { color: #b53e28; }
@@ -163,7 +153,6 @@
       #dwell { display: none; flex-direction: column; gap: 7px; }
       body.dwell #dwell { display: flex; } body.dwell #run { display: none; }
       #run { display: flex; flex-direction: column; gap: 7px; }
-      body.dwell #fc-scale, body.dwell #fc-bottom { display: none; }
       body.dwell #forecast { padding: 4px 10px; }
       .dhead { display: flex; align-items: baseline; gap: 10px; }
       .dhead b { font-family: var(--dela); font-weight: 400; font-size: 17px; }
@@ -536,7 +525,7 @@
         <canvas id="secbar"></canvas>
         <div id="forecast">
           <div id="fc-1"></div>
-          <div id="fc-scale"></div>
+          <canvas id="fc-side"></canvas>
           <div id="fc-bottom"><span id="fc-3"></span></div>
         </div>
         <div id="cartabs"></div>

@@ -5,7 +5,7 @@ import * as S from './state.ts';
 import { hideCoach, setRewinder, startCoach, updateCoach } from './coach.ts';
 import { setCarPalette } from '../exterior.ts';
 import { makeDemo, stepDemo } from './demo.ts';
-import { BAR_H, drawBar, drawInside, drawOutside, drawSection, ejectZone, type Hit } from './draw.ts';
+import { BAR_H, drawBar, drawInside, drawOutside, drawSection, drawSide, ejectZone, type Hit } from './draw.ts';
 import { isMuted, setIntensity, setScene, sfx, toggleMute, unlock } from './audio.ts';
 import {
   KINDS,
@@ -779,7 +779,6 @@ function renderForecast() {
   const o = nextObstacle(R);
   const line1 = $('fc-1');
   const line3 = $('fc-3');
-  const scale = $('fc-scale');
   const k = kmh(R.v);
   let shock = 0;
   const stopX = POS[Math.min(R.target, LINE.stations.length - 1)];
@@ -849,23 +848,7 @@ function renderForecast() {
     line1.textContent = '';
     line3.textContent = '';
   }
-  const joltShock = 0;
-  // 耐衝撃の目盛り
-  const key = R.pax.map((p) => `${p.id}:${effTol(R, p)}`).join(',') + '|' + shock + '|' + joltShock;
-  if (scale.dataset.k !== key) {
-    scale.dataset.k = key;
-    const max = 100;
-    let html = `<div class="axis"></div>`;
-    if (shock > 0) html += `<div class="line" style="left:${Math.min(100, (shock / max) * 100)}%"><span>${shock}</span></div>`;
-    const sorted = [...R.pax].sort((a, b) => effTol(R, a) - effTol(R, b));
-    sorted.forEach((p, i) => {
-      const t = effTol(R, p);
-      const flies = Math.max(shock, joltShock) > t && !R.airbag;
-      html += `<div class="face ${flies ? 'fly' : ''}" style="left:${Math.min(100, (t / max) * 100)}%;top:${i % 2 ? 22 : 2}px" title="${KINDS[p.kind].name} 耐${t}"><b>${KINDS[p.kind].ch}</b><small>${t}</small></div>`;
-    });
-    if (!R.pax.length) html += '<div class="empty">乗っている客はいない</div>';
-    scale.innerHTML = html;
-  }
+  fcShock = shock;
 }
 
 function renderSpeedo() {
@@ -1378,6 +1361,30 @@ function drawHubScene(dt: number) {
   drawOutside(c, r, rc.width, 0, rc.height - 2, [], demoZoom);
 }
 
+// ---------- 下のパネル：横から見た図 ----------
+let fcShock = 0;
+let sideTap: { ob: Obstacle; x: number; y: number; rad: number } | null = null;
+function renderSide() {
+  const cv = $('fc-side') as HTMLCanvasElement;
+  const rc = cv.getBoundingClientRect();
+  if (!rc.width) return;
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(rc.width * dpr) || cv.height !== Math.round(rc.height * dpr)) {
+    cv.width = Math.round(rc.width * dpr);
+    cv.height = Math.round(rc.height * dpr);
+  }
+  const c = cv.getContext('2d')!;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sideTap = drawSide(c, R, rc.width, rc.height, fcShock);
+}
+$('fc-side').addEventListener('pointerdown', (e) => {
+  if (!sideTap || screen !== 'run') return;
+  const rc = ($('fc-side') as HTMLCanvasElement).getBoundingClientRect();
+  if (Math.hypot(e.clientX - rc.left - sideTap.x, e.clientY - rc.top - sideTap.y) > sideTap.rad * 1.4) return;
+  tapObstacle(R, sideTap.ob);
+  ripple(e.clientX, e.clientY);
+});
+
 // ---------- 射出のスロー ----------
 const SLOWMO = 0.4;
 let slowT = 0;
@@ -1448,6 +1455,7 @@ function frame(now: number) {
       drawSection(sc, R, sr.width, 12);
     }
     renderHud();
+    renderSide();
     updateCoach(R, meta, shopOpen && !!R.offer, now);
   } else {
     hideCoach();
